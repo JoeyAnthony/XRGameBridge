@@ -455,9 +455,7 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     auto& event_manager = g_game_bridge_instance->GetEventManager();
 
     uint32_t event_type;
-    size_t size;
-    void* data = nullptr;
-    g_openxr_event_stream_reader->GetNextEvent(event_type, size, &data);
+    void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
     if (event_type == GB_EVENT_NULL) {
         return XR_EVENT_UNAVAILABLE;
     }
