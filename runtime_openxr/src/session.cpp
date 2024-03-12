@@ -155,11 +155,12 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
                 gb_session.wait_frame_state = XRGameBridge::NewFrameBusy;
                 break;
             }
+            gb_session.wait_frame_state_mutex.unlock();
         }
-        gb_session.wait_frame_state_mutex.unlock();
         std::this_thread::sleep_for(ch::nanoseconds(10));
     }
 
+    // Todo Scoped lock inside the if statement may be easier
     gb_session.wait_frame_state_mutex.unlock();
 
     // Time point since session epoch + 16 milliseconds

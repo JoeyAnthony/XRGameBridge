@@ -45,6 +45,7 @@ XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsA
 
 // Suggested bindings
 XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrInteractionProfileSuggestedBinding* suggestedBindings);
+XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile);
 
 // Events
 inline XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData);
@@ -107,7 +108,7 @@ namespace XRGameBridge {
 
     // Data
     // The key is the string hash of an action set path. The same hash is being used for action set handles
-    inline std::unordered_map<XrPath, std::string> xrpath_storage;
+    inline std::unordered_map<XrPath, std::string> g_xrpath_storage;
 
     // TODO a list of instances in the future?
     //inline std::unordered_map<XrInstance, GB_Instance> instances;

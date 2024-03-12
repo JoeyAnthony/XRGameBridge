@@ -14,8 +14,8 @@ namespace XRGameBridge {
     const std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
     const std::string LAYERING_PIXEL_DEBUG = "../../runtime_openxr/shaders/layering_pixel.cso";
 
-    const std::string LAYERING_VERTEX_NAME = "layering_vertex.cso";
-    const std::string LAYERING_PIXEL_NAME = "layering_pixel.cso";
+    const std::string LAYERING_VERTEX_NAME = "shaders/layering_vertex.cso";
+    const std::string LAYERING_PIXEL_NAME = "shaders/layering_pixel.cso";
 
 
     std::vector<char> LoadBinaryFile(std::string path) {
