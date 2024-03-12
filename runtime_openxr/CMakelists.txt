@@ -46,6 +46,7 @@ add_library(RuntimeOpenXR SHARED
 		${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src/easylogging++.cc
 )
 
+# Don't let Visual Studio build the shaders with wrong settings
 set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
@@ -76,6 +77,20 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
 	DEPENDS 3DGameBridge
 )
+
+# Compile shaders
+add_custom_command(TARGET RuntimeOpenXR POST_BUILD
+	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
+)
+
+# Copy shaders to output directory
+foreach(item ${SHADERS})
+string(REGEX REPLACE "\\.[^.]*$" "" item_no_ext ${item})
+	add_custom_command(TARGET RuntimeOpenXR POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders/"
+		COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/${item_no_ext}.cso" "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders"
+	)
+endforeach()
 
 message("DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 
