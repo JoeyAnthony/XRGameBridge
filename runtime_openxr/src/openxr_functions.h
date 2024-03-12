@@ -8,7 +8,7 @@
 inline XrResult xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE]) { LOG(INFO) << "Called " << __func__;return XR_ERROR_RUNTIME_FAILURE;}
 inline XrResult xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[XR_MAX_STRUCTURE_NAME_SIZE]) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
 
-inline XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
+
 
 inline XrResult xrGetInputSourceLocalizedName(XrSession session, const XrInputSourceLocalizedNameGetInfo* getInfo, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
 inline XrResult xrApplyHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo, const XrHapticBaseHeader* hapticFeedback) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }

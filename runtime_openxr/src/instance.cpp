@@ -6,6 +6,7 @@
 
 #include <easylogging++.h>
 
+#include "actions.h"
 #include "openxr_functions.h"
 #include "swapchain.h"
 #include "game_bridge_structs.h"
@@ -202,6 +203,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
         //GB_Instance gb_instance = instances.at(instance);
         g_gbinstance->active_graphics_backend = GraphicsBackend::D3D11;
+        system.active_graphics_backend = GraphicsBackend::D3D11;
     }
     catch (std::out_of_range& e) {
         return XR_ERROR_SYSTEM_INVALID;
@@ -260,15 +262,15 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
     graphicsRequirements->adapterLuid = desc.AdapterLuid;
     graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_0;
 
-#ifdef _DEBUG
-    // Enable the D3D12 debug layer.
-    {
-        ComPtr<ID3D12Debug> debugController;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-            debugController->EnableDebugLayer();
-        }
-    }
-#endif
+//#ifdef _DEBUG
+//    // Enable the D3D12 debug layer.
+//    {
+//        ComPtr<ID3D12Debug> debugController;
+//        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+//            debugController->EnableDebugLayer();
+//        }
+//    }
+//#endif
     return XR_SUCCESS;
 }
 
@@ -277,18 +279,18 @@ XrResult xrStringToPath(XrInstance instance, const char* pathString, XrPath* pat
     *path = xr_path;
 
     // Don't overwrite the path if it already exists
-    if (!xrpath_storage[xr_path].empty()) {
+    if (!g_xrpath_storage[xr_path].empty()) {
         return XR_SUCCESS;
     }
 
-    xrpath_storage[xr_path] = std::string(pathString);
+    g_xrpath_storage[xr_path] = std::string(pathString);
     *path = xr_path;
 
     return XR_SUCCESS;
 }
 
 XrResult xrPathToString(XrInstance instance, XrPath path, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) {
-    std::string string_path = xrpath_storage[path];
+    std::string string_path = g_xrpath_storage[path];
 
     if (string_path.empty()) {
         return XR_ERROR_PATH_INVALID;
@@ -448,6 +450,16 @@ XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrIntera
 
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
     suggestedBindings = &gb_instance->suggested_bindings;
+    return XR_SUCCESS;
+}
+
+XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile) {
+    std::string string_path = g_xrpath_storage[topLevelUserPath];
+    if(std::find(XRGameBridge::g_supported_paths.begin(), XRGameBridge::g_supported_paths.end(), string_path) == XRGameBridge::g_supported_paths.end())
+    {
+        return XR_ERROR_PATH_UNSUPPORTED;
+    }
+
     return XR_SUCCESS;
 }
 

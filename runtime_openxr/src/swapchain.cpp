@@ -169,6 +169,10 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 
 namespace XRGameBridge {
     bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo) {
+        // Reinitialize the values in the array
+        current_image_state.fill(IMAGE_STATE_RELEASED);
+        fence_values.fill(0);
+
         for (uint32_t i = 0; i < g_back_buffer_count; i++) {
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC textureDesc = {};
@@ -296,22 +300,23 @@ namespace XRGameBridge {
     }
 
     XrResult GB_ProxySwapchain::AcquireNextImage(uint32_t& index) {
-        if (current_image_state != IMAGE_STATE_RELEASED) {
+        uint32_t next_index = (current_frame_index + 1) % g_back_buffer_count;
+
+        if (current_image_state[next_index] != IMAGE_STATE_RELEASED) {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
         // set current frame values to the values of the next frame
-        current_frame_index++;
-        current_frame_index = current_frame_index % g_back_buffer_count;
+        current_frame_index = next_index;
         index = current_frame_index;
-        current_image_state = IMAGE_STATE_ACQUIRED;
+        current_image_state[next_index] = IMAGE_STATE_ACQUIRED;
         return XR_SUCCESS;
     }
 
     // Wait for the gpu to be done with the image so we can use it for drawing
     // Must only be called after GetCurrentBackBufferIndex to be sure that the image index is not in use anymore
     XrResult GB_ProxySwapchain::WaitForImage(const XrDuration& timeout) {
-        if (current_image_state != IMAGE_STATE_ACQUIRED) {
+        if (current_image_state[current_frame_index] != IMAGE_STATE_ACQUIRED) {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
@@ -335,7 +340,8 @@ namespace XRGameBridge {
         fence_values[current_frame_index]++;
 
         // Set the image state to render target because we have waited for the image to be freed so it can be used by the application again.
-        current_image_state = IMAGE_STATE_RENDER_TARGET;
+        current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
+        awaited_frame_index = current_frame_index;
 
         return XR_SUCCESS;
     }
@@ -345,7 +351,7 @@ namespace XRGameBridge {
         // When Acquiring, an image is released that has already been presented, that index is then used to render a new image to.
 
         // Image state must be IMAGE_STATE_RENDER_TARGET before calling this. Image must have waited without timeout.
-        if (current_image_state != IMAGE_STATE_RENDER_TARGET) {
+        if (current_image_state[awaited_frame_index] != IMAGE_STATE_RENDER_TARGET) {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
@@ -357,7 +363,7 @@ namespace XRGameBridge {
         /// TODO (ONLY FOR SETTING TO IMAGE_STATE_WEAVING) test if this works with multi threaded rendering applications. It could be that after release, another thread will immediately call AcquireSwapchainImage, which will now return CALL_ORDER_INVALID since the weaving still has to happen on the first thread.
         // Set the image state to IMAGE_STATE_RELEASED. After this the image can be weaved. The image can also be reacquired by the application though.
         // TODO Set up the fences in a way that WaitForImage should also wait for the presentation to be done
-        current_image_state = IMAGE_STATE_RELEASED;
+        current_image_state[awaited_frame_index] = IMAGE_STATE_RELEASED;
 
         return XR_SUCCESS;
     }

@@ -318,7 +318,7 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
         LOG(INFO) << "Space does not exist";
     }
 
-    std::string& path = XRGameBridge::xrpath_storage[gb_a_space.sub_action_path];
+    std::string& path = XRGameBridge::g_xrpath_storage[gb_a_space.sub_action_path];
 
     // TODO Actions are never located now, might be what we want anyways
     // Application is told the actions are never being tracked this way
@@ -328,7 +328,23 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
 }
 
 XrResult xrDestroySpace(XrSpace space) {
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    // Todo If the space is not a reference space, unorderedmap::[] creates an entry for it. This may not be desired but won't do any harm.
+    // Check for reference space
+     XRGameBridge::GB_ReferenceSpace& gb_reference_space = XRGameBridge::g_reference_spaces[space];
+    if(gb_reference_space.session != nullptr)
+    {
+        XRGameBridge::g_reference_spaces.erase(space);
+        return XR_SUCCESS;
+    }
+
+    // Check for action space
+    XRGameBridge::GB_ActionSpace& gb_action_space = XRGameBridge::g_action_spaces[space];
+    if (gb_action_space.session != nullptr) {
+        XRGameBridge::g_action_spaces.erase(space);
+        return XR_SUCCESS;
+    }
+
+    return XR_ERROR_HANDLE_INVALID;
 }
 
 //XRGameBridge::GBVector2i XRGameBridge::GetDummyScreenResolution() {

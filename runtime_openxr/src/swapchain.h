@@ -46,13 +46,14 @@ namespace XRGameBridge {
         uint32_t cbc_srv_uav_descriptor_size = 0;
 
         uint32_t current_frame_index = 0;
-        ImageState current_image_state = IMAGE_STATE_RELEASED;
-        UINT64 previous_fence_value = 0;
+        uint32_t awaited_frame_index = 0;
+        std::array<ImageState, g_back_buffer_count> current_image_state;
+        uint64_t previous_fence_value = 0;
 
         // TODO We are using fences for every image instead of every frame, test if we can use fences per frame only instead
         HANDLE fence_event;
         ComPtr<ID3D12Fence> fence;
-        UINT64 fence_values[g_back_buffer_count];
+        std::array<uint64_t, g_back_buffer_count> fence_values;
 
     public:
         GB_ProxySwapchain() = default;
