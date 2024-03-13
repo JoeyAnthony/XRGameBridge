@@ -156,6 +156,8 @@ namespace XRGameBridge {
             // TODO use initial pipeline state here later. First check if it works without.
             ThrowIfFailed(d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state.Get(), IID_PPV_ARGS(&command_lists[i])));
 
+            std::wstring name = std::format(L"Compositor Command List {}", i);
+            command_lists[i]->SetName(name.c_str());
             command_lists[i]->Close();
         }
     }
@@ -193,7 +195,7 @@ namespace XRGameBridge {
 
                     // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
                     // Transition proxy swapchain resource to pixel shader resource
-                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    TransitionImage(cmd_list, proxy_resource.Get(),gb_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
                     std::array heaps = { gb_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
                     cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
@@ -219,7 +221,7 @@ namespace XRGameBridge {
                     cmd_list->DrawInstanced(3, 1, 0, 0);
 
                     // Transition proxy swapchain resource back to render target
-                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, gb_swapchain.resource_usage);
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
@@ -249,6 +251,10 @@ namespace XRGameBridge {
     }
 
     void GB_Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
+        if (state_before == state_after) {
+            return;
+        }
+
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(resource, state_before, state_after);
         cmd_list->ResourceBarrier(1, &barrier);
     }

@@ -57,13 +57,13 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
 XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* createInfo, XrSwapchain* swapchain) {
     //TODO Get compositor from the session and create descriptor on it for the new swapchain
 
-    static uint32_t swapchain_creation_count = 1;
+    static size_t swapchain_creation_count = 1;
 
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
 
-    // Create entry in the list
-    XRGameBridge::GB_ProxySwapchain& gb_proxy = XRGameBridge::g_proxy_swapchains[handle];
+    // Create entry in the listx
+    XRGameBridge::GB_ProxySwapchain gb_proxy(handle);
 
     // Create swap chain
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
@@ -82,6 +82,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     // Whether there is something to render to is responsibility of the application.
     XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_READY);
 
+    XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
     return XR_SUCCESS;
 }
 
@@ -168,7 +169,18 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 }
 
 namespace XRGameBridge {
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo) {
+    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle) : handle(handle) {
+    }
+
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo)
+    {
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
+        D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
+        GetResourceStateFlags(createInfo->usageFlags, flags, states);
+        return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states);
+    }
+
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states){
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
         fence_values.fill(0);
@@ -177,10 +189,10 @@ namespace XRGameBridge {
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC textureDesc = {};
             textureDesc.MipLevels = 1;
-            textureDesc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
-            textureDesc.Width = createInfo->width;
-            textureDesc.Height = createInfo->height;
-            textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+            textureDesc.Format = format;
+            textureDesc.Width = width;
+            textureDesc.Height = height;
+            textureDesc.Flags = flags;
             textureDesc.DepthOrArraySize = 1;
             textureDesc.SampleDesc.Count = 1;
             textureDesc.SampleDesc.Quality = 0;
@@ -193,18 +205,25 @@ namespace XRGameBridge {
             float clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
 
             D3D12_CLEAR_VALUE clear_value{
-                static_cast<DXGI_FORMAT>(createInfo->format),
+                static_cast<DXGI_FORMAT>(format),
                 0.5f
             };
+
+            // Set resource_usage to save the state the application expects the buffer to be in
+            resource_usage = states;
 
             auto resource = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
             ThrowIfFailed(device->CreateCommittedResource(
                 &resource,
                 D3D12_HEAP_FLAG_NONE,
                 &textureDesc,
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                states,
                 &clear_value,
                 IID_PPV_ARGS(&back_buffers[i])));
+
+            // Set name for debugging
+            std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
+            back_buffers[i]->SetName(name.c_str());
         }
 
         // Create descriptor heaps.
@@ -252,7 +271,7 @@ namespace XRGameBridge {
                 tex2d.MostDetailedMip = 0;
                 tex2d.PlaneSlice = 0;
                 D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc {};
-                srv_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+                srv_desc.Format = format;
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D = tex2d;
@@ -495,6 +514,10 @@ namespace XRGameBridge {
                 back_buffers[i]->SetName(ss.str().c_str());
                 device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtvHandle);
                 rtvHandle.Offset(1, rtv_descriptor_size);
+
+                //Give name to swapchain buffers
+                std::wstring name = std::format(L"GB Swapchain Resource {}", i);
+                back_buffers[i]->SetName(name.c_str());
             }
         }
 
@@ -530,5 +553,35 @@ namespace XRGameBridge {
 
 
         // barrier to render target
+    }
+
+    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states)
+    {
+        if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
+            flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
+        if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        }
+        if (XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        }
+        if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_SOURCE;
+        }
+        if (XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+        if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        }
+        if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
+            //usage |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COMMON;
+        }
+        if (XR_SWAPCHAIN_USAGE_INPUT_ATTACHMENT_BIT_MND & usage_flags) {
+            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        }
     }
 }
