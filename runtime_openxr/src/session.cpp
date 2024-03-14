@@ -102,6 +102,8 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // Create debug window
     auto native_resolution = XRGameBridge::GetNativeSystemResolution(gb_system);
     gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    // Debugging with non full screen mode
+    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 1920, 1080, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -249,7 +251,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // Do weaving
     gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
 
-    // DEBUG
+    // DEBUG to easily view the sbs image
     //gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
 
     // Transition swapchain to present
