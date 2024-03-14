@@ -166,12 +166,12 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     XrView view1, view2;
     view1.type = XR_TYPE_VIEW;
     view1.next = nullptr;
-    view1.pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {-0.060f, 0, 0} }; // Orientation, Position
+    view1.pose = { {.0f, 0.0f, 0.0f, 1.0f}, {-0.060f, 0, 0} }; // Orientation, Position
     view1.fov = { -fov, fov, fov, -fov }; // FOV angle left, right, up, down
 
     view2.type = XR_TYPE_VIEW;
     view2.next = nullptr;
-    view2.pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0.060f, 0, 0} }; // Orientation, Position
+    view2.pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.060f, 0, 0} }; // Orientation, Position
     view2.fov = { -fov, fov, fov, -fov }; // FOV angle left, right, up, down
 
     std::vector<XrView> sr_views;
