@@ -403,7 +403,7 @@ XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_s
 
     GBVector2i physical_res = gb_system.physical_resolution;
     if (use_halved_width) {
-        physical_res.x /= 2;
+        //physical_res.x /= 2;
     }
 
     return physical_res;

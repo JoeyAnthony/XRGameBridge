@@ -250,7 +250,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
 
     // DEBUG
-    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
+    //gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
 
     // Transition swapchain to present
     gb_compositor.TransitionImage(cmd_list.Get(), gb_graphics_device.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
