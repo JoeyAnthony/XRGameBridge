@@ -1,0 +1,12 @@
+[submodule "third-party/3DGameBridge"]
+	path = third-party/3DGameBridge
+	url = https://github.com/BramTeurlings/3DGameBridge.git
+[submodule "third-party/easyloggingpp"]
+	path = third-party/easyloggingpp
+	url = https://github.com/abumq/easyloggingpp.git
+[submodule "third-party/DirectX-Headers"]
+	path = third-party/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "third-party/OpenXR-SDK"]
+	path = third-party/OpenXR-SDK
+	url = https://github.com/KhronosGroup/OpenXR-SDK.git

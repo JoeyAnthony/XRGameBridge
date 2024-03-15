@@ -1,0 +1,102 @@
+cmake_minimum_required(VERSION 3.23)
+
+set (CMAKE_CXX_STANDARD 20)
+
+project (RuntimeOpenXR VERSION 0.1)
+message("3D Game Bridge Version: ${3DGameBridge_VERSION}")
+
+set(CMAKE_DEBUG_POSTFIX d)
+
+set(SHADERS
+	shaders/layering_vertex.hlsl
+	shaders/layering_pixel.hlsl
+)
+
+# Source files
+add_library(RuntimeOpenXR SHARED
+		src/main.cpp
+		src/dll.h
+		src/instance.h
+		src/instance.cpp
+		src/openxr_functions.h
+		src/openxr_includes.h
+		src/system.h
+		src/system.cpp
+		src/session.h
+		src/session.cpp
+		src/swapchain.h
+		src/swapchain.cpp
+		src/settings.h
+		src/settings.cpp
+		src/events.h
+		src/events.cpp
+		src/actions.h
+		src/actions.cpp
+		src/compositor.h
+		src/compositor.cpp
+		src/window.h
+		src/window.cpp
+		src/dxhelpers.h
+		src/dxhelpers.cpp
+		src/srhelpers.h
+		src/srhelpers.cpp
+
+		${SHADERS}
+
+		${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src/easylogging++.cc
+)
+
+# Don't let Visual Studio build the shaders with wrong settings
+set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
+
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
+#target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_VULKAN)
+#target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_OPENGL)
+
+# Include OpenXR
+target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
+target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src)
+target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
+
+# Link dependancies
+target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
+
+find_package(srDirectX)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+		3DGameBridge
+		simulatedreality
+		srDirectX::srDirectX
+)
+
+# Copy dependancies
+add_custom_command(
+    TARGET RuntimeOpenXR POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
+	DEPENDS 3DGameBridge
+)
+
+# Compile shaders
+add_custom_command(TARGET RuntimeOpenXR POST_BUILD
+	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
+)
+
+# Copy shaders to output directory
+foreach(item ${SHADERS})
+string(REGEX REPLACE "\\.[^.]*$" "" item_no_ext ${item})
+	add_custom_command(TARGET RuntimeOpenXR POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders/"
+		COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/${item_no_ext}.cso" "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders"
+	)
+endforeach()
+
+message("DIR: ${CMAKE_CURRENT_BINARY_DIR}")
+
+# Delay loading of Simulated Reality
+ target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
+# set_property(TARGET 3DGameBridge PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS true)
+# set_property(TARGET srDirectX::srDirectX PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS true)
+ target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_BASE_NAME:3DGameBridge>.dll")
+ target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_BASE_NAME:srDirectX::srDirectX>.dll")
