@@ -423,7 +423,7 @@ XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system)
     GBVector2i native_resolution = GetNativeSystemResolution(gb_system);
 
     XrSystemGraphicsProperties g_props{};
-    g_props.maxLayerCount = 1;
+    g_props.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
     g_props.maxSwapchainImageWidth = native_resolution.x;
     g_props.maxSwapchainImageHeight = native_resolution.y;
 
@@ -434,7 +434,7 @@ XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system)
     XrSystemProperties sys_props{
         XR_TYPE_SYSTEM_PROPERTIES,
         nullptr,
-        1,
+        gb_system.id,
         0x354B, // USB Vendor ID
         "SR Monitor",
         g_props,

@@ -186,7 +186,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
     frameState->predictedDisplayTime = display_time.count();
     frameState->shouldRender = true;
 
-    LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
+    //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
     return XR_SUCCESS;
 }
@@ -210,8 +210,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
-    LOG(INFO) << "xrEndFrame Called: " << display_time.count();
-
+    //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
 
     // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
     auto& gb_graphics_device = gb_session.window_swapchain;

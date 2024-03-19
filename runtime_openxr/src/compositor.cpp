@@ -185,6 +185,14 @@ namespace XRGameBridge {
                     auto& gb_swapchain = g_proxy_swapchains[view.subImage.swapchain];
                     auto proxy_resource = gb_swapchain.GetBuffers()[view.subImage.imageArrayIndex];
 
+                    LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
+                                << " Layercount: "  << frameEndInfo->layerCount
+                                << " Layernum: "    << layer_num
+                                << " viewnum "      << view_num
+                                << " swapchain: "   << view.subImage.swapchain
+                                << " swapchain index "  << view.subImage.imageArrayIndex
+                    ;
+
                     // Viewport settings
                     const float width = static_cast<float>(rect.extent.width);
                     const float height = static_cast<float>(rect.extent.height);

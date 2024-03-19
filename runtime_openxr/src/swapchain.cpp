@@ -121,6 +121,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         auto directx_images = gb_render_target.GetBuffers();
         for (uint32_t i = 0; i < count; i++) {
             XrSwapchainImageD3D12KHR image{};
+            image.type = XrStructureType::XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
             image.texture = directx_images[i].Get();
             xr_images.push_back(image);
         }
@@ -144,7 +145,9 @@ XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAc
     // return XR_ERROR_CALL_ORDER_INVALID
 
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
-    XrResult res = gb_proxy.AcquireNextImage(*index);
+    uint32_t i = 0;
+    XrResult res = gb_proxy.AcquireNextImage(i);
+    *index = i;
     return res;
 }
 
