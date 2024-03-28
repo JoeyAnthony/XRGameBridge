@@ -182,15 +182,15 @@ namespace XRGameBridge {
                     // TODO do something with rectangles
                     auto& rect = view.subImage.imageRect;
 
-                    auto& gb_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-                    auto proxy_resource = gb_swapchain.GetBuffers()[view.subImage.imageArrayIndex];
+                    auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
+                    auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
 
                     LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
                                 << " Layercount: "  << frameEndInfo->layerCount
                                 << " Layernum: "    << layer_num
                                 << " viewnum "      << view_num
                                 << " swapchain: "   << view.subImage.swapchain
-                                << " swapchain index "  << view.subImage.imageArrayIndex
+                                << " swapchain index "  << proxy_swapchain.awaited_frame_index
                     ;
 
                     // Viewport settings
@@ -203,9 +203,9 @@ namespace XRGameBridge {
 
                     // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
                     // Transition proxy swapchain resource to pixel shader resource
-                    TransitionImage(cmd_list, proxy_resource.Get(),gb_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-                    std::array heaps = { gb_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
+                    std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
                     cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
 
                     struct {
@@ -223,13 +223,13 @@ namespace XRGameBridge {
                     cmd_list->SetGraphicsRoot32BitConstants(2, 3, &layering_constants, 0);
 
                     // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-                    cmd_list->SetGraphicsRootDescriptorTable(0, gb_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart()); // Set offset in the heap for the shader (descriptor tables)
+                    cmd_list->SetGraphicsRootDescriptorTable(0, proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart()); // Set offset in the heap for the shader (descriptor tables)
                     cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
                     cmd_list->DrawInstanced(3, 1, 0, 0);
 
                     // Transition proxy swapchain resource back to render target
-                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, gb_swapchain.resource_usage);
+                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
@@ -239,15 +239,18 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ExecuteCommandLists(ID3D12GraphicsCommandList* cmd_list, const XrFrameEndInfo* frameEndInfo) {
+    void GB_Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
         ID3D12CommandList* lists[]{ cmd_list };
         command_queue->ExecuteCommandLists(1, lists);
+    }
 
+    void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
+    {
         // Go over every layer to signal all proxy swapchain fences
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
                 auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-                    // In every layer get every view
+                // In every layer get every view
                 for (uint32_t view_num = 0; view_num < layer->viewCount; view_num++) {
                     // Get the swapchain from the view and signal its fence
                     auto& view = layer->views[view_num];

@@ -265,7 +265,7 @@ namespace XRGameBridge {
                 //std::wstringstream ss; ss << "Swap Container Resource: " << i;
                 //back_buffers[i]->SetName(ss.str().c_str());
 
-                // Create a RTV for each frame.
+                // Create a RTV for each resource.
                 device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
                 rtv_handle.Offset(1, rtv_descriptor_size);
 
@@ -278,7 +278,7 @@ namespace XRGameBridge {
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D = tex2d;
-                // Create SRV for each frame
+                // Create SRV for each resource
                 device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, srv_handle);
                 srv_handle.Offset(1, cbc_srv_uav_descriptor_size);
             }

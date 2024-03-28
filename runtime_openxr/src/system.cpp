@@ -123,8 +123,8 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         view.maxImageRectWidth = native_resolution.x;
         view.recommendedImageRectHeight = form_factor_resolution.y;
         view.maxImageRectHeight = native_resolution.y;
-        view.recommendedSwapchainSampleCount = 2; //TODO idk what this means
-        view.maxSwapchainSampleCount = 2;
+        view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
+        view.maxSwapchainSampleCount = 1;
 
         // TODO Create 2 views here to get 2 swap chains and so a view per eye
         supported_views.push_back(view);
