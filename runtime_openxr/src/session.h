@@ -101,4 +101,6 @@ namespace XRGameBridge {
     inline std::vector<GB_FrameTimer> g_frames;
 
     void ChangeSessionState(GB_Session& session, XrSessionState state);
+
+    void UpdateSession(GB_Session& session);
 }

@@ -479,6 +479,20 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
         eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
         memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
     }
+    else if (event_type == XR_SESSION_STATE_SYNCHRONIZED) {
+        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
+        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
+        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
+        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
+    }
+    else if (event_type == XR_SESSION_STATE_VISIBLE) {
+        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
+        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
+        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
+        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
+    }
     else if (event_type == XR_SESSION_STATE_FOCUSED) {
         XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
         XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);

@@ -269,18 +269,26 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->Close();
 
     // Execute command lists
-    gb_compositor.ExecuteCommandLists(cmd_list.Get(), frameEndInfo);
+    gb_compositor.ExecuteCommandList(cmd_list.Get());
+    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
 
     // Present to window
-    gb_graphics_device.PresentFrame();
+    window_swapchain.PresentFrame();
 
     // Update window
     gb_session.display.UpdateWindow();
+
+    gb_session.ended_frame = gb_session.started_frame;
 
     return XR_SUCCESS;
 }
 
 void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {
+    if(session.session_state == state)
+    {
+        return;
+    }
+
     session.session_state = state;
     EventManager& event_manager = g_game_bridge_instance->GetEventManager();
 
@@ -294,6 +302,24 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
         g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_READY, sizeof(XrEventDataSessionStateChanged), &state_change);
         event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
     }
+    else if (state == XR_SESSION_STATE_SYNCHRONIZED) {
+        XrEventDataSessionStateChanged state_change;
+        state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        state_change.session = session.id;
+        state_change.state = XR_SESSION_STATE_SYNCHRONIZED;
+        state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
+        g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_SYNCHRONIZED, sizeof(XrEventDataSessionStateChanged), &state_change);
+        event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
+    else if (state == XR_SESSION_STATE_VISIBLE) {
+        XrEventDataSessionStateChanged state_change;
+        state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        state_change.session = session.id;
+        state_change.state = XR_SESSION_STATE_VISIBLE;
+        state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
+        g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_VISIBLE, sizeof(XrEventDataSessionStateChanged), &state_change);
+        event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
     else if (state == XR_SESSION_STATE_FOCUSED) {
         XrEventDataSessionStateChanged state_change;
         state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
@@ -302,5 +328,20 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
         state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
         g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_FOCUSED, sizeof(XrEventDataSessionStateChanged), &state_change);
         event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
+}
+
+void XRGameBridge::UpdateSession(GB_Session& session) {
+    if (session.session_state == XR_SESSION_STATE_READY) {
+        ChangeSessionState(session, XR_SESSION_STATE_SYNCHRONIZED);
+        session.should_render = false;
+    }
+    else if (session.session_state == XR_SESSION_STATE_SYNCHRONIZED) {
+        ChangeSessionState(session, XR_SESSION_STATE_VISIBLE);
+        session.should_render = true;
+    }
+    else if (session.session_state == XR_SESSION_STATE_VISIBLE) {
+        ChangeSessionState(session, XR_SESSION_STATE_FOCUSED);
+        session.should_render = true;
     }
 }
