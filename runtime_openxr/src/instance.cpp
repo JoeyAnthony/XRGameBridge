@@ -504,6 +504,9 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
 }
 
 void XRGameBridge::InitializeGameBridge() {
+    // Set dpi awareness for the application
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+
     if (g_game_bridge_instance == nullptr) {
         g_game_bridge_instance = new GameBridge(EventManager());
         auto& event_manager = g_game_bridge_instance->GetEventManager();

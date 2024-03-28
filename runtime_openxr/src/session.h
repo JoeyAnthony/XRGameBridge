@@ -27,6 +27,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo);
 namespace ch = std::chrono;
 
 namespace XRGameBridge {
+    typedef uint64_t Frame;
+
     enum FrameState {
         NewFrameAllowed,
         NewFrameBusy,
@@ -48,6 +50,10 @@ namespace XRGameBridge {
         std::chrono::high_resolution_clock::time_point session_epoch;
         FrameState wait_frame_state;
         std::mutex wait_frame_state_mutex;
+        Frame waited_frame = 0;
+        Frame started_frame = 0;
+        Frame ended_frame = 0;
+        bool should_render = false;
 
         // DirectX 12
         ComPtr<ID3D12Device> d3d12_device;

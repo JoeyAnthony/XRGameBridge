@@ -17,8 +17,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
 
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
-
     try {
         XRGameBridge::GB_System& system = XRGameBridge::g_systems.at(createInfo->systemId);
         if (!system.features_enumerated) {
@@ -97,13 +95,11 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
-
     // Create debug window
     auto native_resolution = XRGameBridge::GetNativeSystemResolution(gb_system);
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
     // Debugging with non full screen mode
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 1920, 1080, true, false);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 800, 600, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -163,9 +159,6 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
         std::this_thread::sleep_for(ch::nanoseconds(10));
     }
 
-    // Todo Scoped lock inside the if statement may be easier
-    gb_session.wait_frame_state_mutex.unlock();
-
     // Time point since session epoch + 16 milliseconds
     // Super simple version of this for now I guess
 
@@ -175,16 +168,22 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
      */
 
     // 1/60th in nanoseconds
-    uint32_t nanoseconds = 1.0f / 60.0f * 1000.f * 1000.f * 1000.f;
+    uint64_t nanoseconds = 1.0f / 90.0f * 1000.f * 1000.f * 1000.f;
     auto refresh_rate = ch::nanoseconds(nanoseconds);
     // Image should be displayed for the <refresh rate> amount of time
     auto display_period = ch::nanoseconds(refresh_rate);
     // Time since the epoch the application is running now, add the refresh rate to predict the time the next image will be displayed.
-    auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate;
+    auto display_time = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate);
+
+    XRGameBridge::UpdateSession(gb_session);
 
     frameState->predictedDisplayPeriod = display_period.count();
     frameState->predictedDisplayTime = display_time.count();
-    frameState->shouldRender = true;
+    frameState->shouldRender = gb_session.should_render;
+
+    gb_session.waited_frame = frameState->predictedDisplayTime;
+
+    gb_session.wait_frame_state_mutex.unlock();
 
     //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
@@ -195,11 +194,37 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     std::lock_guard guard(gb_session.wait_frame_state_mutex);
+
+    if(gb_session.waited_frame == 0)
+    {
+        // Call order invalid
+        return XR_ERROR_CALL_ORDER_INVALID;
+    }
+    if (gb_session.waited_frame == gb_session.started_frame)
+    {
+        // Skip frame
+        gb_session.started_frame = 0;
+        gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+        return XR_FRAME_DISCARDED;
+    }
+
+    if(gb_session.ended_frame > gb_session.started_frame)
+    {
+        // Should be impossible
+        LOG(WARNING) << "Previous frame is later than current";
+    }
+
     if (gb_session.wait_frame_state != XRGameBridge::NewFrameBusy) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
 
     gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+    gb_session.started_frame = gb_session.waited_frame;
+
+    // Log time left
+    //uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
+    //uint64_t time_left = gb_session.started_frame - time_now;
+    //LOG(INFO) << "Frame started. Time left: " << time_left;
 
     return XR_SUCCESS;
 }
@@ -208,6 +233,29 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    auto& gb_compositor = gb_session.compositor;
+
+    uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
+    long long time_left = gb_session.started_frame - time_now;
+    LOG(INFO) << "EndFrame, Time left: " << time_left;
+
+    // Frame too late, signal fences and return success
+    //if (time_now > gb_session.started_frame) {
+    //    // Application too late
+    //    LOG(INFO) << "Application too late, skipping compose";
+    //    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
+    //    return XR_SUCCESS;
+    //}
+    if(gb_session.started_frame == 0)
+    {
+        // Call order invalid
+        LOG(INFO) << "No frame started";
+        return XR_SUCCESS;
+    }
+    if(gb_session.started_frame == gb_session.ended_frame)
+    {
+        // Same frame to be re-presented, can choose to only weave here.
+    }
 
     auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
     //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
