@@ -45,6 +45,8 @@ namespace XRGameBridge {
 
         uint32_t rtv_descriptor_size = 0;
         uint32_t cbc_srv_uav_descriptor_size = 0;
+        uint32_t resolution_x = 0;
+        uint32_t resolution_y = 0;
 
         D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
         uint32_t current_frame_index = 0;
@@ -79,6 +81,9 @@ namespace XRGameBridge {
 
         // Make the image available for weaving
         XrResult ReleaseImage();
+
+        uint32_t GetWidth();
+        uint32_t GetHeight();
     };
 
     // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window

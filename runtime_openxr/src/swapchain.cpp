@@ -175,15 +175,14 @@ namespace XRGameBridge {
     GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle) : handle(handle) {
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo)
-    {
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo) {
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
         D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
         GetResourceStateFlags(createInfo->usageFlags, flags, states);
         return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states);
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states){
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states) {
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
         fence_values.fill(0);
@@ -255,6 +254,8 @@ namespace XRGameBridge {
 
         rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         cbc_srv_uav_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        resolution_x = width;
+        resolution_y = height;
 
         // Create descriptors
         {
@@ -273,7 +274,7 @@ namespace XRGameBridge {
                 tex2d.MipLevels = 1;
                 tex2d.MostDetailedMip = 0;
                 tex2d.PlaneSlice = 0;
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc {};
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
                 srv_desc.Format = format;
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -388,6 +389,14 @@ namespace XRGameBridge {
         current_image_state[awaited_frame_index] = IMAGE_STATE_RELEASED;
 
         return XR_SUCCESS;
+    }
+
+    uint32_t GB_ProxySwapchain::GetWidth() {
+        return resolution_x;
+    }
+
+    uint32_t GB_ProxySwapchain::GetHeight() {
+        return resolution_y;
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {
@@ -558,8 +567,7 @@ namespace XRGameBridge {
         // barrier to render target
     }
 
-    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states)
-    {
+    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {
         if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         }

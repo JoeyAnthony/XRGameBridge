@@ -64,7 +64,7 @@ namespace XRGameBridge {
             CD3DX12_ROOT_PARAMETER1 root_parameters[3];
             root_parameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
             root_parameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
-            root_parameters[2].InitAsConstants(3, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+            root_parameters[2].InitAsConstants(7, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
 
 
@@ -146,6 +146,7 @@ namespace XRGameBridge {
         samplerDesc.MipLODBias = 0.0f;
         samplerDesc.MaxAnisotropy = 1;
         samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        samplerDesc.BorderColor;
         device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
         command_allocators.resize(back_buffer_count);
@@ -162,7 +163,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list) {
+    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t rtv_width, uint32_t rtv_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -194,10 +195,12 @@ namespace XRGameBridge {
                     ;
 
                     // Viewport settings
+                    const float offset_x = static_cast<float>(rect.offset.x);
+                    const float offset_y = static_cast<float>(rect.offset.y);
                     const float width = static_cast<float>(rect.extent.width);
                     const float height = static_cast<float>(rect.extent.height);
-                    D3D12_VIEWPORT view_port{ (width * view_num), 0, width, height, 0.0f, 1.0f };
-                    D3D12_RECT scissor_rect{ 0, 0, g_platform_manager->GetScreen()->getPhysicalResolutionWidth(), g_platform_manager->GetScreen()->getPhysicalResolutionHeight() };
+                    D3D12_VIEWPORT view_port{ 0, 0, width, height, 0.0f, 1.0f };
+                    D3D12_RECT scissor_rect{ 0, 0, rect.extent.width, rect.extent.height };
                     cmd_list->RSSetViewports(1, &view_port);
                     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
@@ -212,18 +215,31 @@ namespace XRGameBridge {
                         uint32_t is_opaque;
                         uint32_t multiply_alpha;
                         float convert_to_linear;
+                        float uvmin_x, uvmin_y;
+                        float uvmax_x, uvmax_y;
+                        
                     } layering_constants;
                     // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
                     layering_constants.is_opaque = (layer->layerFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
                     // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
                     layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
                     layering_constants.convert_to_linear = 0;
+
+                    // Normalize uv values
+                    const float frtv_width = static_cast<float>(rtv_width);
+                    const float frtv_height = static_cast<float>(rtv_height);
+                    layering_constants.uvmin_x = offset_x   / frtv_width;
+                    layering_constants.uvmin_y = offset_y   / frtv_height;
+                    layering_constants.uvmax_x = width      / frtv_width;
+                    layering_constants.uvmax_y = height     / frtv_height;
+
                     cmd_list->SetGraphicsRootSignature(root_signature.Get());
                     cmd_list->SetPipelineState(pipeline_state.Get());
-                    cmd_list->SetGraphicsRoot32BitConstants(2, 3, &layering_constants, 0);
+                    cmd_list->SetGraphicsRoot32BitConstants(2, 7, &layering_constants, 0);
 
                     // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-                    cmd_list->SetGraphicsRootDescriptorTable(0, proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart()); // Set offset in the heap for the shader (descriptor tables)
+                    auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
+                    cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
                     cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
                     cmd_list->DrawInstanced(3, 1, 0, 0);

@@ -4,14 +4,17 @@ struct PSInput {
     float2 uv : TEXCOORD0;
 };
 
-// Pixel shader
+// Constant buffer
 struct temp
 {
     int is_opaque;
     int multiply_alpha;
     float convert_to_linear;
+    float2 uvmin;
+    float2 uvmax;
 };
 
+// Pixel shader
 Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
 ConstantBuffer<temp> settings : register(b0, space0);
