@@ -272,7 +272,7 @@ namespace XRGameBridge {
                     // Get the swapchain from the view and signal its fence
                     auto& view = layer->views[view_num];
                     auto& gb_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-                    command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.current_frame_index]);
+                    command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
@@ -281,7 +281,7 @@ namespace XRGameBridge {
 
                 // Get the swapchain from the view and signal its fence
                 auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
-                command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.current_frame_index]);
+                command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
             }
         }
     }
