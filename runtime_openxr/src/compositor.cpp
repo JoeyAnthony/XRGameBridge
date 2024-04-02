@@ -206,7 +206,7 @@ namespace XRGameBridge {
 
                     // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
                     // Transition proxy swapchain resource to pixel shader resource
-                    TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    //TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
                     std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
                     cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
@@ -245,7 +245,7 @@ namespace XRGameBridge {
                     cmd_list->DrawInstanced(3, 1, 0, 0);
 
                     // Transition proxy swapchain resource back to render target
-                    TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
+                    //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
@@ -263,6 +263,7 @@ namespace XRGameBridge {
     void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
     {
         // Go over every layer to signal all proxy swapchain fences
+        // Signals bot projection layers and quad layers
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
                 auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
@@ -273,6 +274,14 @@ namespace XRGameBridge {
                     auto& gb_swapchain = g_proxy_swapchains[view.subImage.swapchain];
                     command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.current_frame_index]);
                 }
+            }
+            else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
+                // TODO, not fully implemented. Not all fields in XrCompositionLayerQuad are used
+                auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
+
+                // Get the swapchain from the view and signal its fence
+                auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
+                command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.current_frame_index]);
             }
         }
     }

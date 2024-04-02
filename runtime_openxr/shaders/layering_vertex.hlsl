@@ -39,7 +39,7 @@ PSInput main(uint VertexIndex : SV_VertexID)
     PSInput result;
 
     result.pos = vertices[VertexIndex];
-    result.uv = settings.uvmin + uvcoords[VertexIndex] * (settings.uvmax - settings.uvmin);
+    result.uv = uvcoords[VertexIndex]; //settings.uvmin + uvcoords[VertexIndex] * (settings.uvmax - settings.uvmin);
 
     return result;
 }

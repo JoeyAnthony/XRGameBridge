@@ -109,7 +109,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
     gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue ,&swapchain_info, gb_session.display.GetWindowHandle());
@@ -168,7 +168,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
      */
 
     // 1/60th in nanoseconds
-    uint64_t nanoseconds = 1.0f / 90.0f * 1000.f * 1000.f * 1000.f;
+    uint64_t nanoseconds = 1.0f / 60.0f * 1000.f * 1000.f * 1000.f;
     auto refresh_rate = ch::nanoseconds(nanoseconds);
     // Image should be displayed for the <refresh rate> amount of time
     auto display_period = ch::nanoseconds(refresh_rate);
@@ -239,6 +239,11 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     long long time_left = gb_session.started_frame - time_now;
     LOG(INFO) << "EndFrame, Time left: " << time_left;
 
+    if(frameEndInfo->layerCount == 0)
+    {
+        return XR_ERROR_LAYER_INVALID;
+    }
+
     // Frame too late, signal fences and return success
     //if (time_now > gb_session.started_frame) {
     //    // Application too late
@@ -246,16 +251,16 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
     //    return XR_SUCCESS;
     //}
-    if(gb_session.started_frame == 0)
-    {
-        // Call order invalid
-        LOG(INFO) << "No frame started";
-        return XR_SUCCESS;
-    }
-    if(gb_session.started_frame == gb_session.ended_frame)
-    {
-        // Same frame to be re-presented, can choose to only weave here.
-    }
+    //if(gb_session.started_frame == 0)
+    //{
+    //    // Call order invalid
+    //    LOG(INFO) << "No frame started";
+    //    return XR_SUCCESS;
+    //}
+    //if(gb_session.started_frame == gb_session.ended_frame)
+    //{
+    //    // Same frame to be re-presented, can choose to only weave here.
+    //}
 
     auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
     //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
@@ -271,7 +276,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
 
     // Transition window swapchain to render targetn
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
@@ -279,11 +285,12 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
-    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetHeight(), gb_session.intermediate_resource.GetHeight());
+    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
 
     // Transition intermediate resource to unordered access fo the weaver
     // Todo Figure out whether I need 2 buffers as input or the weaver, not entirely sure about it....
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // Set swapchain as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
@@ -309,8 +316,10 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
 
     // Transition swapchain to present
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
 
@@ -383,7 +392,9 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
 void XRGameBridge::UpdateSession(GB_Session& session) {
     if (session.session_state == XR_SESSION_STATE_READY) {
         ChangeSessionState(session, XR_SESSION_STATE_SYNCHRONIZED);
-        session.should_render = false;
+        // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
+        //session.should_render = false;
+        session.should_render = true;
     }
     else if (session.session_state == XR_SESSION_STATE_SYNCHRONIZED) {
         ChangeSessionState(session, XR_SESSION_STATE_VISIBLE);

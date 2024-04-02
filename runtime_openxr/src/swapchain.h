@@ -37,6 +37,7 @@ namespace XRGameBridge {
     class GB_ProxySwapchain {
         friend GB_Compositor;
         XrSwapchain handle;
+        std::wstring proxy_name;
 
         //ComPtr<ID3D12CommandQueue> command_queue;
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
@@ -64,8 +65,8 @@ namespace XRGameBridge {
         GB_ProxySwapchain(XrSwapchain handle);
 
         // Todo Not sure how to get the initial resource usage if there are multiple specified, for example D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE and D3D12_RESOURCE_STATE_UNORDERED_ACCESS. Can't set them both initially so there exist the initial_usage parameter for now
-        bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo);
-        bool CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states);
+        bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"");
+        bool CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
         void DestroyResources();
 
         uint32_t GetBufferCount();
