@@ -199,7 +199,7 @@ namespace XRGameBridge {
                     const float offset_y = static_cast<float>(rect.offset.y);
                     const float width = static_cast<float>(rect.extent.width);
                     const float height = static_cast<float>(rect.extent.height);
-                    D3D12_VIEWPORT view_port{ 0, 0, width, height, 0.0f, 1.0f };
+                    D3D12_VIEWPORT view_port{ offset_x, offset_y, width, height, 0.0f, 1.0f };
                     D3D12_RECT scissor_rect{ 0, 0, rect.extent.width, rect.extent.height };
                     cmd_list->RSSetViewports(1, &view_port);
                     cmd_list->RSSetScissorRects(1, &scissor_rect);
