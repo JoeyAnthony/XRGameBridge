@@ -53,6 +53,7 @@ namespace XRGameBridge {
         Frame waited_frame = 0;
         Frame started_frame = 0;
         Frame ended_frame = 0;
+        bool end_frame_called;
         bool should_render = false;
 
         // DirectX 12

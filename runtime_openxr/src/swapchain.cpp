@@ -399,6 +399,15 @@ namespace XRGameBridge {
         // TODO Set up the fences in a way that WaitForImage should also wait for the presentation to be done
         current_image_state[awaited_frame_index] = IMAGE_STATE_RELEASED;
 
+        released_frame_index = awaited_frame_index;
+
+        LOG(INFO) << "px - "
+            << " swapchain: " << handle
+            << " aqcuired index " << current_frame_index
+            << " awaited index " << awaited_frame_index
+            << " released index " << released_frame_index
+            ;
+
         return XR_SUCCESS;
     }
 

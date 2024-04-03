@@ -186,13 +186,13 @@ namespace XRGameBridge {
                     auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
                     auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
 
-                    LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
-                                << " Layercount: "  << frameEndInfo->layerCount
-                                << " Layernum: "    << layer_num
-                                << " viewnum "      << view_num
-                                << " swapchain: "   << view.subImage.swapchain
-                                << " swapchain index "  << proxy_swapchain.awaited_frame_index
-                    ;
+                    //LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
+                    //            << " Layercount: "  << frameEndInfo->layerCount
+                    //            << " Layernum: "    << layer_num
+                    //            << " viewnum "      << view_num
+                    //            << " swapchain: "   << view.subImage.swapchain
+                    //            << " swapchain index "  << proxy_swapchain.awaited_frame_index
+                    //;
 
                     // Viewport settings
                     const float offset_x = static_cast<float>(rect.offset.x);
@@ -264,6 +264,7 @@ namespace XRGameBridge {
     {
         // Go over every layer to signal all proxy swapchain fences
         // Signals bot projection layers and quad layers
+
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
                 auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
@@ -271,8 +272,21 @@ namespace XRGameBridge {
                 for (uint32_t view_num = 0; view_num < layer->viewCount; view_num++) {
                     // Get the swapchain from the view and signal its fence
                     auto& view = layer->views[view_num];
-                    auto& gb_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-                    command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
+                    auto& gb_proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
+
+                    if (layer_num == 0 && view_num == 1) {
+                        LOG(INFO) << "sl - "
+                            //<< " Layercount: " << frameEndInfo->layerCount
+                            //<< " Layernum: " << layer_num
+                            //<< " viewnum " << view_num
+                            << " swapchain: " << view.subImage.swapchain
+                            << " aqcuired index " << gb_proxy_swapchain.current_frame_index
+                            << " awaited index " << gb_proxy_swapchain.awaited_frame_index
+                            << " released index " << gb_proxy_swapchain.released_frame_index
+                            ;
+                    }
+
+                    command_queue->Signal(gb_proxy_swapchain.fence.Get(), gb_proxy_swapchain.fence_values[gb_proxy_swapchain.awaited_frame_index]);
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {

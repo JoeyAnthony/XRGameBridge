@@ -200,9 +200,10 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
         // Call order invalid
         return XR_ERROR_CALL_ORDER_INVALID;
     }
-    if (gb_session.waited_frame == gb_session.started_frame)
+    if (gb_session.end_frame_called == false)
     {
         // Skip frame
+        // TODO If no layers are provided then the display must be cleared.
         gb_session.started_frame = 0;
         gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
         return XR_FRAME_DISCARDED;
@@ -221,6 +222,8 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
     gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
     gb_session.started_frame = gb_session.waited_frame;
 
+    gb_session.end_frame_called = false;
+
     // Log time left
     //uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
     //uint64_t time_left = gb_session.started_frame - time_now;
@@ -237,7 +240,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
 
     uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
     long long time_left = gb_session.started_frame - time_now;
-    LOG(INFO) << "EndFrame, Time left: " << time_left;
+    //LOG(INFO) << "EndFrame, Time left: " << time_left;
 
     if(frameEndInfo->layerCount == 0)
     {
@@ -337,6 +340,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     gb_session.display.UpdateWindow();
 
     gb_session.ended_frame = gb_session.started_frame;
+
+    gb_session.end_frame_called = true;
 
     return XR_SUCCESS;
 }

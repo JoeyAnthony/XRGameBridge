@@ -52,6 +52,7 @@ namespace XRGameBridge {
         D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
         uint32_t current_frame_index = 0;
         uint32_t awaited_frame_index = 0;
+        uint32_t released_frame_index = 0;
         std::array<ImageState, g_back_buffer_count> current_image_state;
         uint64_t previous_fence_value = 0;
 
