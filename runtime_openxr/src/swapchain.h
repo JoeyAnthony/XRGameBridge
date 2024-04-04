@@ -37,6 +37,7 @@ namespace XRGameBridge {
     class GB_ProxySwapchain {
         friend GB_Compositor;
         XrSwapchain handle;
+        std::wstring proxy_name;
 
         //ComPtr<ID3D12CommandQueue> command_queue;
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
@@ -45,10 +46,13 @@ namespace XRGameBridge {
 
         uint32_t rtv_descriptor_size = 0;
         uint32_t cbc_srv_uav_descriptor_size = 0;
+        uint32_t resolution_x = 0;
+        uint32_t resolution_y = 0;
 
         D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
         uint32_t current_frame_index = 0;
         uint32_t awaited_frame_index = 0;
+        uint32_t released_frame_index = 0;
         std::array<ImageState, g_back_buffer_count> current_image_state;
         uint64_t previous_fence_value = 0;
 
@@ -62,8 +66,8 @@ namespace XRGameBridge {
         GB_ProxySwapchain(XrSwapchain handle);
 
         // Todo Not sure how to get the initial resource usage if there are multiple specified, for example D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE and D3D12_RESOURCE_STATE_UNORDERED_ACCESS. Can't set them both initially so there exist the initial_usage parameter for now
-        bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo);
-        bool CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states);
+        bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"");
+        bool CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
         void DestroyResources();
 
         uint32_t GetBufferCount();
@@ -79,6 +83,9 @@ namespace XRGameBridge {
 
         // Make the image available for weaving
         XrResult ReleaseImage();
+
+        uint32_t GetWidth();
+        uint32_t GetHeight();
     };
 
     // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window

@@ -121,6 +121,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         auto directx_images = gb_render_target.GetBuffers();
         for (uint32_t i = 0; i < count; i++) {
             XrSwapchainImageD3D12KHR image{};
+            image.type = XrStructureType::XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
             image.texture = directx_images[i].Get();
             xr_images.push_back(image);
         }
@@ -144,7 +145,9 @@ XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAc
     // return XR_ERROR_CALL_ORDER_INVALID
 
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
-    XrResult res = gb_proxy.AcquireNextImage(*index);
+    uint32_t i = 0;
+    XrResult res = gb_proxy.AcquireNextImage(i);
+    *index = i;
     return res;
 }
 
@@ -172,15 +175,16 @@ namespace XRGameBridge {
     GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle) : handle(handle) {
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo)
-    {
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
         D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
         GetResourceStateFlags(createInfo->usageFlags, flags, states);
-        return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states);
+
+        states = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states){
+    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
         fence_values.fill(0);
@@ -222,8 +226,17 @@ namespace XRGameBridge {
                 IID_PPV_ARGS(&back_buffers[i])));
 
             // Set name for debugging
-            std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
-            back_buffers[i]->SetName(name.c_str());
+            if (resource_name.empty()) {
+                std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
+                back_buffers[i]->SetName(name.c_str());
+                proxy_name = name;
+            }
+            else
+            {
+                std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(handle), i);
+                back_buffers[i]->SetName(name.c_str());
+                proxy_name = name;
+            }
         }
 
         // Create descriptor heaps.
@@ -252,6 +265,8 @@ namespace XRGameBridge {
 
         rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         cbc_srv_uav_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        resolution_x = width;
+        resolution_y = height;
 
         // Create descriptors
         {
@@ -262,7 +277,7 @@ namespace XRGameBridge {
                 //std::wstringstream ss; ss << "Swap Container Resource: " << i;
                 //back_buffers[i]->SetName(ss.str().c_str());
 
-                // Create a RTV for each frame.
+                // Create a RTV for each resource.
                 device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
                 rtv_handle.Offset(1, rtv_descriptor_size);
 
@@ -270,12 +285,12 @@ namespace XRGameBridge {
                 tex2d.MipLevels = 1;
                 tex2d.MostDetailedMip = 0;
                 tex2d.PlaneSlice = 0;
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc {};
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
                 srv_desc.Format = format;
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D = tex2d;
-                // Create SRV for each frame
+                // Create SRV for each resource
                 device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, srv_handle);
                 srv_handle.Offset(1, cbc_srv_uav_descriptor_size);
             }
@@ -384,7 +399,24 @@ namespace XRGameBridge {
         // TODO Set up the fences in a way that WaitForImage should also wait for the presentation to be done
         current_image_state[awaited_frame_index] = IMAGE_STATE_RELEASED;
 
+        released_frame_index = awaited_frame_index;
+
+        LOG(INFO) << "px - "
+            << " swapchain: " << handle
+            << " aqcuired index " << current_frame_index
+            << " awaited index " << awaited_frame_index
+            << " released index " << released_frame_index
+            ;
+
         return XR_SUCCESS;
+    }
+
+    uint32_t GB_ProxySwapchain::GetWidth() {
+        return resolution_x;
+    }
+
+    uint32_t GB_ProxySwapchain::GetHeight() {
+        return resolution_y;
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {
@@ -555,33 +587,30 @@ namespace XRGameBridge {
         // barrier to render target
     }
 
-    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states)
-    {
+    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {
         if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            //states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         }
         if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         }
         if (XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         }
         if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_SOURCE;
+            // Ignored for D3D12
         }
         if (XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
+            // Ignored for D3D12
         }
         if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            // Omitted for D3D12
+            //states = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         }
         if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
+            // Ignored for D3D12
             //usage |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COMMON;
-        }
-        if (XR_SWAPCHAIN_USAGE_INPUT_ATTACHMENT_BIT_MND & usage_flags) {
-            states |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         }
     }
 }

@@ -15,6 +15,17 @@ static float2 uvcoords[3] =
     { 2.0f, 1.0f}
 };
 
+// Constant buffer
+struct temp
+{
+    int is_opaque;
+    int multiply_alpha;
+    float convert_to_linear;
+    float2 uvmin;
+    float2 uvmax;
+};
+ConstantBuffer<temp> settings : register(b0, space0);
+
 // Pixel shader input
 struct PSInput
 {
@@ -28,7 +39,7 @@ PSInput main(uint VertexIndex : SV_VertexID)
     PSInput result;
 
     result.pos = vertices[VertexIndex];
-    result.uv = uvcoords[VertexIndex];
+    result.uv = uvcoords[VertexIndex]; //settings.uvmin + uvcoords[VertexIndex] * (settings.uvmax - settings.uvmin);
 
     return result;
 }

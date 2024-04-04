@@ -9,15 +9,14 @@ XrResult xrGetActionStatePose(XrSession session, const XrActionStateGetInfo* get
 
 namespace  XRGameBridge {
     inline std::vector<std::string> g_supported_paths{
-        ""
+            "/user/hand/left",
+            "/user/hand/right",
+            "/user/head",
+            "/user/gamepad"
     };
 
     // Only here for reference. Can be found here https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#semantic-path-user
     inline const std::vector g_unsupported_paths{
-        "/user/hand/left",
-        "/user/hand/right",
-        "/user/head",
-        "/user/gamepad",
         "/user/treadmill"
     };
 }

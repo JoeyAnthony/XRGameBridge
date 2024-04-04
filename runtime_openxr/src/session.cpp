@@ -17,8 +17,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
 
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
-
     try {
         XRGameBridge::GB_System& system = XRGameBridge::g_systems.at(createInfo->systemId);
         if (!system.features_enumerated) {
@@ -84,7 +82,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // TODO, move SESSION_READY logic to here, check here whether all components are initialized for the session to be put on READY.
 
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    XRGameBridge::GB_System gb_system = XRGameBridge::g_systems[gb_session.system];
+    XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
         LOG(ERROR) << "Session not ready";
@@ -97,11 +95,11 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
-
     // Create debug window
     auto native_resolution = XRGameBridge::GetNativeSystemResolution(gb_system);
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    // Debugging with non full screen mode
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 800, 600, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -111,7 +109,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
     gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue ,&swapchain_info, gb_session.display.GetWindowHandle());
@@ -161,9 +159,6 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
         std::this_thread::sleep_for(ch::nanoseconds(10));
     }
 
-    // Todo Scoped lock inside the if statement may be easier
-    gb_session.wait_frame_state_mutex.unlock();
-
     // Time point since session epoch + 16 milliseconds
     // Super simple version of this for now I guess
 
@@ -173,16 +168,24 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
      */
 
     // 1/60th in nanoseconds
-    uint32_t nanoseconds = 1.0 / 60.0 * 1000 * 1000 * 1000;
+    uint64_t nanoseconds = 1.0f / 60.0f * 1000.f * 1000.f * 1000.f;
     auto refresh_rate = ch::nanoseconds(nanoseconds);
     // Image should be displayed for the <refresh rate> amount of time
     auto display_period = ch::nanoseconds(refresh_rate);
     // Time since the epoch the application is running now, add the refresh rate to predict the time the next image will be displayed.
-    auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate;
+    auto display_time = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate);
+
+    XRGameBridge::UpdateSession(gb_session);
 
     frameState->predictedDisplayPeriod = display_period.count();
     frameState->predictedDisplayTime = display_time.count();
-    frameState->shouldRender = true;
+    frameState->shouldRender = gb_session.should_render;
+
+    gb_session.waited_frame = frameState->predictedDisplayTime;
+
+    gb_session.wait_frame_state_mutex.unlock();
+
+    //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
     return XR_SUCCESS;
 }
@@ -191,11 +194,40 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     std::lock_guard guard(gb_session.wait_frame_state_mutex);
+
+    if(gb_session.waited_frame == 0)
+    {
+        // Call order invalid
+        return XR_ERROR_CALL_ORDER_INVALID;
+    }
+    if (gb_session.end_frame_called == false)
+    {
+        // Skip frame
+        // TODO If no layers are provided then the display must be cleared.
+        gb_session.started_frame = 0;
+        gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+        return XR_FRAME_DISCARDED;
+    }
+
+    if(gb_session.ended_frame > gb_session.started_frame)
+    {
+        // Should be impossible
+        LOG(WARNING) << "Previous frame is later than current";
+    }
+
     if (gb_session.wait_frame_state != XRGameBridge::NewFrameBusy) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
 
     gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+    gb_session.started_frame = gb_session.waited_frame;
+
+    gb_session.end_frame_called = false;
+
+    // Log time left
+    //uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
+    //uint64_t time_left = gb_session.started_frame - time_now;
+    //LOG(INFO) << "Frame started. Time left: " << time_left;
 
     return XR_SUCCESS;
 }
@@ -204,11 +236,41 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    auto& gb_compositor = gb_session.compositor;
+
+    uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
+    long long time_left = gb_session.started_frame - time_now;
+    //LOG(INFO) << "EndFrame, Time left: " << time_left;
+
+    if(frameEndInfo->layerCount == 0)
+    {
+        return XR_ERROR_LAYER_INVALID;
+    }
+
+    // Frame too late, signal fences and return success
+    //if (time_now > gb_session.started_frame) {
+    //    // Application too late
+    //    LOG(INFO) << "Application too late, skipping compose";
+    //    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
+    //    return XR_SUCCESS;
+    //}
+    //if(gb_session.started_frame == 0)
+    //{
+    //    // Call order invalid
+    //    LOG(INFO) << "No frame started";
+    //    return XR_SUCCESS;
+    //}
+    //if(gb_session.started_frame == gb_session.ended_frame)
+    //{
+    //    // Same frame to be re-presented, can choose to only weave here.
+    //}
+
+    auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
+    //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
 
     // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
-    auto& gb_graphics_device = gb_session.window_swapchain;
-    int32_t index = gb_graphics_device.AcquireNextImage();
-    auto& gb_compositor = gb_session.compositor;
+    auto& window_swapchain = gb_session.window_swapchain;
+    int32_t index = window_swapchain.AcquireNextImage();
     auto& cmd_list = gb_compositor.GetCommandList(index);
     auto& cmd_allocator = gb_compositor.GetCommandAllocator(index);
 
@@ -216,23 +278,25 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_allocator->Reset();
     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
 
-    // TODO transition proxy images to unordered access/shader source (If I'm right...)
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_graphics_device.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    // Transition window swapchain to render targetn
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Set intermediate resource as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, gb_graphics_device.GetRtvDescriptorSize());
+    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
     cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // Compose and draw to the render target
-    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
+    // Compose and draw to the intermediate resource
+    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
 
     // Transition intermediate resource to unordered access fo the weaver
     // Todo Figure out whether I need 2 buffers as input or the weaver, not entirely sure about it....
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // Set swapchain as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(gb_graphics_device.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, gb_graphics_device.GetRtvDescriptorSize());
+    CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
     float clear_color[4] = {0.5f, 0.0f, 0.5f, 1.0f};
     //cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
     cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
@@ -244,17 +308,21 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->RSSetViewports(1, &view_port);
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-    gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[index].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    //gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[index].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 
     // Do weaving
-    gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
+    //gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
 
-    // DEBUG
+    cmd_list->CopyResource(window_swapchain.GetImages()[index].Get(), gb_session.intermediate_resource.GetBuffers()[index].Get());
+
+    // DEBUG to easily view the sbs image
     //gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
 
     // Transition swapchain to present
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_graphics_device.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
 
@@ -262,18 +330,28 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->Close();
 
     // Execute command lists
-    gb_compositor.ExecuteCommandLists(cmd_list.Get(), frameEndInfo);
+    gb_compositor.ExecuteCommandList(cmd_list.Get());
+    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
 
     // Present to window
-    gb_graphics_device.PresentFrame();
+    window_swapchain.PresentFrame();
 
     // Update window
     gb_session.display.UpdateWindow();
+
+    gb_session.ended_frame = gb_session.started_frame;
+
+    gb_session.end_frame_called = true;
 
     return XR_SUCCESS;
 }
 
 void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {
+    if(session.session_state == state)
+    {
+        return;
+    }
+
     session.session_state = state;
     EventManager& event_manager = g_game_bridge_instance->GetEventManager();
 
@@ -287,6 +365,24 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
         g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_READY, sizeof(XrEventDataSessionStateChanged), &state_change);
         event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
     }
+    else if (state == XR_SESSION_STATE_SYNCHRONIZED) {
+        XrEventDataSessionStateChanged state_change;
+        state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        state_change.session = session.id;
+        state_change.state = XR_SESSION_STATE_SYNCHRONIZED;
+        state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
+        g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_SYNCHRONIZED, sizeof(XrEventDataSessionStateChanged), &state_change);
+        event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
+    else if (state == XR_SESSION_STATE_VISIBLE) {
+        XrEventDataSessionStateChanged state_change;
+        state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        state_change.session = session.id;
+        state_change.state = XR_SESSION_STATE_VISIBLE;
+        state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
+        g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_VISIBLE, sizeof(XrEventDataSessionStateChanged), &state_change);
+        event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
     else if (state == XR_SESSION_STATE_FOCUSED) {
         XrEventDataSessionStateChanged state_change;
         state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
@@ -295,5 +391,22 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
         state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
         g_openxr_event_stream_writer->SubmitEvent(XR_SESSION_STATE_FOCUSED, sizeof(XrEventDataSessionStateChanged), &state_change);
         event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+    }
+}
+
+void XRGameBridge::UpdateSession(GB_Session& session) {
+    if (session.session_state == XR_SESSION_STATE_READY) {
+        ChangeSessionState(session, XR_SESSION_STATE_SYNCHRONIZED);
+        // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
+        //session.should_render = false;
+        session.should_render = true;
+    }
+    else if (session.session_state == XR_SESSION_STATE_SYNCHRONIZED) {
+        ChangeSessionState(session, XR_SESSION_STATE_VISIBLE);
+        session.should_render = true;
+    }
+    else if (session.session_state == XR_SESSION_STATE_VISIBLE) {
+        ChangeSessionState(session, XR_SESSION_STATE_FOCUSED);
+        session.should_render = true;
     }
 }

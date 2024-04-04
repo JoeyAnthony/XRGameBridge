@@ -123,8 +123,8 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         view.maxImageRectWidth = native_resolution.x;
         view.recommendedImageRectHeight = form_factor_resolution.y;
         view.maxImageRectHeight = native_resolution.y;
-        view.recommendedSwapchainSampleCount = 2; //TODO idk what this means
-        view.maxSwapchainSampleCount = 2;
+        view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
+        view.maxSwapchainSampleCount = 1;
 
         // TODO Create 2 views here to get 2 swap chains and so a view per eye
         supported_views.push_back(view);
@@ -166,7 +166,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     XrView view1, view2;
     view1.type = XR_TYPE_VIEW;
     view1.next = nullptr;
-    view1.pose = { {.0f, 0.0f, 0.0f, 1.0f}, {-0.060f, 0, 0} }; // Orientation, Position
+    view1.pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.060f, 0, 0} }; // Orientation, Position
     view1.fov = { -fov, fov, fov, -fov }; // FOV angle left, right, up, down
 
     view2.type = XR_TYPE_VIEW;
@@ -393,6 +393,11 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
     system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->sr_context);
     system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionHeight()) };
 
+    if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
+    {
+        system.physical_resolution = GetScaledSystemResolutionMainDisplay();
+    }
+
     g_systems.insert({ system.id, system });
 
     return system.id;
@@ -423,7 +428,7 @@ XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system)
     GBVector2i native_resolution = GetNativeSystemResolution(gb_system);
 
     XrSystemGraphicsProperties g_props{};
-    g_props.maxLayerCount = 1;
+    g_props.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
     g_props.maxSwapchainImageWidth = native_resolution.x;
     g_props.maxSwapchainImageHeight = native_resolution.y;
 
@@ -434,7 +439,7 @@ XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system)
     XrSystemProperties sys_props{
         XR_TYPE_SYSTEM_PROPERTIES,
         nullptr,
-        1,
+        gb_system.id,
         0x354B, // USB Vendor ID
         "SR Monitor",
         g_props,

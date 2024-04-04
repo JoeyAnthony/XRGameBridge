@@ -9,15 +9,20 @@
 INITIALIZE_EASYLOGGINGPP
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
-    el::Configurations defaultConf;
-    defaultConf.setGlobally(el::ConfigurationType::Format, "%date %level %loc %msg");
 
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
     {
+        el::Configurations defaultConf;
+        defaultConf.setGlobally(el::ConfigurationType::Format, "%date %level %loc %msg");
+        defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "true");
+
         char module_path[MAX_PATH];
         GetModuleFileNameA(hInst, module_path, MAX_PATH);
         runtime_path = std::string(module_path);
+
+        std::string log_path = (fs::path(runtime_path).parent_path() /= "log.txt").string();
+        defaultConf.setGlobally(el::ConfigurationType::Filename, log_path);
 
         FindPathEnv();
 
@@ -47,6 +52,9 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
 
         XRGameBridge::g_runtime_settings.hInst = hInst;
 
+        // Allocate console for when none exists for debugging
+        //AllocConsole();
+
         break;
     }
 
@@ -55,6 +63,8 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
         LOG(INFO) << "DLL_PROCESS_DETACH";
 
         LOG(INFO) << "XR Game Bridge Unloaded";
+
+        //FreeConsole();
         break;
     }
 

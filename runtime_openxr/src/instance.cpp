@@ -262,15 +262,15 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
     graphicsRequirements->adapterLuid = desc.AdapterLuid;
     graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_0;
 
-#ifdef _DEBUG
-    // Enable the D3D12 debug layer.
-    {
-        ComPtr<ID3D12Debug> debugController;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
-            debugController->EnableDebugLayer();
-        }
-    }
-#endif
+//#ifdef _DEBUG
+//    // Enable the D3D12 debug layer.
+//    {
+//        ComPtr<ID3D12Debug> debugController;
+//        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
+//            debugController->EnableDebugLayer();
+//        }
+//    }
+//#endif
     return XR_SUCCESS;
 }
 
@@ -479,6 +479,20 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
         eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
         memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
     }
+    else if (event_type == XR_SESSION_STATE_SYNCHRONIZED) {
+        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
+        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
+        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
+        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
+    }
+    else if (event_type == XR_SESSION_STATE_VISIBLE) {
+        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
+        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
+        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
+        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
+    }
     else if (event_type == XR_SESSION_STATE_FOCUSED) {
         XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
         XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
@@ -490,6 +504,9 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
 }
 
 void XRGameBridge::InitializeGameBridge() {
+    // Set dpi awareness for the application
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+
     if (g_game_bridge_instance == nullptr) {
         g_game_bridge_instance = new GameBridge(EventManager());
         auto& event_manager = g_game_bridge_instance->GetEventManager();
