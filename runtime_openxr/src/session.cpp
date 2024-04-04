@@ -96,20 +96,20 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
     // Create debug window
-    auto native_resolution = XRGameBridge::GetNativeSystemResolution(gb_system);
+    auto system_resolution = XRGameBridge::GetSystemResolution(gb_system);
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
     // Debugging with non full screen mode
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 800, 600, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
-    swapchain_info.width = native_resolution.x;
-    swapchain_info.height = native_resolution.y;
+    swapchain_info.width = system_resolution.x;
+    swapchain_info.height = system_resolution.y;
     swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
+    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
     gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue ,&swapchain_info, gb_session.display.GetWindowHandle());
@@ -302,7 +302,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
 
     // Set viewport for rendering to the final rtv
-    auto native_resolution = XRGameBridge::GetNativeSystemResolution(XRGameBridge::g_systems[gb_session.system]);
+    auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
     D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
     cmd_list->RSSetViewports(1, &view_port);

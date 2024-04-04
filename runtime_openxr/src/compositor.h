@@ -19,7 +19,7 @@ namespace XRGameBridge {
     public:
         void Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
         //void InitShaders(const ComPtr<ID3D12Device>& device);
-        void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t rtv_width, uint32_t rtv_height);
+        void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);
         void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
         void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
 
