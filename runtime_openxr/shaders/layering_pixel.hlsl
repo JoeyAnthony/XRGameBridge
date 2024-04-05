@@ -10,8 +10,11 @@ struct temp
     int is_opaque;
     int multiply_alpha;
     float convert_to_linear;
-    float2 uvmin;
-    float2 uvmax;
+    float uvmin_x;
+    float uvmin_y;
+    float uvmax_x;
+    float uvmax_y;
+    float pad;
 };
 
 // Pixel shader
@@ -35,4 +38,6 @@ float4 main(PSInput input) : SV_TARGET
     layer_color = float4(layer_color.rgb * alpha, blend);
 
     return layer_color;
+    //return float4(input.uv.x, input.uv.y, 0.f, 1.f);
+    //return float4(settings.uvmax_x, 0.f, 0.f, 1.f);
 }

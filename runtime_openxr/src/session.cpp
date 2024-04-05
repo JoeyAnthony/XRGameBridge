@@ -273,6 +273,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     int32_t index = window_swapchain.AcquireNextImage();
     auto& cmd_list = gb_compositor.GetCommandList(index);
     auto& cmd_allocator = gb_compositor.GetCommandAllocator(index);
+    float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 
     // Prepare command list // TODO set pipeline state when resetting command list later
     cmd_allocator->Reset();
@@ -285,6 +286,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
     cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);
+    cmd_list->ClearRenderTargetView(intermediate_rtv_handle, clear_color, 0, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
@@ -297,9 +299,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
 
     // Set swapchain as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
-    float clear_color[4] = {0.5f, 0.0f, 0.5f, 1.0f};
-    //cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
     cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
+    cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
 
     // Set viewport for rendering to the final rtv
     auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);

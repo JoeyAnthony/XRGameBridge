@@ -21,8 +21,11 @@ struct temp
     int is_opaque;
     int multiply_alpha;
     float convert_to_linear;
-    float2 uvmin;
-    float2 uvmax;
+    float uvmin_x;
+    float uvmin_y;
+    float uvmax_x;
+    float uvmax_y;
+    float pad;
 };
 ConstantBuffer<temp> settings : register(b0, space0);
 
@@ -38,14 +41,17 @@ PSInput main(uint VertexIndex : SV_VertexID)
 {
     PSInput result;
 
+    float2 uvmin = { settings.uvmin_x, settings.uvmin_y };
+    float2 uvmax = { settings.uvmax_x, settings.uvmax_y };
+
     result.pos = vertices[VertexIndex];
 
-    float2 uv_scaled = uvcoords[VertexIndex] / 2;
-    uv_scaled.y += 1.f;
-    uv_scaled = settings.uvmin + uv_scaled * (settings.uvmax - settings.uvmin);
+    // Scale the uvcoords to a 0, 1 system
+    float2 uv_scaled = { uvcoords[VertexIndex].x, uvcoords[VertexIndex].y + 1 };
+    uv_scaled = uvmin + uv_scaled * (uvmax - uvmin);
+    float2 uv_final = { uv_scaled.x, uv_scaled.y -1 };
 
-    float2 uv_final = uv_scaled.y -= 1;
-    result.uv = uv_final *= 2;
+    result.uv = uv_final;
 
     return result;
 }
