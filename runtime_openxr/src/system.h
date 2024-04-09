@@ -36,12 +36,6 @@ namespace  XRGameBridge {
         OpenGL = 4
     };
 
-    struct GBVector2i
-    {
-        uint64_t x;
-        uint64_t y;
-    };
-
     enum class SRDisplay {
         SR_DISPLAY
     };
@@ -83,8 +77,8 @@ namespace  XRGameBridge {
     //XrSystemProperties GetDummySystemProperties();
 
     XrSystemId CreateXrGameBridgeSystem(XrInstance instance);
-    GBVector2i GetSystemResolution(const GB_System& gb_system, XrFormFactor form_factor);
-    GBVector2i GetNativeSystemResolution(const GB_System& gb_system);
+    GBVector2i GetRenderResolution(const GB_System& gb_system);
+    GBVector2i GetSystemResolution(const GB_System& gb_system);
     GBVector2i GetScaledSystemResolutionMainDisplay();
     XrSystemProperties GetSystemProperties(const GB_System& gb_system);
 }

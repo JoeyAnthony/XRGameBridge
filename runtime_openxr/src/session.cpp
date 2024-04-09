@@ -96,20 +96,20 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
     // Create debug window
-    auto native_resolution = XRGameBridge::GetNativeSystemResolution(gb_system);
+    auto system_resolution = XRGameBridge::GetSystemResolution(gb_system);
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, native_resolution.x, native_resolution.y, true, true);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
     // Debugging with non full screen mode
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 800, 600, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
-    swapchain_info.width = native_resolution.x;
-    swapchain_info.height = native_resolution.y;
+    swapchain_info.width = system_resolution.x;
+    swapchain_info.height = system_resolution.y;
     swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, native_resolution.x, native_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
+    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
     gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue ,&swapchain_info, gb_session.display.GetWindowHandle());
@@ -273,36 +273,30 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     int32_t index = window_swapchain.AcquireNextImage();
     auto& cmd_list = gb_compositor.GetCommandList(index);
     auto& cmd_allocator = gb_compositor.GetCommandAllocator(index);
+    float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 
     // Prepare command list // TODO set pipeline state when resetting command list later
     cmd_allocator->Reset();
     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
 
-    // Transition window swapchain to render targetn
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
     //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
     cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);
+    cmd_list->ClearRenderTargetView(intermediate_rtv_handle, clear_color, 0, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
     gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
 
-    // Transition intermediate resource to unordered access fo the weaver
-    // Todo Figure out whether I need 2 buffers as input or the weaver, not entirely sure about it....
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
     // Set swapchain as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
-    float clear_color[4] = {0.5f, 0.0f, 0.5f, 1.0f};
-    //cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
     cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
+    //cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
 
     // Set viewport for rendering to the final rtv
-    auto native_resolution = XRGameBridge::GetNativeSystemResolution(XRGameBridge::g_systems[gb_session.system]);
+    auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
     D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
     cmd_list->RSSetViewports(1, &view_port);
@@ -310,8 +304,17 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
 
     //gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[index].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 
+    // Transition intermediate resource to unordered access fo the weaver
+    // Todo Figure out whether I need 2 buffers as input or the weaver, not entirely sure about it....
+    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+    // Transition window swapchain to render target
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+
     // Do weaving
     //gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
+
 
     cmd_list->CopyResource(window_swapchain.GetImages()[index].Get(), gb_session.intermediate_resource.GetBuffers()[index].Get());
 

@@ -4,11 +4,11 @@
 #include <fstream>
 #include <filesystem>
 
+#include "instance.h"
 #include "swapchain.h"
 #include "settings.h"
 
 
-#include "instance.h"
 namespace XRGameBridge {
 
     const std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
@@ -41,7 +41,6 @@ namespace XRGameBridge {
     }
 
     void GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
-
         d3d12_device = device;
         command_queue = queue;
 
@@ -64,7 +63,7 @@ namespace XRGameBridge {
             CD3DX12_ROOT_PARAMETER1 root_parameters[3];
             root_parameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
             root_parameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
-            root_parameters[2].InitAsConstants(7, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+            root_parameters[2].InitAsConstants(8, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
 
 
@@ -138,9 +137,9 @@ namespace XRGameBridge {
         // Describe and create a sampler.
         D3D12_SAMPLER_DESC samplerDesc = {};
         samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-        samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-        samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-        samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
         samplerDesc.MinLOD = 0;
         samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
         samplerDesc.MipLODBias = 0.0f;
@@ -163,7 +162,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t rtv_width, uint32_t rtv_height) {
+    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -195,12 +194,10 @@ namespace XRGameBridge {
                     //;
 
                     // Viewport settings
-                    const float offset_x = static_cast<float>(rect.offset.x);
-                    const float offset_y = static_cast<float>(rect.offset.y);
-                    const float width = static_cast<float>(rect.extent.width);
-                    const float height = static_cast<float>(rect.extent.height);
-                    D3D12_VIEWPORT view_port{ offset_x, offset_y, width, height, 0.0f, 1.0f };
-                    D3D12_RECT scissor_rect{ 0, 0, rect.extent.width, rect.extent.height };
+                    const float width = static_cast<float>(system_width) / 2;
+                    const float height = static_cast<float>(system_height);
+                    D3D12_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
+                    D3D12_RECT scissor_rect{ 0, 0, system_width, system_height};
                     cmd_list->RSSetViewports(1, &view_port);
                     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
@@ -208,34 +205,35 @@ namespace XRGameBridge {
                     // Transition proxy swapchain resource to pixel shader resource
                     //TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-                    std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
-                    cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
-
                     struct {
                         uint32_t is_opaque;
                         uint32_t multiply_alpha;
                         float convert_to_linear;
-                        float uvmin_x, uvmin_y;
-                        float uvmax_x, uvmax_y;
+                        float uvmin_x;
+                        float uvmin_y;
+                        float uvmax_x;
+                        float uvmax_y;
+                        float pad;
                         
                     } layering_constants;
                     // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
                     layering_constants.is_opaque = (layer->layerFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
                     // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
                     layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-                    layering_constants.convert_to_linear = 0;
+                    layering_constants.convert_to_linear = 1;
 
                     // Normalize uv values
-                    const float frtv_width = static_cast<float>(rtv_width);
-                    const float frtv_height = static_cast<float>(rtv_height);
-                    layering_constants.uvmin_x = offset_x   / frtv_width;
-                    layering_constants.uvmin_y = offset_y   / frtv_height;
-                    layering_constants.uvmax_x = width      / frtv_width;
-                    layering_constants.uvmax_y = height     / frtv_height;
+                    layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain.GetWidth());
+                    layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain.GetHeight());
+                    layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain.GetWidth());
+                    layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain.GetHeight());
+
+                    std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
+                    cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
 
                     cmd_list->SetGraphicsRootSignature(root_signature.Get());
                     cmd_list->SetPipelineState(pipeline_state.Get());
-                    cmd_list->SetGraphicsRoot32BitConstants(2, 7, &layering_constants, 0);
+                    cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
                     // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
                     auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);

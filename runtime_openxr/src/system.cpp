@@ -111,18 +111,18 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
     XrResult res = XR_ERROR_RUNTIME_FAILURE;
 
     XRGameBridge::GB_System gb_system = XRGameBridge::g_systems[systemId];
-    XRGameBridge::GBVector2i form_factor_resolution = GetSystemResolution(gb_system, gb_system.form_factor);
-    XRGameBridge::GBVector2i native_resolution = GetNativeSystemResolution(gb_system);
+    XRGameBridge::GBVector2i render_resolution = XRGameBridge::GetRenderResolution(gb_system);
+    XRGameBridge::GBVector2i system_resolution = XRGameBridge::GetSystemResolution(gb_system);
 
     std::vector<XrViewConfigurationView> supported_views;
     if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
         XrViewConfigurationView view{};
         view.type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
         // recommended is half width, max is full width?
-        view.recommendedImageRectWidth = form_factor_resolution.x;
-        view.maxImageRectWidth = native_resolution.x;
-        view.recommendedImageRectHeight = form_factor_resolution.y;
-        view.maxImageRectHeight = native_resolution.y;
+        view.recommendedImageRectWidth = render_resolution.x;
+        view.maxImageRectWidth = system_resolution.x;
+        view.recommendedImageRectHeight = render_resolution.y;
+        view.maxImageRectHeight = system_resolution.y;
         view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
         view.maxSwapchainSampleCount = 1;
 
@@ -395,6 +395,7 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
 
     if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
     {
+        // For when no SR display is connected, and if it's an 8K SR display it should work as well
         system.physical_resolution = GetScaledSystemResolutionMainDisplay();
     }
 
@@ -403,18 +404,19 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
     return system.id;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_system, XrFormFactor form_factor) {
+XRGameBridge::GBVector2i XRGameBridge::GetRenderResolution(const GB_System& gb_system) {
+    GBVector2i physical_res = gb_system.physical_resolution;
+    auto form_factor = gb_system.form_factor;
     bool use_halved_width = form_factor == XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY || form_factor == XR_FORM_FACTOR_HANDHELD_DISPLAY;
 
-    GBVector2i physical_res = gb_system.physical_resolution;
     if (use_halved_width) {
-        //physical_res.x /= 2;
+        physical_res.x /= 2;
     }
 
     return physical_res;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetNativeSystemResolution(const GB_System& gb_system) {
+XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_system) {
     return gb_system.physical_resolution;
 }
 
@@ -425,7 +427,7 @@ XRGameBridge::GBVector2i XRGameBridge::GetScaledSystemResolutionMainDisplay() {
 }
 
 XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system) {
-    GBVector2i native_resolution = GetNativeSystemResolution(gb_system);
+    GBVector2i native_resolution = GetRenderResolution(gb_system);
 
     XrSystemGraphicsProperties g_props{};
     g_props.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;

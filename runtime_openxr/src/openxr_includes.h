@@ -35,3 +35,11 @@ inline void ThrowIfFailed(HRESULT hr) {
 
 // Extra
 #include "easylogging++.h"
+
+namespace XRGameBridge {
+    // Data types
+    struct GBVector2i {
+        uint64_t x;
+        uint64_t y;
+    };
+}
