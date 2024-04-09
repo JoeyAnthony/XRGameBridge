@@ -41,13 +41,19 @@ namespace XRGameBridge {
         XrSession id;
         XrInstance instance;
         XrSystemId system;
-        XrSessionState session_state;
         XrViewConfigurationType view_configuration;
         XrSwapchain swap_chain;
         //std::vector<XrActionSet> g_action_sets;
 
+        // Session state
+        std::mutex mutex_session_state_queue;
+        std::vector<XrSessionState> session_state_queue;
+        XrSessionState session_state;
+
         //std
         std::chrono::high_resolution_clock::time_point session_epoch;
+
+        // Frame logic
         FrameState wait_frame_state;
         std::mutex wait_frame_state_mutex;
         Frame waited_frame = 0;
@@ -90,18 +96,6 @@ namespace XRGameBridge {
         }
 
         void EndFrame(uint32_t frame_id) {
-        }
-
-        uint64_t GetNextRenderTimeNanoseconds() {
-            //auto display_time = ch::high_resolution_clock::now() - last_frame_start;
-            //next_frame_time = ch::high_resolution_clock::now() + ch::milliseconds(33);
-            //last_frame_start = ch::high_resolution_clock::now();
-            //return ch::time_point_cast<ch::nanoseconds>(ch::high_resolution_clock::now() + ch::milliseconds(3));
-        }
-
-        uint64_t GetFrameTime() {
-            //last_frame_time = ch::high_resolution_clock::now() - last_frame;
-            //return ch::duration_cast<ch::nanoseconds>(last_frame_time).count();
         }
     };
 

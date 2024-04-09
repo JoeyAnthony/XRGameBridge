@@ -82,6 +82,9 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     // Whether there is something to render to is responsibility of the application.
     XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_READY);
 
+    // TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
+    XRGameBridge::UpdateSession(gb_session);
+
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
     return XR_SUCCESS;
 }
