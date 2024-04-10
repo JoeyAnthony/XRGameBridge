@@ -64,6 +64,9 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_gbinstance);
     new_session.sr_context = gb_instance->sr_context;
 
+    // Start session idle thread
+    new_session.StartSessionIdle();
+
     return XR_SUCCESS;
 }
 
@@ -71,9 +74,16 @@ XrResult xrDestroySession(XrSession session) {
     // TODO Should probably destroy all objects related to a session.
     // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.
     // Also action sets/g_actions attached to the session should be destroyed
-    LOG(INFO) << "Called " << __func__;
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    gb_session.idle_thread.join();
 
-    return XR_ERROR_RUNTIME_FAILURE;
+    if (gb_session.d3d12weaver) {
+        delete gb_session.d3d12weaver;
+    }
+
+    XRGameBridge::g_sessions.erase(session);
+
+    return XR_SUCCESS;
 }
 
 XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
@@ -82,6 +92,8 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
     XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];
+
+    gb_session.idle_thread.join();
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
         LOG(ERROR) << "Session not ready";
@@ -156,6 +168,7 @@ XrResult xrEndSession(XrSession session) {
 
     // Destroy resources created by BeginSession
     delete gb_session.d3d12weaver;
+    gb_session.d3d12weaver = nullptr;
 
     // Not necessary as it uses ComPtr for resources
     gb_session.intermediate_resource.DestroyResources();
@@ -177,10 +190,13 @@ XrResult xrEndSession(XrSession session) {
     // Save profiles maybe
 
     // Change session state to idle
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
-    XRGameBridge::UpdateSession(gb_session);
+    //if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
+        XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
+        XRGameBridge::UpdateSession(gb_session);
 
-    // Start Session Idle thread
+        // Start Session Idle thread
+        gb_session.StartSessionIdle();
+    //}
 
     return XR_SUCCESS;
 }
@@ -192,7 +208,9 @@ XrResult xrRequestExitSession(XrSession session) {
     }
 
     // Change session state to stopping
+    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
 
     return XR_SUCCESS;
 }
@@ -336,7 +354,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
 
     // Set intermediate resource as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, window_swapchain.GetRtvDescriptorSize());
+    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
     cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);
     cmd_list->ClearRenderTargetView(intermediate_rtv_handle, clear_color, 0, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -367,8 +385,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     // Do weaving
-    gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[0].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-    gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
+    //gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[0].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    //gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
 
 
     cmd_list->CopyResource(window_swapchain.GetImages()[index].Get(), gb_session.intermediate_resource.GetBuffers()[0].Get());
@@ -402,6 +420,22 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     gb_session.end_frame_called = true;
 
     return XR_SUCCESS;
+}
+
+void XRGameBridge::GB_Session::StartSessionIdle() {
+    idle_thread = std::thread(&GB_Session::IdleFunc, this);
+}
+
+void XRGameBridge::GB_Session::IdleFunc() {
+    while (session_state == XR_SESSION_STATE_IDLE) {
+        if (g_proxy_swapchains.size() > 0) {
+            ChangeSessionState(*this, XR_SESSION_STATE_READY);
+        }
+
+        UpdateSession(*this);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
 }
 
 void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {

@@ -76,11 +76,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = handle;
     swapchain_creation_count++;
 
-    // TODO Is this the right place set the session state to ready?
-    // Maybe the session is ready when all systems for the session are there, this would not include swapchains
-    // Whether there is something to render to is responsibility of the application.
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_READY);
-
     // TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
     XRGameBridge::UpdateSession(gb_session);
 
@@ -335,6 +330,11 @@ namespace XRGameBridge {
         return srv_heap;
     }
 
+    uint32_t GB_ProxySwapchain::GetRtvDescriptorSize()
+    {
+        return rtv_descriptor_size;
+    }
+
     XrResult GB_ProxySwapchain::AcquireNextImage(uint32_t& index) {
         uint32_t next_index = (current_frame_index + 1) % g_back_buffer_count;
 
@@ -496,11 +496,11 @@ namespace XRGameBridge {
 
         // Swap chain needs the queue so that it can force a flush on it.
         ComPtr<IDXGISwapChain1> swapChain;
-        if (FAILED(factory->CreateSwapChainForHwnd(queue.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain))) {
+        HRESULT res = factory->CreateSwapChainForHwnd(queue.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
+        if (FAILED(res)) {
             LOG(ERROR) << "Failed to create d3d12 swap chain";
             return false;
         }
-
         if (FAILED(swapChain.As(&swap_chain))) {
             LOG(ERROR) << "Failed to get ComPtr object";
             return false;

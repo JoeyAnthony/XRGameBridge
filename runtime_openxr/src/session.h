@@ -73,6 +73,10 @@ namespace XRGameBridge {
         // SR
         SR::SRContext* sr_context;
         DirectX12Weaver* d3d12weaver;
+
+        std::thread idle_thread;
+        void StartSessionIdle();
+        void IdleFunc();
     };
 
     class GB_FrameTimer {

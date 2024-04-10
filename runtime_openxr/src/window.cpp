@@ -40,27 +40,8 @@ namespace XRGameBridge {
         return 0;
     }
 
-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {
-        // TODO better window creation checking code
-        static bool window_created = false;
-        if (window_created) {
-            return false;
-        }
-
-        window_created = true;
-
-        // Create window
-        uint32_t window_style = 0;
-        uint32_t borderless_fullscreen = WS_POPUP;
-        uint32_t windowed = WS_OVERLAPPEDWINDOW;
-
-        if (fullscreen) {
-            window_style = borderless_fullscreen;
-        }
-        else {
-            window_style = windowed;
-        }
-
+    bool GB_Display::InitWindowClass(HINSTANCE hInstance)
+    {
         WNDCLASSEX window_ex;
 
         window_ex.cbSize = sizeof(WNDCLASSEX);
@@ -77,9 +58,36 @@ namespace XRGameBridge {
         window_ex.hIconSm = LoadIcon(window_ex.hInstance, IDI_APPLICATION);
 
         if (!RegisterClassEx(&window_ex)) {
+            uint32_t err = GetLastError();
+            LOG(ERROR) << "Call to RegisterClassEx failed " << err;
             MessageBox(NULL, "Call to RegisterClassEx failed!", "XR Game Bridge", NULL);
 
             return false;
+        }
+    }
+
+    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {
+        // TODO better window creation checking code
+        static bool window_created = false;
+        if (h_wnd != nullptr) {
+            return false;
+        }
+
+        if (!window_class_is_registered) {
+            InitWindowClass(hInstance);
+            window_class_is_registered = true;
+        }
+
+        // Create window
+        uint32_t window_style = 0;
+        uint32_t borderless_fullscreen = WS_POPUP;
+        uint32_t windowed = WS_OVERLAPPEDWINDOW;
+
+        if (fullscreen) {
+            window_style = borderless_fullscreen;
+        }
+        else {
+            window_style = windowed;
         }
 
         const long w = static_cast<long>(width);
@@ -118,6 +126,7 @@ namespace XRGameBridge {
             LOG(ERROR) << "Failed to destroy window: " << GetLastError();
         }
 
+        h_wnd = nullptr;
         return res;
     }
 

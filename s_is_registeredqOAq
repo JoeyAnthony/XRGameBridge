@@ -1,0 +1,315 @@
+[1mdiff --git a/runtime_openxr/src/instance.cpp b/runtime_openxr/src/instance.cpp[m
+[1mindex a58c47e..9a2f6e8 100644[m
+[1m--- a/runtime_openxr/src/instance.cpp[m
+[1m+++ b/runtime_openxr/src/instance.cpp[m
+[36m@@ -262,15 +262,15 @@[m [mXrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste[m
+     graphicsRequirements->adapterLuid = desc.AdapterLuid;[m
+     graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_0;[m
+ [m
+[31m-//#ifdef _DEBUG[m
+[31m-//    // Enable the D3D12 debug layer.[m
+[31m-//    {[m
+[31m-//        ComPtr<ID3D12Debug> debugController;[m
+[31m-//        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {[m
+[31m-//            debugController->EnableDebugLayer();[m
+[31m-//        }[m
+[31m-//    }[m
+[31m-//#endif[m
+[32m+[m[32m#ifdef _DEBUG[m
+[32m+[m[32m    // Enable the D3D12 debug layer.[m
+[32m+[m[32m    {[m
+[32m+[m[32m        ComPtr<ID3D12Debug> debugController;[m
+[32m+[m[32m        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {[m
+[32m+[m[32m            debugController->EnableDebugLayer();[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m[32m#endif[m
+     return XR_SUCCESS;[m
+ }[m
+ [m
+[1mdiff --git a/runtime_openxr/src/session.cpp b/runtime_openxr/src/session.cpp[m
+[1mindex 2a0f4c0..45d62dc 100644[m
+[1m--- a/runtime_openxr/src/session.cpp[m
+[1m+++ b/runtime_openxr/src/session.cpp[m
+[36m@@ -64,6 +64,9 @@[m [mXrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI[m
+     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_gbinstance);[m
+     new_session.sr_context = gb_instance->sr_context;[m
+ [m
+[32m+[m[32m    // Start session idle thread[m
+[32m+[m[32m    new_session.StartSessionIdle();[m
+[32m+[m
+     return XR_SUCCESS;[m
+ }[m
+ [m
+[36m@@ -71,9 +74,16 @@[m [mXrResult xrDestroySession(XrSession session) {[m
+     // TODO Should probably destroy all objects related to a session.[m
+     // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.[m
+     // Also action sets/g_actions attached to the session should be destroyed[m
+[31m-    LOG(INFO) << "Called " << __func__;[m
+[32m+[m[32m    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];[m
+[32m+[m[32m    gb_session.idle_thread.join();[m
+[32m+[m
+[32m+[m[32m    if (gb_session.d3d12weaver) {[m
+[32m+[m[32m        delete gb_session.d3d12weaver;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    XRGameBridge::g_sessions.erase(session);[m
+ [m
+[31m-    return XR_ERROR_RUNTIME_FAILURE;[m
+[32m+[m[32m    return XR_SUCCESS;[m
+ }[m
+ [m
+ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {[m
+[36m@@ -83,6 +93,8 @@[m [mXrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)[m
+     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];[m
+     XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];[m
+ [m
+[32m+[m[32m    gb_session.idle_thread.join();[m
+[32m+[m
+     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {[m
+         LOG(ERROR) << "Session not ready";[m
+         return XR_ERROR_SESSION_NOT_READY;[m
+[36m@@ -156,6 +168,7 @@[m [mXrResult xrEndSession(XrSession session) {[m
+ [m
+     // Destroy resources created by BeginSession[m
+     delete gb_session.d3d12weaver;[m
+[32m+[m[32m    gb_session.d3d12weaver = nullptr;[m
+ [m
+     // Not necessary as it uses ComPtr for resources[m
+     gb_session.intermediate_resource.DestroyResources();[m
+[36m@@ -177,10 +190,13 @@[m [mXrResult xrEndSession(XrSession session) {[m
+     // Save profiles maybe[m
+ [m
+     // Change session state to idle[m
+[31m-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);[m
+[31m-    XRGameBridge::UpdateSession(gb_session);[m
+[32m+[m[32m    //if (gb_session.session_state != XR_SESSION_STATE_EXITING) {[m
+[32m+[m[32m        XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);[m
+[32m+[m[32m        XRGameBridge::UpdateSession(gb_session);[m
+ [m
+[31m-    // Start Session Idle thread[m
+[32m+[m[32m        // Start Session Idle thread[m
+[32m+[m[32m        gb_session.StartSessionIdle();[m
+[32m+[m[32m    //}[m
+ [m
+     return XR_SUCCESS;[m
+ }[m
+[36m@@ -192,7 +208,9 @@[m [mXrResult xrRequestExitSession(XrSession session) {[m
+     }[m
+ [m
+     // Change session state to stopping[m
+[32m+[m[32m    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);[m
+     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);[m
+[32m+[m[32m    ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);[m
+ [m
+     return XR_SUCCESS;[m
+ }[m
+[36m@@ -336,7 +354,7 @@[m [mXrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {[m
+     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());[m
+ [m
+     // Set intermediate resource as render target[m
+[31m-    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, window_swapchain.GetRtvDescriptorSize());[m
+[32m+[m[32m    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());[m
+     cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);[m
+     cmd_list->ClearRenderTargetView(intermediate_rtv_handle, clear_color, 0, nullptr);[m
+     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);[m
+[36m@@ -367,8 +385,8 @@[m [mXrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {[m
+     //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);[m
+ [m
+     // Do weaving[m
+[31m-    gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[0].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);[m
+[31m-    gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);[m
+[32m+[m[32m    //gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[0].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);[m
+[32m+[m[32m    //gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);[m
+ [m
+ [m
+     cmd_list->CopyResource(window_swapchain.GetImages()[index].Get(), gb_session.intermediate_resource.GetBuffers()[0].Get());[m
+[36m@@ -404,6 +422,22 @@[m [mXrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {[m
+     return XR_SUCCESS;[m
+ }[m
+ [m
+[32m+[m[32mvoid XRGameBridge::GB_Session::StartSessionIdle() {[m
+[32m+[m[32m    idle_thread = std::thread(&GB_Session::IdleFunc, this);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mvoid XRGameBridge::GB_Session::IdleFunc() {[m
+[32m+[m[32m    while (session_state == XR_SESSION_STATE_IDLE) {[m
+[32m+[m[32m        if (g_proxy_swapchains.size() > 0) {[m
+[32m+[m[32m            ChangeSessionState(*this, XR_SESSION_STATE_READY);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        UpdateSession(*this);[m
+[32m+[m
+[32m+[m[32m        std::this_thread::sleep_for(std::chrono::milliseconds(200));[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[32m+[m
+ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {[m
+     if (session.session_state == state) {[m
+         return;[m
+[1mdiff --git a/runtime_openxr/src/session.h b/runtime_openxr/src/session.h[m
+[1mindex 3ae731e..8952ad7 100644[m
+[1m--- a/runtime_openxr/src/session.h[m
+[1m+++ b/runtime_openxr/src/session.h[m
+[36m@@ -73,6 +73,10 @@[m [mnamespace XRGameBridge {[m
+         // SR[m
+         SR::SRContext* sr_context;[m
+         DirectX12Weaver* d3d12weaver;[m
+[32m+[m
+[32m+[m[32m        std::thread idle_thread;[m
+[32m+[m[32m        void StartSessionIdle();[m
+[32m+[m[32m        void IdleFunc();[m
+     };[m
+ [m
+     class GB_FrameTimer {[m
+[1mdiff --git a/runtime_openxr/src/swapchain.cpp b/runtime_openxr/src/swapchain.cpp[m
+[1mindex a39e905..1f0e48d 100644[m
+[1m--- a/runtime_openxr/src/swapchain.cpp[m
+[1m+++ b/runtime_openxr/src/swapchain.cpp[m
+[36m@@ -76,11 +76,6 @@[m [mXrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat[m
+     *swapchain = handle;[m
+     swapchain_creation_count++;[m
+ [m
+[31m-    // TODO Is this the right place set the session state to ready?[m
+[31m-    // Maybe the session is ready when all systems for the session are there, this would not include swapchains[m
+[31m-    // Whether there is something to render to is responsibility of the application.[m
+[31m-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_READY);[m
+[31m-[m
+     // TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.[m
+     XRGameBridge::UpdateSession(gb_session);[m
+ [m
+[36m@@ -335,6 +330,11 @@[m [mnamespace XRGameBridge {[m
+         return srv_heap;[m
+     }[m
+ [m
+[32m+[m[32m    uint32_t GB_ProxySwapchain::GetRtvDescriptorSize()[m
+[32m+[m[32m    {[m
+[32m+[m[32m        return rtv_descriptor_size;[m
+[32m+[m[32m    }[m
+[32m+[m
+     XrResult GB_ProxySwapchain::AcquireNextImage(uint32_t& index) {[m
+         uint32_t next_index = (current_frame_index + 1) % g_back_buffer_count;[m
+ [m
+[36m@@ -496,11 +496,11 @@[m [mnamespace XRGameBridge {[m
+ [m
+         // Swap chain needs the queue so that it can force a flush on it.[m
+         ComPtr<IDXGISwapChain1> swapChain;[m
+[31m-        if (FAILED(factory->CreateSwapChainForHwnd(queue.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain))) {[m
+[32m+[m[32m        HRESULT res = factory->CreateSwapChainForHwnd(queue.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);[m
+[32m+[m[32m        if (FAILED(res)) {[m
+             LOG(ERROR) << "Failed to create d3d12 swap chain";[m
+             return false;[m
+         }[m
+[31m-[m
+         if (FAILED(swapChain.As(&swap_chain))) {[m
+             LOG(ERROR) << "Failed to get ComPtr object";[m
+             return false;[m
+[1mdiff --git a/runtime_openxr/src/swapchain.h b/runtime_openxr/src/swapchain.h[m
+[1mindex 409452e..447269f 100644[m
+[1m--- a/runtime_openxr/src/swapchain.h[m
+[1m+++ b/runtime_openxr/src/swapchain.h[m
+[36m@@ -74,6 +74,7 @@[m [mnamespace XRGameBridge {[m
+         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetBuffers();[m
+         ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();[m
+         ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();[m
+[32m+[m[32m        uint32_t GetRtvDescriptorSize();[m
+ [m
+         // Returns the oldest image index[m
+         XrResult AcquireNextImage(uint32_t& index);[m
+[1mdiff --git a/runtime_openxr/src/window.cpp b/runtime_openxr/src/window.cpp[m
+[1mindex 4d4acd5..84d38c3 100644[m
+[1m--- a/runtime_openxr/src/window.cpp[m
+[1m+++ b/runtime_openxr/src/window.cpp[m
+[36m@@ -40,27 +40,8 @@[m [mnamespace XRGameBridge {[m
+         return 0;[m
+     }[m
+ [m
+[31m-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {[m
+[31m-        // TODO better window creation checking code[m
+[31m-        static bool window_created = false;[m
+[31m-        if (window_created) {[m
+[31m-            return false;[m
+[31m-        }[m
+[31m-[m
+[31m-        window_created = true;[m
+[31m-[m
+[31m-        // Create window[m
+[31m-        uint32_t window_style = 0;[m
+[31m-        uint32_t borderless_fullscreen = WS_POPUP;[m
+[31m-        uint32_t windowed = WS_OVERLAPPEDWINDOW;[m
+[31m-[m
+[31m-        if (fullscreen) {[m
+[31m-            window_style = borderless_fullscreen;[m
+[31m-        }[m
+[31m-        else {[m
+[31m-            window_style = windowed;[m
+[31m-        }[m
+[31m-[m
+[32m+[m[32m    bool GB_Display::InitWindowClass(HINSTANCE hInstance)[m
+[32m+[m[32m    {[m
+         WNDCLASSEX window_ex;[m
+ [m
+         window_ex.cbSize = sizeof(WNDCLASSEX);[m
+[36m@@ -77,10 +58,37 @@[m [mnamespace XRGameBridge {[m
+         window_ex.hIconSm = LoadIcon(window_ex.hInstance, IDI_APPLICATION);[m
+ [m
+         if (!RegisterClassEx(&window_ex)) {[m
+[32m+[m[32m            uint32_t err = GetLastError();[m
+[32m+[m[32m            LOG(ERROR) << "Call to RegisterClassEx failed " << err;[m
+             MessageBox(NULL, "Call to RegisterClassEx failed!", "XR Game Bridge", NULL);[m
+ [m
+             return false;[m
+         }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {[m
+[32m+[m[32m        // TODO better window creation checking code[m
+[32m+[m[32m        static bool window_created = false;[m
+[32m+[m[32m        if (h_wnd != nullptr) {[m
+[32m+[m[32m            return false;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (!window_class_is_registered) {[m
+[32m+[m[32m            InitWindowClass(hInstance);[m
+[32m+[m[32m            window_class_is_registered = true;[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m        // Create window[m
+[32m+[m[32m        uint32_t window_style = 0;[m
+[32m+[m[32m        uint32_t borderless_fullscreen = WS_POPUP;[m
+[32m+[m[32m        uint32_t windowed = WS_OVERLAPPEDWINDOW;[m
+[32m+[m
+[32m+[m[32m        if (fullscreen) {[m
+[32m+[m[32m            window_style = borderless_fullscreen;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        else {[m
+[32m+[m[32m            window_style = windowed;[m
+[32m+[m[32m        }[m
+ [m
+         const long w = static_cast<long>(width);[m
+         const long h = static_cast<long>(height);[m
+[36m@@ -118,6 +126,7 @@[m [mnamespace XRGameBridge {[m
+             LOG(ERROR) << "Failed to destroy window: " << GetLastError();[m
+         }[m
+ [m
+[32m+[m[32m        h_wnd = nullptr;[m
+         return res;[m
+     }[m
+ [m
+[1mdiff --git a/runtime_openxr/src/window.h b/runtime_openxr/src/window.h[m
+[1mindex 0956259..9fc20ed 100644[m
+[1m--- a/runtime_openxr/src/window.h[m
+[1m+++ b/runtime_openxr/src/window.h[m
+[36m@@ -11,9 +11,12 @@[m [mnamespace XRGameBridge {[m
+ [m
+         HWND h_wnd = 0;[m
+ [m
+[32m+[m[32m        inline static bool window_class_is_registered = false;[m
+[32m+[m
+     public:[m
+         // Returns the window of the application or false if none exist[m
+         static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);[m
+[32m+[m[32m        bool InitWindowClass(HINSTANCE hInstance);[m
+         bool CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true);[m
+         bool DestroyApplicationWindow();[m
+         HWND GetWindowHandle();[m
