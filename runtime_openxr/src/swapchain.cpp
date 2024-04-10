@@ -62,7 +62,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
 
-    // Create entry in the listx
+    // Create entry in the list
     XRGameBridge::GB_ProxySwapchain gb_proxy(handle);
 
     // Create swap chain
@@ -74,7 +74,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 
     // Couple swap chain to the session
     *swapchain = handle;
-    gb_session.swap_chain = handle;
     swapchain_creation_count++;
 
     // TODO Is this the right place set the session state to ready?

@@ -109,6 +109,18 @@ namespace XRGameBridge {
         return true;
     }
 
+    bool GB_Display::DestroyApplicationWindow()
+    {
+        // Must be destroyed from the creation thread
+        bool res = DestroyWindow(h_wnd);
+        if(!res)
+        {
+            LOG(ERROR) << "Failed to destroy window: " << GetLastError();
+        }
+
+        return res;
+    }
+
     HWND GB_Display::GetWindowHandle() {
         return h_wnd;
     }

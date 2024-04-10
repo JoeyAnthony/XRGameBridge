@@ -15,6 +15,7 @@ namespace XRGameBridge {
         // Returns the window of the application or false if none exist
         static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
         bool CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true);
+        bool DestroyApplicationWindow();
         HWND GetWindowHandle();
         void UpdateWindow();
     };

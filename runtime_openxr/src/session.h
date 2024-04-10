@@ -42,8 +42,6 @@ namespace XRGameBridge {
         XrInstance instance;
         XrSystemId system;
         XrViewConfigurationType view_configuration;
-        XrSwapchain swap_chain;
-        //std::vector<XrActionSet> g_action_sets;
 
         // Session state
         std::mutex mutex_session_state_queue;

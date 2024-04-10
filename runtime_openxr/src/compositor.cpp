@@ -291,6 +291,8 @@ namespace XRGameBridge {
                 // TODO, not fully implemented. Not all fields in XrCompositionLayerQuad are used
                 auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
 
+                //TODO increase fence value here instead of in WaitForImage to fix the issue with should_render = false
+
                 // Get the swapchain from the view and signal its fence
                 auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
                 command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
