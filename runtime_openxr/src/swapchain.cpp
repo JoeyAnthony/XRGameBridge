@@ -179,12 +179,15 @@ namespace XRGameBridge {
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
         D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
         GetResourceStateFlags(createInfo->usageFlags, flags, states);
+        if (states == D3D12_RESOURCE_STATE_COMMON) {
+            states = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        }
 
-        states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
     }
 
     bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
+        HRESULT res = 0;
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
         fence_values.fill(0);
@@ -216,27 +219,31 @@ namespace XRGameBridge {
             // Set resource_usage to save the state the application expects the buffer to be in
             resource_usage = states;
 
+            // Choose name for debugging
+            if (resource_name.empty()) {
+                std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
+                proxy_name = name;
+            }
+            else {
+                std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(handle), i);
+                proxy_name = name;
+            }
+
             auto resource = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-            ThrowIfFailed(device->CreateCommittedResource(
+            res = device->CreateCommittedResource(
                 &resource,
                 D3D12_HEAP_FLAG_NONE,
                 &textureDesc,
                 states,
                 &clear_value,
-                IID_PPV_ARGS(&back_buffers[i])));
+                IID_PPV_ARGS(&back_buffers[i]));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, failed creating swapchain resource: " << proxy_name;
+                ThrowIfFailed(res);
+                return false;
+            }
 
-            // Set name for debugging
-            if (resource_name.empty()) {
-                std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
-                back_buffers[i]->SetName(name.c_str());
-                proxy_name = name;
-            }
-            else
-            {
-                std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(handle), i);
-                back_buffers[i]->SetName(name.c_str());
-                proxy_name = name;
-            }
+            back_buffers[i]->SetName(proxy_name.c_str());
         }
 
         // Create descriptor heaps.
@@ -595,10 +602,11 @@ namespace XRGameBridge {
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {
         if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-            //states = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         }
         if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+            states = D3D12_RESOURCE_STATE_DEPTH_WRITE;
         }
         if (XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
