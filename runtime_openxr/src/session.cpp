@@ -75,13 +75,28 @@ XrResult xrDestroySession(XrSession session) {
     // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.
     // Also action sets/g_actions attached to the session should be destroyed
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    gb_session.idle_thread.join();
 
     if (gb_session.d3d12weaver) {
         delete gb_session.d3d12weaver;
     }
 
-    XRGameBridge::g_sessions.erase(session);
+    gb_session.compositor = {};
+    gb_session.window_swapchain = {};
+    gb_session.intermediate_resource = {};
+    gb_session.display = {};
+    gb_session.sr_context = nullptr;
+    gb_session.command_queue.Reset();
+    gb_session.d3d12_device.Reset();
+
+    try {
+        XRGameBridge::g_sessions.erase(session);
+    }
+    catch (std::exception& e) {
+        LOG(ERROR) << "" << e.what();
+    }
+    catch (...) {
+        LOG(ERROR) << "Error occurred while destroying the session";
+    }
 
     return XR_SUCCESS;
 }
@@ -125,7 +140,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
-    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue ,&swapchain_info, gb_session.display.GetWindowHandle());
+    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &swapchain_info, gb_session.display.GetWindowHandle());
 
     // Initialize weaver params
     DX12WeaverInitialize params{};
@@ -155,13 +170,12 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 XrResult xrEndSession(XrSession session) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    if(gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED & XR_SESSION_STATE_STOPPING == false)
-    {
+    if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED & XR_SESSION_STATE_STOPPING == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
     }
 
-    if(gb_session.wait_frame_state_mutex.try_lock() == false)
-    {
+    std::unique_lock unique_guard(gb_session.mutex_wait_frame_state, std::try_to_lock);
+    if (unique_guard.owns_lock() == false) {
         LOG(WARNING) << "Trying to stop the session but the frame mutex is in use";
         return XR_ERROR_SESSION_NOT_STOPPING;
     }
@@ -190,13 +204,13 @@ XrResult xrEndSession(XrSession session) {
     // Save profiles maybe
 
     // Change session state to idle
-    //if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
+    if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
         XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
         XRGameBridge::UpdateSession(gb_session);
 
         // Start Session Idle thread
         gb_session.StartSessionIdle();
-    //}
+    }
 
     return XR_SUCCESS;
 }
@@ -223,12 +237,12 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     // Blocking wait, blocks until BeginFrame was called
     while (should_wait) {
-        if (gb_session.wait_frame_state_mutex.try_lock()) {
+        if (gb_session.mutex_wait_frame_state.try_lock()) {
             if (gb_session.wait_frame_state == XRGameBridge::NewFrameAllowed) {
                 gb_session.wait_frame_state = XRGameBridge::NewFrameBusy;
                 break;
             }
-            gb_session.wait_frame_state_mutex.unlock();
+            gb_session.mutex_wait_frame_state.unlock();
         }
         std::this_thread::sleep_for(ch::nanoseconds(10));
     }
@@ -238,10 +252,10 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     /* As far as I understand:
      * predictedDisplayTime: The future time point the next image will be displayed at
-     * predictedDisplayPeriod: The amount of time the next image will be visible (presented) on the screen 
+     * predictedDisplayPeriod: The amount of time the next image will be visible (presented) on the screen
      */
 
-    // 1/60th in nanoseconds
+     // 1/60th in nanoseconds
     uint64_t nanoseconds = 1.0f / 60.0f * 1000.f * 1000.f * 1000.f;
     auto refresh_rate = ch::nanoseconds(nanoseconds);
     // Image should be displayed for the <refresh rate> amount of time
@@ -257,7 +271,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     gb_session.waited_frame = frameState->predictedDisplayTime;
 
-    gb_session.wait_frame_state_mutex.unlock();
+    gb_session.mutex_wait_frame_state.unlock();
 
     //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
@@ -267,15 +281,13 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    std::lock_guard guard(gb_session.wait_frame_state_mutex);
+    std::lock_guard guard(gb_session.mutex_wait_frame_state);
 
-    if(gb_session.waited_frame == 0)
-    {
+    if (gb_session.waited_frame == 0) {
         // Call order invalid
         return XR_ERROR_CALL_ORDER_INVALID;
     }
-    if (gb_session.end_frame_called == false)
-    {
+    if (gb_session.end_frame_called == false) {
         // Skip frame
         // TODO If no layers are provided then the display must be cleared.
         gb_session.started_frame = 0;
@@ -283,8 +295,7 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
         return XR_FRAME_DISCARDED;
     }
 
-    if(gb_session.ended_frame > gb_session.started_frame)
-    {
+    if (gb_session.ended_frame > gb_session.started_frame) {
         // Should be impossible
         LOG(WARNING) << "Previous frame is later than current";
     }
@@ -316,8 +327,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     long long time_left = gb_session.started_frame - time_now;
     //LOG(INFO) << "EndFrame, Time left: " << time_left;
 
-    if(frameEndInfo->layerCount == 0)
-    {
+    if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
     }
 

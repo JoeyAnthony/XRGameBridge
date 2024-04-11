@@ -53,7 +53,7 @@ namespace XRGameBridge {
 
         // Frame logic
         FrameState wait_frame_state;
-        std::mutex wait_frame_state_mutex;
+        std::mutex mutex_wait_frame_state;
         Frame waited_frame = 0;
         Frame started_frame = 0;
         Frame ended_frame = 0;
