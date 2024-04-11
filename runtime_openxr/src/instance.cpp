@@ -472,35 +472,16 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
         return XR_EVENT_UNAVAILABLE;
     }
 
-    if (event_type == XR_SESSION_STATE_READY) {
-        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
-        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
+    XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
+    if (state_change->type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
         uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
         eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
         memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
+        return XR_SUCCESS;
     }
-    else if (event_type == XR_SESSION_STATE_SYNCHRONIZED) {
-        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
-        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
-        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
-        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
-    }
-    else if (event_type == XR_SESSION_STATE_VISIBLE) {
-        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
-        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
-        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
-        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
-    }
-    else if (event_type == XR_SESSION_STATE_FOCUSED) {
-        XrEventDataSessionStateChanged* state_change = reinterpret_cast<XrEventDataSessionStateChanged*>(data);
-        XrEventDataBuffer* state_change_B = reinterpret_cast<XrEventDataBuffer*>(data);
-        uint32_t objsize = sizeof(XrEventDataSessionStateChanged);
-        eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-        memcpy_s(eventData, XR_MAX_EVENT_DATA_SIZE, data, objsize);
-    }
-    return XR_SUCCESS;
+
+    // Runtime tries to send an event that is not supported.
+    return XR_ERROR_RUNTIME_FAILURE;
 }
 
 void XRGameBridge::InitializeGameBridge() {

@@ -74,6 +74,7 @@ namespace XRGameBridge {
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetBuffers();
         ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
         ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
+        uint32_t GetRtvDescriptorSize();
 
         // Returns the oldest image index
         XrResult AcquireNextImage(uint32_t& index);
