@@ -401,6 +401,7 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
 
     g_systems.insert({ system.id, system });
 
+    LOG(INFO) << "Created system: " << system.id;
     return system.id;
 }
 

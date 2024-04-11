@@ -78,6 +78,8 @@ XrResult xrEnumerateInstanceExtensionProperties(const char* layerName, uint32_t 
 }
 
 XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance) {
+    LOG(INFO) << "Creating instance created session: ";
+
     if (createInfo == nullptr) {
         LOG(INFO) << "Invalid XrInstanceCreateInfo";
         return XR_ERROR_INITIALIZATION_FAILED;

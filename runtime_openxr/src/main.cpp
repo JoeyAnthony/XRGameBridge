@@ -106,12 +106,16 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         {
             fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
             HMODULE gb_module = LoadLibraryA(gb_path.string().data());
+
+            LOG(INFO) << "Loading dll: " << gb_path.string();
+
             if(gb_module == NULL)
             {
-                LOG(INFO) << "Failed to load " << gb_path << " error: " << GetLastError();
+                LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
                 return 0;
             }
 
+            LOG(INFO) << "Successfully loaded " << gb_dll_name;
             return reinterpret_cast<FARPROC>(gb_module);
         }
 

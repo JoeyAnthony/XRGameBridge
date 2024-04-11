@@ -17,7 +17,7 @@ namespace XRGameBridge {
         std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
 
     public:
-        void Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
+        bool Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
         //void InitShaders(const ComPtr<ID3D12Device>& device);
         void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);
         void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);

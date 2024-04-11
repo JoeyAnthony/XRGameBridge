@@ -17,20 +17,26 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
 
+    LOG(INFO) << "Creating session: " << session_creation_count;
+
     try {
         XRGameBridge::GB_System& system = XRGameBridge::g_systems.at(createInfo->systemId);
         if (!system.features_enumerated) {
+            LOG(ERROR) << "Graphics requirements call missing";
             return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
         }
 
         if (system.instance != instance) {
+            LOG(ERROR) << "Couldn't find system. System invalid";
             return XR_ERROR_SYSTEM_INVALID;
         }
     }
     catch (std::out_of_range& e) {
+        LOG(ERROR) << "Couldn't find system. System invalid";
         return XR_ERROR_SYSTEM_INVALID;
     }
     catch (std::exception& e) {
+        LOG(ERROR) << "Runtime failure when getting system";
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -51,6 +57,10 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
         const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (createInfo->next);
         new_session.d3d12_device = d3d12_bindings->device;
         new_session.command_queue = d3d12_bindings->queue;
+        LOG(INFO) << "Create session with DirectX 12";
+    }
+    else {
+        LOG(ERROR) << "Trying to create session with unsupported graphics api";
     }
 
     *session = handle;
@@ -58,7 +68,10 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 
     // TODO Not sure where to put the compositor, it has to be initialized by the session, but you render to a system
     // Maybe a system should own a compositor, but it is created and destroyed by the client?
-    new_session.compositor.Initialize(new_session.d3d12_device, new_session.command_queue, 2);
+    if (new_session.compositor.Initialize(new_session.d3d12_device, new_session.command_queue, 2) == false) {
+        LOG(ERROR) << "Failed to create compositor";
+        return XR_ERROR_RUNTIME_FAILURE;
+    }
 
     // Create sr context, blocks till there is a connection
     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_gbinstance);
@@ -67,6 +80,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Start session idle thread
     new_session.StartSessionIdle();
 
+    LOG(INFO) << "Successfully created session: " << session_creation_count;
     return XR_SUCCESS;
 }
 

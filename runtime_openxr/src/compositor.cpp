@@ -40,10 +40,10 @@ namespace XRGameBridge {
         return buffer;
     }
 
-    void GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
+    bool GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
         d3d12_device = device;
         command_queue = queue;
-
+        HRESULT res = 0;
         // Create the root signature.
         {
             D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
@@ -53,6 +53,12 @@ namespace XRGameBridge {
 
             if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
                 feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+                LOG(ERROR) << "D3D12 Failed checking support for root signature 1.1, falling back to 1.0";
+                return false;
+
+                //if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
+                //    LOG(ERROR) << "D3D12 Failed checking support for root signature 1.0";
+                //}
             }
 
             CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
@@ -68,12 +74,28 @@ namespace XRGameBridge {
 
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-            root_signature_desc.Init_1_1(_countof(root_parameters), root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+            if (feature_data.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_1) {
+                root_signature_desc.Init_1_1(_countof(root_parameters), root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+            }
+            else if (feature_data.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_0) {
+               //root_signature_desc.Init_1_0(_countof(root_parameters), root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+            }
 
             ComPtr<ID3DBlob> signature;
             ComPtr<ID3DBlob> error;
-            ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&root_signature_desc, feature_data.HighestVersion, &signature, &error));
-            ThrowIfFailed(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature)));
+            res = D3DX12SerializeVersionedRootSignature(&root_signature_desc, feature_data.HighestVersion, &signature, &error);
+            if(FAILED(res))
+            {
+                LOG(ERROR) << "D3D12 Error, failed serializing root signature";
+                ThrowIfFailed(res);
+                return false;
+            }
+            res = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, failed creating root signature";
+                ThrowIfFailed(res);
+                return false;
+            }
             root_signature->SetName(L"Compositor Root Signature");
         }
 
@@ -91,11 +113,13 @@ namespace XRGameBridge {
 
                 if (vertex_shader.empty()) {
                     LOG(ERROR) << "Couldn't find shaders";
+                    return false;
                 }
             }
             else {
                 vertex_shader = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
                 pixel_shader = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
+                LOG(INFO) << "Loading shaders with debug paths";
             }
 
             CD3DX12_RASTERIZER_DESC rasterizerStateDesc(D3D12_DEFAULT);
@@ -123,7 +147,13 @@ namespace XRGameBridge {
             //psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
             psoDesc.SampleDesc.Count = 1;
 
-            ThrowIfFailed(device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline_state)));
+            res = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline_state));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, failed to create graphics pipeline state";
+                ThrowIfFailed(res);
+                return false;
+            }
+
             pipeline_state->SetName(L"Compositor Pipeline State");
         }
 
@@ -132,7 +162,12 @@ namespace XRGameBridge {
         samplerHeapDesc.NumDescriptors = 1;
         samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
         samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        ThrowIfFailed(device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&sampler_heap)));
+        res = device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&sampler_heap));
+        if (FAILED(res)) {
+            LOG(ERROR) << "D3D12 Error, failed to create descriptor heap";
+            ThrowIfFailed(res);
+            return false;
+        }
 
         // Describe and create a sampler.
         D3D12_SAMPLER_DESC samplerDesc = {};
@@ -152,14 +187,27 @@ namespace XRGameBridge {
         command_lists.resize(back_buffer_count);
         for (uint32_t i = 0; i < back_buffer_count; i++) {
             // Create present command allocator and command list resources
-            ThrowIfFailed(d3d12_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command_allocators[i])));
+            res = d3d12_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command_allocators[i]));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, failed to create command allocator";
+                ThrowIfFailed(res);
+                return false;
+            }
+
             // TODO use initial pipeline state here later. First check if it works without.
-            ThrowIfFailed(d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state.Get(), IID_PPV_ARGS(&command_lists[i])));
+            res = d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state.Get(), IID_PPV_ARGS(&command_lists[i]));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, Failed creating compositor command list";
+                ThrowIfFailed(res);
+                return false;
+            }
 
             std::wstring name = std::format(L"Compositor Command List {}", i);
             command_lists[i]->SetName(name.c_str());
             command_lists[i]->Close();
         }
+
+        return true;
     }
 
     void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {

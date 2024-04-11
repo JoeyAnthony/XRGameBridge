@@ -69,6 +69,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     if (gb_proxy.CreateResources(gb_session.d3d12_device, createInfo) == false) {
+        LOG(ERROR) << "Failed to create proxy swapchain";
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -80,6 +81,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XRGameBridge::UpdateSession(gb_session);
 
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
+
+    LOG(INFO) << "Successfully created proxy swapchain";
     return XR_SUCCESS;
 }
 
