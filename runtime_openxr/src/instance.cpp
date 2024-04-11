@@ -30,7 +30,7 @@ XrResult xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoid
         *function = openxr_functions.at(name);
     }
     catch (std::out_of_range& e) {
-        LOG(WARNING) << "FUNCTION UNSUPPORTED: " << name << " Error: " << e.what();
+        //LOG(WARNING) << "FUNCTION UNSUPPORTED: " << name << " Error: " << e.what();
         return XR_ERROR_FUNCTION_UNSUPPORTED;
     }
     catch (std::exception& e) {

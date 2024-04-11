@@ -320,17 +320,17 @@ namespace XRGameBridge {
                     auto& view = layer->views[view_num];
                     auto& gb_proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
 
-                    if (layer_num == 0 && view_num == 1) {
-                        LOG(INFO) << "sl - "
-                            //<< " Layercount: " << frameEndInfo->layerCount
-                            //<< " Layernum: " << layer_num
-                            //<< " viewnum " << view_num
-                            << " swapchain: " << view.subImage.swapchain
-                            << " aqcuired index " << gb_proxy_swapchain.current_frame_index
-                            << " awaited index " << gb_proxy_swapchain.awaited_frame_index
-                            << " released index " << gb_proxy_swapchain.released_frame_index
-                            ;
-                    }
+                    //if (layer_num == 0 && view_num == 1) {
+                    //    LOG(INFO) << "sl - "
+                    //        //<< " Layercount: " << frameEndInfo->layerCount
+                    //        //<< " Layernum: " << layer_num
+                    //        //<< " viewnum " << view_num
+                    //        << " swapchain: " << view.subImage.swapchain
+                    //        << " aqcuired index " << gb_proxy_swapchain.current_frame_index
+                    //        << " awaited index " << gb_proxy_swapchain.awaited_frame_index
+                    //        << " released index " << gb_proxy_swapchain.released_frame_index
+                    //        ;
+                    //}
 
                     command_queue->Signal(gb_proxy_swapchain.fence.Get(), gb_proxy_swapchain.fence_values[gb_proxy_swapchain.awaited_frame_index]);
                 }

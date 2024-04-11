@@ -406,12 +406,12 @@ namespace XRGameBridge {
 
         released_frame_index = awaited_frame_index;
 
-        LOG(INFO) << "px - "
-            << " swapchain: " << handle
-            << " aqcuired index " << current_frame_index
-            << " awaited index " << awaited_frame_index
-            << " released index " << released_frame_index
-            ;
+        //LOG(INFO) << "px - "
+        //    << " swapchain: " << handle
+        //    << " aqcuired index " << current_frame_index
+        //    << " awaited index " << awaited_frame_index
+        //    << " released index " << released_frame_index
+        //    ;
 
         return XR_SUCCESS;
     }
