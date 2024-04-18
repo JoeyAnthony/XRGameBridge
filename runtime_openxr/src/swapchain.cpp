@@ -238,6 +238,8 @@ namespace XRGameBridge {
                 &clear_value,
                 IID_PPV_ARGS(&back_buffers[i]));
             if (FAILED(res)) {
+                HRESULT reason = device->GetDeviceRemovedReason();
+                //D3D12_ERROR_ADAPTER_NOT_FOUND
                 LOG(ERROR) << "D3D12 Error, failed creating swapchain resource: " << proxy_name;
                 ThrowIfFailed(res);
                 return false;
