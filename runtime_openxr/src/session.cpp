@@ -213,7 +213,7 @@ XrResult xrEndSession(XrSession session) {
     gb_session.started_frame = 0;
     gb_session.end_frame_called = 0;
     gb_session.end_frame_called = false;
-    gb_session.should_render = false;
+    gb_session.should_render = true;
 
     // Save profiles maybe
 

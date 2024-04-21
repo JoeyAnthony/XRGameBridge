@@ -161,7 +161,7 @@ constexpr auto M_PI = 3.14159265358979323846;
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
     // TODO Dummy implementation for locate views, only returning views with a hardcoded offset hoping these are the eye locations
 
-    float fov = M_PI / 3.5f;
+    float fov = M_PI / 4.0f;
 
     XrView view1, view2;
     view1.type = XR_TYPE_VIEW;

@@ -38,6 +38,7 @@ namespace XRGameBridge {
         friend GB_Compositor;
         XrSwapchain handle;
         std::wstring proxy_name;
+        bool is_depth_resource = false;
 
         //ComPtr<ID3D12CommandQueue> command_queue;
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
