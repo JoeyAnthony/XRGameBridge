@@ -254,6 +254,13 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
 
+    if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+    }
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        new_space.pose_in_reference_space.position = { 0.0f, 1.7f, 0.f };
+    }
+
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
     if (!inserted.second) {
         return XR_ERROR_RUNTIME_FAILURE;
@@ -396,7 +403,7 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
     if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
     {
         // For when no SR display is connected, and if it's an 8K SR display it should work as well
-        system.physical_resolution = GetScaledSystemResolutionMainDisplay();
+        system.physical_resolution = GetResolutionMainDisplay();
     }
 
     g_systems.insert({ system.id, system });
@@ -421,7 +428,7 @@ XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_s
     return gb_system.physical_resolution;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetScaledSystemResolutionMainDisplay() {
+XRGameBridge::GBVector2i XRGameBridge::GetResolutionMainDisplay() {
     size_t width = GetSystemMetrics(SM_CXSCREEN);
     size_t height = GetSystemMetrics(SM_CYSCREEN);
     return GBVector2i{ static_cast<uint32_t>(width) ,static_cast<uint32_t>(height) };

@@ -79,6 +79,6 @@ namespace  XRGameBridge {
     XrSystemId CreateXrGameBridgeSystem(XrInstance instance);
     GBVector2i GetRenderResolution(const GB_System& gb_system);
     GBVector2i GetSystemResolution(const GB_System& gb_system);
-    GBVector2i GetScaledSystemResolutionMainDisplay();
+    GBVector2i GetResolutionMainDisplay();
     XrSystemProperties GetSystemProperties(const GB_System& gb_system);
 }
