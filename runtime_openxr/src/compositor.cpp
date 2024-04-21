@@ -295,10 +295,75 @@ namespace XRGameBridge {
                 }
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
-                // TODO this is for viewing 2dimensional content in VR space. We could project this in 2d to the screen perhaps...
-                // TODO maybe this is also used to display 3d videos without lookaround?
+                auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
+
+                // TODO has to be done either after weaving, or also in both views
+                ComposeQuadLayer(cmd_list, system_width, system_height, layer);
             }
         }
+    }
+
+    void GB_Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer) {
+        // TODO do something with rectangles
+        auto& rect = layer->subImage.imageRect;
+
+        // Since we don't care about the 'VR' space, we may not really have a need for this
+        auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
+        layer->pose; // position and orientation of the quad in the reference frame of the space
+        layer->size; // Width and height in meters
+
+        // TODO Maybe do something with the visibility...
+        if (layer->eyeVisibility == XR_EYE_VISIBILITY_BOTH) {
+
+        }
+
+        auto& proxy_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
+        auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
+
+        // Viewport settings
+        const float width = static_cast<float>(system_width);
+        const float height = static_cast<float>(system_height);
+        D3D12_VIEWPORT view_port{ 0, 0, width, height, 0.0f, 1.0f };
+        D3D12_RECT scissor_rect{ 0, 0, system_width, system_height };
+        cmd_list->RSSetViewports(1, &view_port);
+        cmd_list->RSSetScissorRects(1, &scissor_rect);
+
+        struct {
+            uint32_t is_opaque;
+            uint32_t multiply_alpha;
+            float convert_to_linear;
+            float uvmin_x;
+            float uvmin_y;
+            float uvmax_x;
+            float uvmax_y;
+            float pad;
+
+        } layering_constants;
+        // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
+        layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+        // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
+        layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+        layering_constants.convert_to_linear = 1;
+
+        // Normalize uv values
+        layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain.GetWidth());
+        layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain.GetHeight());
+        layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain.GetWidth());
+        layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain.GetHeight());
+
+        std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
+        cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+
+        cmd_list->SetGraphicsRootSignature(root_signature.Get());
+        cmd_list->SetPipelineState(pipeline_state.Get());
+        cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
+
+        // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
+        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
+        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+
+        cmd_list->DrawInstanced(3, 1, 0, 0);
     }
 
     void GB_Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
