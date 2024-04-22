@@ -126,7 +126,6 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
         view.maxSwapchainSampleCount = 1;
 
-        // TODO Create 2 views here to get 2 swap chains and so a view per eye
         supported_views.push_back(view);
         supported_views.push_back(view);
 
