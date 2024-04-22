@@ -99,62 +99,32 @@ namespace XRGameBridge {
             root_signature->SetName(L"Compositor Root Signature");
         }
 
-        // Create the pipeline state, which includes loading shaders.
-        {
-            std::vector<char>vertex_shader;
-            std::vector<char>pixel_shader;
+        // Create pipeline states
+        D3D12_BLEND_DESC  blend_state_opaque = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        D3D12_BLEND_DESC  blend_state_blend;
+        blend_state_blend.AlphaToCoverageEnable = false;
+        blend_state_blend.IndependentBlendEnable = false;
 
-            fs::path shader_dir = fs::path(runtime_path).parent_path();
-            if (fs::exists(shader_dir / LAYERING_VERTEX_NAME)) {
-                fs::path vertex = shader_dir / LAYERING_VERTEX_NAME;
-                fs::path pixel = shader_dir / LAYERING_PIXEL_NAME;
-                vertex_shader = LoadBinaryFile(vertex.string());
-                pixel_shader = LoadBinaryFile(pixel.string());
+        blend_state_blend.RenderTarget[0].BlendEnable = true;
+        blend_state_blend.RenderTarget[0].LogicOpEnable = false;
+        blend_state_blend.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+        blend_state_blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        blend_state_blend.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+        blend_state_blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-                if (vertex_shader.empty()) {
-                    LOG(ERROR) << "Couldn't find shaders";
-                    return false;
-                }
-            }
-            else {
-                vertex_shader = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
-                pixel_shader = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
-                LOG(INFO) << "Loading shaders with debug paths";
-            }
+        // TODO Loads the shaders twice this way
+        if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_opaque, pipeline_state_opaque) == false) {
+            // Error logged inside function
+            return false;
+        }
 
-            CD3DX12_RASTERIZER_DESC rasterizerStateDesc(D3D12_DEFAULT);
-            rasterizerStateDesc.CullMode = D3D12_CULL_MODE_FRONT;
-
-            // Define the vertex input layout.
-            std::vector<D3D12_INPUT_ELEMENT_DESC> inputElementDescs = {
-                //{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                //{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-            };
-
-            // Describe and create the graphics pipeline state object (PSO).
-            D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-            psoDesc.InputLayout = { inputElementDescs.data(),static_cast<uint32_t>(inputElementDescs.size()) };
-            psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertex_shader.data(), vertex_shader.size());
-            psoDesc.pRootSignature = root_signature.Get();
-            psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixel_shader.data(), pixel_shader.size());
-            psoDesc.RasterizerState = rasterizerStateDesc;
-            psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-            //psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-            psoDesc.SampleMask = UINT_MAX;
-            psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-            psoDesc.NumRenderTargets = 1;
-            psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //TODO choose format from the client
-            //psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-            psoDesc.SampleDesc.Count = 1;
-
-            res = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline_state));
-            if (FAILED(res)) {
-                LOG(ERROR) << "D3D12 Error, failed to create graphics pipeline state";
-                ThrowIfFailed(res);
-                return false;
-            }
-
-            pipeline_state->SetName(L"Compositor Pipeline State");
+        if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_blend, pipeline_state_blend) == false) {
+            // Error logged inside function
+            return false;
         }
 
         // Describe and create a sampler descriptor heap.
@@ -195,7 +165,7 @@ namespace XRGameBridge {
             }
 
             // TODO use initial pipeline state here later. First check if it works without.
-            res = d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state.Get(), IID_PPV_ARGS(&command_lists[i]));
+            res = d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state_opaque.Get(), IID_PPV_ARGS(&command_lists[i]));
             if (FAILED(res)) {
                 LOG(ERROR) << "D3D12 Error, Failed creating compositor command list";
                 ThrowIfFailed(res);
@@ -205,6 +175,69 @@ namespace XRGameBridge {
             std::wstring name = std::format(L"Compositor Command List {}", i);
             command_lists[i]->SetName(name.c_str());
             command_lists[i]->Close();
+        }
+
+        return true;
+    }
+
+    bool GB_Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
+    {
+        // Create the pipeline state, which includes loading shaders.
+        {
+            std::vector<char>vertex_shader;
+            std::vector<char>pixel_shader;
+
+            fs::path shader_dir = fs::path(runtime_path).parent_path();
+            if (fs::exists(shader_dir / LAYERING_VERTEX_NAME)) {
+                fs::path vertex = shader_dir / LAYERING_VERTEX_NAME;
+                fs::path pixel = shader_dir / LAYERING_PIXEL_NAME;
+                vertex_shader = LoadBinaryFile(vertex.string());
+                pixel_shader = LoadBinaryFile(pixel.string());
+
+                if (vertex_shader.empty()) {
+                    LOG(ERROR) << "Couldn't find shaders";
+                    return false;
+                }
+            }
+            else {
+                vertex_shader = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
+                pixel_shader = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
+                LOG(INFO) << "Loading shaders with debug paths";
+            }
+
+            CD3DX12_RASTERIZER_DESC rasterizerStateDesc(D3D12_DEFAULT);
+            rasterizerStateDesc.CullMode = D3D12_CULL_MODE_FRONT;
+
+            // Define the vertex input layout.
+            std::vector<D3D12_INPUT_ELEMENT_DESC> inputElementDescs = {
+                //{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+                //{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+            };
+
+            // Describe and create the graphics pipeline state object (PSO).
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+            psoDesc.InputLayout = { inputElementDescs.data(),static_cast<uint32_t>(inputElementDescs.size()) };
+            psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertex_shader.data(), vertex_shader.size());
+            psoDesc.pRootSignature = root.Get();
+            psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixel_shader.data(), pixel_shader.size());
+            psoDesc.RasterizerState = rasterizerStateDesc;
+            psoDesc.BlendState = blend_state;
+            //psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+            psoDesc.SampleMask = UINT_MAX;
+            psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            psoDesc.NumRenderTargets = 1;
+            psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //TODO choose format from the client
+            //psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+            psoDesc.SampleDesc.Count = 1;
+
+            HRESULT res = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline_state));
+            if (FAILED(res)) {
+                LOG(ERROR) << "D3D12 Error, failed to create graphics pipeline state";
+                ThrowIfFailed(res);
+                return false;
+            }
+
+            pipeline_state->SetName(L"Compositor Pipeline State");
         }
 
         return true;
@@ -280,13 +313,23 @@ namespace XRGameBridge {
                     cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
 
                     cmd_list->SetGraphicsRootSignature(root_signature.Get());
-                    cmd_list->SetPipelineState(pipeline_state.Get());
+
+                    if (layering_constants.is_opaque) {
+                        cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+                    }
+                    else {
+                        cmd_list->SetPipelineState(pipeline_state_blend.Get());
+                    }
+
                     cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
                     // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
                     auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
                     cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
                     cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+
+                    //float blend_factor[4]{ 0.f };
+                    //cmd_list->OMSetBlendFactor(blend_factor);
 
                     cmd_list->DrawInstanced(3, 1, 0, 0);
 
@@ -355,7 +398,14 @@ namespace XRGameBridge {
         cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
 
         cmd_list->SetGraphicsRootSignature(root_signature.Get());
-        cmd_list->SetPipelineState(pipeline_state.Get());
+
+        if (layering_constants.is_opaque) {
+            cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+        }
+        else {
+            cmd_list->SetPipelineState(pipeline_state_blend.Get());
+        }
+
         cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
         // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
@@ -432,6 +482,6 @@ namespace XRGameBridge {
 
     ComPtr<ID3D12PipelineState>& GB_Compositor::GetPipelineState()
     {
-        return pipeline_state;
+        return pipeline_state_opaque;
     }
 }
