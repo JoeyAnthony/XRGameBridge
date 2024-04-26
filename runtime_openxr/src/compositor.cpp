@@ -7,6 +7,7 @@
 #include "instance.h"
 #include "swapchain.h"
 #include "settings.h"
+#include "session.h"
 
 
 namespace XRGameBridge {
@@ -243,7 +244,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+    void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -259,6 +260,9 @@ namespace XRGameBridge {
                 // Render every view to the resource
                 for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
                     auto& view = layer->views[view_num];
+
+                    SetXrViewPose(session, view_num, view.pose);
+                    SetXrViewFov(session, view_num, view.fov);
 
                     // TODO do something with rectangles
                     auto& rect = view.subImage.imageRect;

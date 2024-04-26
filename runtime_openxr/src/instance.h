@@ -10,6 +10,7 @@
 
 #include "game_bridge.h"
 #include "event_manager.h"
+#include "hotkey_manager.h"
 #include "platform_manager.h"
 
 //TODO fix versioning
@@ -99,8 +100,9 @@ namespace XRGameBridge {
     // Hash class
     inline std::hash<std::string> string_hasher;
 
-    inline GB_Instance* g_gbinstance = nullptr;
-    inline GameBridge* g_game_bridge_instance = nullptr;
+    inline GB_Instance* g_xr_instance = nullptr;
+    inline GameBridge* g_gamebridge_instance = nullptr;
+    inline HotkeyManager* g_hotkey_manager = nullptr;
     inline std::shared_ptr<EventStreamWriter> g_openxr_event_stream_writer;
     inline std::shared_ptr<EventStreamReader> g_openxr_event_stream_reader;
 
