@@ -66,6 +66,8 @@ namespace XRGameBridge {
 
         // Views
         std::array<XrView,2> stereo_views;
+        // Weaving
+        bool should_weave = true;
 
         // DirectX 12
         ComPtr<ID3D12Device> d3d12_device;
@@ -111,6 +113,9 @@ namespace XRGameBridge {
     inline std::vector<GB_FrameTimer> g_frames;
 
     void ChangeSessionState(GB_Session& session, XrSessionState state);
+
+    void RenderFrameWeaving();
+    void RenderFrameSideBySide();
 
     void UpdateSession(GB_Session& session);
 

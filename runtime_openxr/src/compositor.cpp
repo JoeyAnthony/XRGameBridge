@@ -270,14 +270,6 @@ namespace XRGameBridge {
                     auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
                     auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
 
-                    //LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
-                    //            << " Layercount: "  << frameEndInfo->layerCount
-                    //            << " Layernum: "    << layer_num
-                    //            << " viewnum "      << view_num
-                    //            << " swapchain: "   << view.subImage.swapchain
-                    //            << " swapchain index "  << proxy_swapchain.awaited_frame_index
-                    //;
-
                     // Viewport settings
                     const float width = static_cast<float>(system_width) / 2;
                     const float height = static_cast<float>(system_height);
@@ -378,6 +370,8 @@ namespace XRGameBridge {
         auto& proxy_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
         auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
 
+       //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
         for (; view_num < view_count; view_num++) {
             // Viewport settings
             const float width = static_cast<float>(system_width) / 2;
@@ -430,6 +424,8 @@ namespace XRGameBridge {
             cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
             cmd_list->DrawInstanced(3, 1, 0, 0);
+
+            //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
         }
     }
 
