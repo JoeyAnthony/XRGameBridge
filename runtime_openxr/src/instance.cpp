@@ -7,10 +7,11 @@
 #include <easylogging++.h>
 #include <hotkey_windows_impl.h>
 
+#include <game_bridge_structs.h>
+
 #include "actions.h"
 #include "openxr_functions.h"
 #include "swapchain.h"
-#include "game_bridge_structs.h"
 #include "system.h"
 
 //class OpenXRContainers {
@@ -506,6 +507,10 @@ void XRGameBridge::InitializeGameBridge() {
         g_openxr_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
 
         //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
+
+        g_window_hook = new WindowHooks();
+        g_window_hook->OpenConsole();
+        g_window_hook->ActivateWindowMessageHook();
     }
 }
 

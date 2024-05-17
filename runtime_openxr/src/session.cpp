@@ -161,11 +161,17 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     // TODO Move creation of objects to CreateSession, except for the creation of the window swapchain and the window perhaps.
 
+    if(gb_session.display.TryGetExternalDisplay() != nullptr)
+    {
+        LOG(INFO) << "Got window";
+    }
+
     // Create debug window
     auto system_resolution = XRGameBridge::GetSystemResolution(gb_system);
     gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
     // Debugging with non full screen mode
+
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
