@@ -14,8 +14,12 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
     case DLL_PROCESS_ATTACH:
     {
         el::Configurations defaultConf;
-        defaultConf.setGlobally(el::ConfigurationType::Format, "%date %level %loc %msg");
+        el::Loggers::reconfigureLogger("default", defaultConf);
+        defaultConf.setToDefault();
+
+        defaultConf.setGlobally(el::ConfigurationType::Format, "%datetime %level %loc %msg");
         defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "true");
+        defaultConf.setGlobally(el::ConfigurationType::ToFile, "true");
 
         char module_path[MAX_PATH];
         GetModuleFileNameA(hInst, module_path, MAX_PATH);

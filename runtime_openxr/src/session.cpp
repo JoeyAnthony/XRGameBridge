@@ -367,10 +367,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
     auto& gb_compositor = gb_session.compositor;
 
-    uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
-    long long time_left = gb_session.started_frame - time_now;
-    //LOG(INFO) << "EndFrame, Time left: " << time_left;
-
     if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
     }
@@ -392,9 +388,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //{
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
-
-    auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
-    //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
 
     // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
     auto& window_swapchain = gb_session.window_swapchain;
