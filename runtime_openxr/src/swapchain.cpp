@@ -77,8 +77,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = handle;
     swapchain_creation_count++;
 
-    // TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
-    XRGameBridge::UpdateSession(gb_session);
+    //// TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
+    //XRGameBridge::UpdateSession(gb_session);
 
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
 
