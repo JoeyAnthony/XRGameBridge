@@ -5,7 +5,7 @@
 #include "platform_manager.h"
 
 // System
-XrResult xrGeSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId);
+XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId);
 XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties);
 XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes);
 
@@ -79,6 +79,6 @@ namespace  XRGameBridge {
     XrSystemId CreateXrGameBridgeSystem(XrInstance instance);
     GBVector2i GetRenderResolution(const GB_System& gb_system);
     GBVector2i GetSystemResolution(const GB_System& gb_system);
-    GBVector2i GetScaledSystemResolutionMainDisplay();
+    GBVector2i GetResolutionMainDisplay();
     XrSystemProperties GetSystemProperties(const GB_System& gb_system);
 }

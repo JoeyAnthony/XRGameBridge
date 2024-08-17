@@ -69,6 +69,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     if (gb_proxy.CreateResources(gb_session.d3d12_device, createInfo) == false) {
+        LOG(ERROR) << "Failed to create proxy swapchain";
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -80,6 +81,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XRGameBridge::UpdateSession(gb_session);
 
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
+
+    LOG(INFO) << "Successfully created proxy swapchain";
     return XR_SUCCESS;
 }
 
@@ -176,120 +179,188 @@ namespace XRGameBridge {
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
         D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
         GetResourceStateFlags(createInfo->usageFlags, flags, states);
+        if (states == D3D12_RESOURCE_STATE_COMMON) {
+            states = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        }
 
-        states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
     }
 
     bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
+        HRESULT res = 0;
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
         fence_values.fill(0);
 
         for (uint32_t i = 0; i < g_back_buffer_count; i++) {
-            // Describe and create a Texture2D.
-            D3D12_RESOURCE_DESC textureDesc = {};
-            textureDesc.MipLevels = 1;
-            textureDesc.Format = format;
-            textureDesc.Width = width;
-            textureDesc.Height = height;
-            textureDesc.Flags = flags;
-            textureDesc.DepthOrArraySize = 1;
-            textureDesc.SampleDesc.Count = 1;
-            textureDesc.SampleDesc.Quality = 0;
-            textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-            //D3D12_DEPTH_STENCIL_VALUE depth_stencil_value;
-            //depth_stencil_value.Depth = 100.f;
-            //depth_stencil_value.Stencil = 0;
-
-            float clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
-
-            D3D12_CLEAR_VALUE clear_value{
-                static_cast<DXGI_FORMAT>(format),
-                0.5f
-            };
-
             // Set resource_usage to save the state the application expects the buffer to be in
             resource_usage = states;
 
-            auto resource = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-            ThrowIfFailed(device->CreateCommittedResource(
-                &resource,
-                D3D12_HEAP_FLAG_NONE,
-                &textureDesc,
-                states,
-                &clear_value,
-                IID_PPV_ARGS(&back_buffers[i])));
+            std::wstring com_name_prefix = L"";
 
-            // Set name for debugging
+            // TODO For depth resources only a single one is needed. For simplicity and to save time, I'll leave it to the back_buffer count for now.
+            // Create depth stencil
+            if (states == D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+                is_depth_resource = true;
+
+                // Describe and create a Texture2D.
+                D3D12_RESOURCE_DESC textureDesc = {};
+                textureDesc.Format = format; // DXGI_FORMAT_D32_FLOAT;
+                textureDesc.Width = width;
+                textureDesc.Height = height;
+                textureDesc.DepthOrArraySize = 1;
+                textureDesc.MipLevels = 1;
+                textureDesc.Flags = flags;
+                textureDesc.SampleDesc.Count = 1;
+                textureDesc.SampleDesc.Quality = 0;
+                textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+                D3D12_CLEAR_VALUE depth_optimized_clear_value = {};
+                depth_optimized_clear_value.Format = format; // DXGI_FORMAT_D32_FLOAT;
+                depth_optimized_clear_value.DepthStencil.Depth = 1.0f;
+                depth_optimized_clear_value.DepthStencil.Stencil = 0;
+
+                auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+                res = device->CreateCommittedResource(
+                    &heap_properties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &textureDesc,
+                    states,
+                    &depth_optimized_clear_value,
+                    IID_PPV_ARGS(&back_buffers[i])
+                );
+                if (FAILED(res)) {
+                    HRESULT reason = device->GetDeviceRemovedReason();
+                    //D3D12_ERROR_ADAPTER_NOT_FOUND
+                    LOG(ERROR) << "D3D12 Error, failed creating proxy swapchain depth resource: " << proxy_name;
+                    ThrowIfFailed(res);
+                    return false;
+                }
+
+                D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = {};
+                depth_stencil_desc.Format = format;
+                depth_stencil_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+                depth_stencil_desc.Flags = D3D12_DSV_FLAG_NONE;
+
+                // Dsv descriptors are not necessary for now
+                //device->CreateDepthStencilView(m_depthStencil.Get(), &depth_stencil_desc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+
+                com_name_prefix = L"Depth ";
+            }
+            // Create render target
+            else {
+                // Describe and create a Texture2D.
+                D3D12_RESOURCE_DESC textureDesc = {};
+                textureDesc.Format = format;
+                textureDesc.Width = width;
+                textureDesc.Height = height;
+                textureDesc.DepthOrArraySize = 1;
+                textureDesc.MipLevels = 1;
+                textureDesc.Flags = flags;
+                textureDesc.SampleDesc.Count = 1;
+                textureDesc.SampleDesc.Quality = 0;
+                textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+                auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+                D3D12_CLEAR_VALUE clear_value{
+                    format,
+                    0.5f
+                };
+
+                res = device->CreateCommittedResource(
+                    &heap_properties,
+                    D3D12_HEAP_FLAG_NONE,
+                    &textureDesc,
+                    states,
+                    &clear_value,
+                    IID_PPV_ARGS(&back_buffers[i]));
+                if (FAILED(res)) {
+                    HRESULT reason = device->GetDeviceRemovedReason();
+                    //D3D12_ERROR_ADAPTER_NOT_FOUND
+                    LOG(ERROR) << "D3D12 Error, failed creating proxy swapchain resource: " << proxy_name;
+                    ThrowIfFailed(res);
+                    return false;
+                }
+            }
+
+            // Choose name for debugging
             if (resource_name.empty()) {
                 std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
-                back_buffers[i]->SetName(name.c_str());
+                name = com_name_prefix + name;
                 proxy_name = name;
             }
-            else
-            {
+            else {
                 std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(handle), i);
-                back_buffers[i]->SetName(name.c_str());
                 proxy_name = name;
             }
+
+            // Give name to the buffer
+            back_buffers[i]->SetName(proxy_name.c_str());
         }
 
-        // Create descriptor heaps.
-        {
-            // Describe and create a render target view (RTV) descriptor heap.
-            D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-            rtvHeapDesc.NumDescriptors = g_back_buffer_count;
-            rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-            rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-            if (FAILED(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtv_heap)))) {
-                LOG(ERROR) << "Failed to create d3d12 rtv descriptor heap";
-                return false;
-            }
-
-            // TODO we create an srv heap here but not srv's themselves later on
-            // Describe and create a shader resource view (SRV) heap for the texture.
-            D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-            srvHeapDesc.NumDescriptors = g_back_buffer_count;
-            srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-            if (FAILED(device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srv_heap)))) {
-                LOG(ERROR) << "Failed to create d3d12 srv descriptor heap";
-                return false;
-            }
+        // Don't create descriptors for depth resources
+        if (states == D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+            is_depth_resource = true;
         }
+        else {
+            // Create descriptor heaps.
+            {
 
-        rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        cbc_srv_uav_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        resolution_x = width;
-        resolution_y = height;
+                // Describe and create a render target view (RTV) descriptor heap.
+                D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+                rtvHeapDesc.NumDescriptors = g_back_buffer_count;
+                rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+                rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+                if (FAILED(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtv_heap)))) {
+                    LOG(ERROR) << "Failed to create d3d12 rtv descriptor heap";
+                    return false;
+                }
 
-        // Create descriptors
-        {
-            CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
-            CD3DX12_CPU_DESCRIPTOR_HANDLE srv_handle(srv_heap->GetCPUDescriptorHandleForHeapStart());
+                // TODO we create an srv heap here but not srv's themselves later on
+                // Describe and create a shader resource view (SRV) heap for the texture.
+                D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+                srvHeapDesc.NumDescriptors = g_back_buffer_count;
+                srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+                srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+                if (FAILED(device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srv_heap)))) {
+                    LOG(ERROR) << "Failed to create d3d12 srv descriptor heap";
+                    return false;
+                }
+            }
 
-            for (int32_t i = 0; i < g_back_buffer_count; i++) {
-                //std::wstringstream ss; ss << "Swap Container Resource: " << i;
-                //back_buffers[i]->SetName(ss.str().c_str());
+            rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+            cbc_srv_uav_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            resolution_x = width;
+            resolution_y = height;
 
-                // Create a RTV for each resource.
-                device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
-                rtv_handle.Offset(1, rtv_descriptor_size);
+            // Create descriptors
+            {
+                CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_heap->GetCPUDescriptorHandleForHeapStart());
+                CD3DX12_CPU_DESCRIPTOR_HANDLE srv_handle(srv_heap->GetCPUDescriptorHandleForHeapStart());
 
-                D3D12_TEX2D_SRV tex2d{};
-                tex2d.MipLevels = 1;
-                tex2d.MostDetailedMip = 0;
-                tex2d.PlaneSlice = 0;
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                srv_desc.Format = format;
-                srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
-                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                srv_desc.Texture2D = tex2d;
-                // Create SRV for each resource
-                device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, srv_handle);
-                srv_handle.Offset(1, cbc_srv_uav_descriptor_size);
+                for (int32_t i = 0; i < g_back_buffer_count; i++) {
+                    //std::wstringstream ss; ss << "Swap Container Resource: " << i;
+                    //back_buffers[i]->SetName(ss.str().c_str());
+
+                    // Create a RTV for each resource.
+                    device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
+                    rtv_handle.Offset(1, rtv_descriptor_size);
+
+                    D3D12_TEX2D_SRV tex2d{};
+                    tex2d.MipLevels = 1;
+                    tex2d.MostDetailedMip = 0;
+                    tex2d.PlaneSlice = 0;
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                    srv_desc.Format = format;
+                    srv_desc.ViewDimension = D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D;
+                    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srv_desc.Texture2D = tex2d;
+                    // Create SRV for each resource
+                    device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, srv_handle);
+                    srv_handle.Offset(1, cbc_srv_uav_descriptor_size);
+                }
             }
         }
 
@@ -403,12 +474,12 @@ namespace XRGameBridge {
 
         released_frame_index = awaited_frame_index;
 
-        LOG(INFO) << "px - "
-            << " swapchain: " << handle
-            << " aqcuired index " << current_frame_index
-            << " awaited index " << awaited_frame_index
-            << " released index " << released_frame_index
-            ;
+        //LOG(INFO) << "px - "
+        //    << " swapchain: " << handle
+        //    << " aqcuired index " << current_frame_index
+        //    << " awaited index " << awaited_frame_index
+        //    << " released index " << released_frame_index
+        //    ;
 
         return XR_SUCCESS;
     }
@@ -592,10 +663,11 @@ namespace XRGameBridge {
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {
         if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-            //states = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         }
         if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+            states = D3D12_RESOURCE_STATE_DEPTH_WRITE;
         }
         if (XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT & usage_flags) {
             flags |= D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;

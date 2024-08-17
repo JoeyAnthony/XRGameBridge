@@ -4,7 +4,9 @@
 namespace XRGameBridge {
     class GB_Compositor {
         ComPtr<ID3D12RootSignature> root_signature;
-        ComPtr<ID3D12PipelineState> pipeline_state;
+
+        ComPtr<ID3D12PipelineState> pipeline_state_opaque;
+        ComPtr<ID3D12PipelineState> pipeline_state_blend;
 
         ComPtr<ID3D12DescriptorHeap> sampler_heap;
 
@@ -17,9 +19,14 @@ namespace XRGameBridge {
         std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
 
     public:
-        void Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
+        bool Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
+
+        bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
+
         //void InitShaders(const ComPtr<ID3D12Device>& device);
         void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);
+        //void ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, XrCompositionLayerProjection& layer);
+        void ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer);
         void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
         void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
 

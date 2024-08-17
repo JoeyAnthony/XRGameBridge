@@ -126,7 +126,6 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
         view.maxSwapchainSampleCount = 1;
 
-        // TODO Create 2 views here to get 2 swap chains and so a view per eye
         supported_views.push_back(view);
         supported_views.push_back(view);
 
@@ -161,7 +160,7 @@ constexpr auto M_PI = 3.14159265358979323846;
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
     // TODO Dummy implementation for locate views, only returning views with a hardcoded offset hoping these are the eye locations
 
-    float fov = M_PI / 3.5f;
+    float fov = M_PI / 4.0f;
 
     XrView view1, view2;
     view1.type = XR_TYPE_VIEW;
@@ -252,6 +251,13 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_LOCAL &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_STAGE) {
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
+    }
+
+    if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+    }
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        new_space.pose_in_reference_space.position = { 0.0f, 1.7f, 0.f };
     }
 
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
@@ -396,11 +402,12 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
     if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
     {
         // For when no SR display is connected, and if it's an 8K SR display it should work as well
-        system.physical_resolution = GetScaledSystemResolutionMainDisplay();
+        system.physical_resolution = GetResolutionMainDisplay();
     }
 
     g_systems.insert({ system.id, system });
 
+    LOG(INFO) << "Created system: " << system.id;
     return system.id;
 }
 
@@ -420,7 +427,7 @@ XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_s
     return gb_system.physical_resolution;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetScaledSystemResolutionMainDisplay() {
+XRGameBridge::GBVector2i XRGameBridge::GetResolutionMainDisplay() {
     size_t width = GetSystemMetrics(SM_CXSCREEN);
     size_t height = GetSystemMetrics(SM_CYSCREEN);
     return GBVector2i{ static_cast<uint32_t>(width) ,static_cast<uint32_t>(height) };

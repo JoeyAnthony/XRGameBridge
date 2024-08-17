@@ -92,7 +92,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // that will be used instead, thereby bypassing the rest
         // of the helper.
 
-        LOG(INFO) << "dliStartProcessing " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliStartProcessing " << "DLL Name: " << pdli->szDll;
 
         break;
 
@@ -100,18 +100,22 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // If you want to return control to the helper, return 0.
         // Otherwise, return your own HMODULE to be used by the
         // helper instead of having it call LoadLibrary itself.
-        LOG(INFO) << "dliNotePreLoadLibrary " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliNotePreLoadLibrary " << "DLL Name: " << pdli->szDll;
 
         if(dll_name.find(gb_dll_name) != std::string::npos)
         {
             fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
             HMODULE gb_module = LoadLibraryA(gb_path.string().data());
+
+            //LOG(INFO) << "Loading dll: " << gb_path.string();
+
             if(gb_module == NULL)
             {
-                LOG(INFO) << "Failed to load " << gb_path << " error: " << GetLastError();
+                //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
                 return 0;
             }
 
+            //LOG(INFO) << "Successfully loaded " << gb_dll_name;
             return reinterpret_cast<FARPROC>(gb_module);
         }
 
@@ -122,7 +126,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // If you want to return control to the helper, return 0.
         // If you choose you may supply your own FARPROC function
         // address and bypass the helper's call to GetProcAddress.
-        LOG(INFO) << "dliNotePreGetProcAddress " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliNotePreGetProcAddress " << "DLL Name: " << pdli->szDll;
 
 
         break;
@@ -138,7 +142,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // this alternate DLL and attempt to find the
         // requested entrypoint via GetProcAddress.
 
-        LOG(INFO) << "dliFailLoadLib " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliFailLoadLib " << "DLL Name: " << pdli->szDll;
 
 
         break;
@@ -150,7 +154,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // (ERROR_PROC_NOT_FOUND) and exit.
         // If you choose, you may handle the failure by returning
         // an alternate FARPROC function address.
-        LOG(INFO) << "dliFailGetProc " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliFailGetProc " << "DLL Name: " << pdli->szDll;
 
 
         break;
@@ -161,12 +165,12 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // at this point except by longjmp()/throw()/RaiseException.
         // No return value is processed.
 
-        LOG(INFO) << "dliNoteEndProcessing " << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "dliNoteEndProcessing " << "DLL Name: " << pdli->szDll;
 
         break;
 
     default:
-        LOG(INFO) << "default" << "DLL Name: " << pdli->szDll;
+        //LOG(INFO) << "default" << "DLL Name: " << pdli->szDll;
         return NULL;
     }
 

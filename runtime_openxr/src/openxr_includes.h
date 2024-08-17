@@ -22,10 +22,15 @@
 template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 inline void ThrowIfFailed(HRESULT hr) {
+#ifdef  _DEBUG
     if (FAILED(hr)) {
         // Set a breakpoint on this line to catch DirectX API errors
         throw std::exception();
     }
+#else
+
+#endif
+
 }
 
 // OpenXR headers
