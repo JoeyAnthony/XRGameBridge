@@ -92,12 +92,12 @@ XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId system
     switch (viewConfigurationType) {
     case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
         configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
-        configurationProperties->fovMutable = true; // TODO check if it's ok if the application changes the fov
+        configurationProperties->fovMutable = true;
         res = XR_SUCCESS;
         break;
     case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
         configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-        configurationProperties->fovMutable = true; // TODO check if it's ok if the application changes the fov
+        configurationProperties->fovMutable = true;
         res = XR_SUCCESS;
         break;
     default:;
@@ -120,9 +120,9 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         view.type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
         // recommended is half width, max is full width?
         view.recommendedImageRectWidth = render_resolution.x;
-        view.maxImageRectWidth = system_resolution.x;
+        view.maxImageRectWidth = render_resolution.x;
         view.recommendedImageRectHeight = render_resolution.y;
-        view.maxImageRectHeight = system_resolution.y;
+        view.maxImageRectHeight = render_resolution.y;
         view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
         view.maxSwapchainSampleCount = 1;
 
@@ -156,32 +156,15 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
     return res;
 }
 
-constexpr auto M_PI = 3.14159265358979323846;
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
-    // TODO Dummy implementation for locate views, only returning views with a hardcoded offset hoping these are the eye locations
-
-    float fov = M_PI / 4.0f;
-
-    XrView view1, view2;
-    view1.type = XR_TYPE_VIEW;
-    view1.next = nullptr;
-    view1.pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.060f, 0, 0} }; // Orientation, Position
-    view1.fov = { -fov, fov, fov, -fov }; // FOV angle left, right, up, down
-
-    view2.type = XR_TYPE_VIEW;
-    view2.next = nullptr;
-    view2.pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.060f, 0, 0} }; // Orientation, Position
-    view2.fov = { -fov, fov, fov, -fov }; // FOV angle left, right, up, down
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     std::vector<XrView> sr_views;
-
-    //TODO Don't understand this, for some reason it wants a single view for stereo output.
-    // Should change this later
     if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        sr_views = { view1 };
+        sr_views = { gb_session.stereo_views[0]};
     }
     else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        sr_views = { view1, view2 };
+        sr_views = std::vector<XrView>{gb_session.stereo_views.begin(), gb_session.stereo_views.end() };
     }
 
     *viewCountOutput = sr_views.size();
@@ -215,7 +198,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 }
 
 XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInput, uint32_t* spaceCountOutput, XrReferenceSpaceType* spaces) {
-    XRGameBridge::GB_Session* gb_session = reinterpret_cast<XRGameBridge::GB_Session*>(session);
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     std::array reference_space_types{
         XR_REFERENCE_SPACE_TYPE_VIEW,
@@ -257,7 +240,7 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
         new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
     }
     else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        new_space.pose_in_reference_space.position = { 0.0f, 1.7f, 0.f };
+        //new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
     }
 
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });

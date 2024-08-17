@@ -1,7 +1,10 @@
 #pragma once
 #include "openxr_includes.h"
 
+
 namespace XRGameBridge {
+    class GB_Session;
+
     class GB_Compositor {
         ComPtr<ID3D12RootSignature> root_signature;
 
@@ -24,7 +27,7 @@ namespace XRGameBridge {
         bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
 
         //void InitShaders(const ComPtr<ID3D12Device>& device);
-        void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);
+        void ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);
         //void ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, XrCompositionLayerProjection& layer);
         void ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer);
         void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);

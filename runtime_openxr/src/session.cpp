@@ -52,6 +52,20 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.session_state = XR_SESSION_STATE_IDLE;
     new_session.session_epoch = std::chrono::high_resolution_clock::now();
 
+    // Set default values for the eye pairs
+    float fovx = M_PI / 4.0f;
+    float fovy = M_PI / 6.0f;
+
+    new_session.stereo_views[0].type = XR_TYPE_VIEW;
+    new_session.stereo_views[0].next = nullptr;
+    new_session.stereo_views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.070f, 0, 0} }; // Orientation, Position
+    new_session.stereo_views[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+
+    new_session.stereo_views[1].type = XR_TYPE_VIEW;
+    new_session.stereo_views[1].next = nullptr;
+    new_session.stereo_views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.070f, 0, 0} }; // Orientation, Position
+    new_session.stereo_views[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+
     // DirectX 12
     if (XRGameBridge::g_runtime_settings.support_d3d12) {
         const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (createInfo->next);
@@ -62,6 +76,16 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";
     }
+
+    // Get hot-key event stream reader
+    new_session.hotkey_events_reader = XRGameBridge::g_gamebridge_instance->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
+
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
+
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F7);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F8);
 
     *session = handle;
     session_creation_count++;
@@ -74,7 +98,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
 
     // Create sr context, blocks till there is a connection
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_gbinstance);
+    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_xr_instance);
     new_session.sr_context = gb_instance->sr_context;
 
     // Start session idle thread
@@ -137,11 +161,17 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     // TODO Move creation of objects to CreateSession, except for the creation of the window swapchain and the window perhaps.
 
+    if(gb_session.display.TryGetExternalDisplay() != nullptr)
+    {
+        LOG(INFO) << "Got window";
+    }
+
     // Create debug window
     auto system_resolution = XRGameBridge::GetSystemResolution(gb_system);
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
+    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
     // Debugging with non full screen mode
+
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -160,7 +190,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     DX12WeaverInitialize params{};
     params.command_queue = gb_session.command_queue.Get();
     params.device = gb_session.d3d12_device.Get();
-    params.game_bridge = XRGameBridge::g_game_bridge_instance;
+    params.game_bridge = XRGameBridge::g_gamebridge_instance;
     params.input_resource = gb_session.intermediate_resource.GetBuffers()[0].Get();
     params.render_target = gb_session.window_swapchain.GetImages()[0].Get();
     params.window = gb_session.display.GetWindowHandle();
@@ -337,10 +367,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
     auto& gb_compositor = gb_session.compositor;
 
-    uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
-    long long time_left = gb_session.started_frame - time_now;
-    //LOG(INFO) << "EndFrame, Time left: " << time_left;
-
     if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
     }
@@ -363,9 +389,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
 
-    auto display_time = ch::high_resolution_clock::now() - gb_session.session_epoch;
-    //LOG(INFO) << "xrEndFrame Called: " << display_time.count();
-
     // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
     auto& window_swapchain = gb_session.window_swapchain;
     int32_t index = window_swapchain.AcquireNextImage();
@@ -373,56 +396,64 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     auto& cmd_allocator = gb_compositor.GetCommandAllocator(index);
     float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 
-    // Prepare command list // TODO set pipeline state when resetting command list later
+    // Prepare command list
     cmd_allocator->Reset();
     cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
 
-    // Set intermediate resource as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE intermediate_rtv_handle(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
-    cmd_list->OMSetRenderTargets(1, &intermediate_rtv_handle, true, nullptr);
-    cmd_list->ClearRenderTargetView(intermediate_rtv_handle, clear_color, 0, nullptr);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose;
+
+    if(gb_session.should_weave)
+    {
+        // Set intermediate resource as render target
+        descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
+    }
+    else
+    {
+        // Transition to render target
+        gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // Set window swapchain as render target
+        descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
+    }
+
+    cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
+    cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
-    gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
+    gb_compositor.ComposeImage(gb_session, frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
 
-    // Set swapchain as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
-    cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
-    //cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
+    if (gb_session.should_weave) {
+        // Transition intermediate resource to unordered access for the weaver
+        gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-    // Set viewport for rendering to the final rtv
-    auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
-    D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
-    D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
-    cmd_list->RSSetViewports(1, &view_port);
-    cmd_list->RSSetScissorRects(1, &scissor_rect);
+        // Transition window swapchain to render target
+        gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 
-    // Transition intermediate resource to unordered access fo the weaver
-    // Todo Figure out whether I need 2 buffers as input or the weaver, not entirely sure about it....
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-    // Transition window swapchain to render target
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-    // Do weaving
-    //gb_session.d3d12weaver->SetInputFrameBuffer(gb_session.intermediate_resource.GetBuffers()[0].Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-    //gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
+        // Set window swapchain as render target
+        CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
+        cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
+        cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
 
 
-    cmd_list->CopyResource(window_swapchain.GetImages()[index].Get(), gb_session.intermediate_resource.GetBuffers()[0].Get());
+        // Set viewport for weaving to window swapchain
+        auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
+        D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
+        D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
+        cmd_list->RSSetViewports(1, &view_port);
+        cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-    // DEBUG to easily view the sbs image
-    //gb_compositor.ComposeImage(frameEndInfo, cmd_list.Get());
+
+        // Do weaving
+        gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
+
+        // Transition to render target
+        gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
 
     // Transition swapchain to present
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-    //gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    //gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
 
@@ -471,9 +502,17 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
     session.session_state_queue.push_back(state);
 }
 
+void XRGameBridge::RenderFrameWeaving()
+{
+}
+
+void XRGameBridge::RenderFrameSideBySide()
+{
+}
+
 void XRGameBridge::UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
-    EventManager& event_manager = g_game_bridge_instance->GetEventManager();
+    EventManager& event_manager = g_gamebridge_instance->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
     {
@@ -498,6 +537,114 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
         session.session_state_queue.clear();
     }
 
+    // Register hot-key events
+    g_hotkey_manager->PollHotkeys();
+    g_hotkey_manager->SendHotkeyEvents();
+
     // Not allowed to send messages after this function
     event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
+
+    LPMSG msg = nullptr;
+    if (session.display.PeekMessageExternal(msg)) {
+        switch (msg->message) {
+        case WM_KEYDOWN:
+            if (GetAsyncKeyState(VK_F1) & 0x80) {
+                LOG(INFO) << "Pressed";
+            }
+            break;
+        case WM_KEYUP:
+            if (GetAsyncKeyState(VK_F1) & 0x00) {
+                LOG(INFO) << "Released";
+            }
+            break;
+        }
+    }
+
+    // Check if the F1 key is up
+    static bool f1_pressed = false;
+    if ((GetAsyncKeyState(VK_F1) & 0x80) == 0) {
+        f1_pressed = false;
+    }
+
+    // Process input events
+    GB_EVENT event_type;
+    while (session.hotkey_events_reader->GetNextEvent(event_type)) {
+        // Toggle buttons
+        if(event_type == GB_EVENT_HOTKEY_TOGGLE_WEAVING && f1_pressed == false)
+        {
+            session.should_weave = session.should_weave ? false : true;
+            f1_pressed = true;
+        }
+
+        // Separation buttons
+        bool value_changed = false;
+        float incremental_value_pose = 0.002f;
+        float incremental_value_orientation = M_PI / 50.0f;
+        int factor_pose = 1.0f;
+        int factor_orientation = 1.0f;
+        XrView view_l = session.stereo_views[0];
+        XrView view_r = session.stereo_views[1];
+
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
+            float addition = incremental_value_pose * factor_pose;
+
+            view_l.pose.position.x += addition * -1.0f;
+            view_r.pose.position.x += addition;
+
+            value_changed = true;
+        }
+
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_SEPARATION) {
+            factor_pose = -1.0f;
+            float addition = incremental_value_pose * factor_pose;
+
+            view_l.pose.position.x += addition * -1.0f;
+            view_r.pose.position.x += addition;
+
+            value_changed = true;
+        }
+
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
+            float addition = incremental_value_orientation * factor_orientation;
+            view_l.pose.orientation.y += addition * -1.0f;
+            view_r.pose.orientation.y += addition;
+
+            value_changed = true;
+        }
+
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
+            factor_orientation = 1.0f;
+
+            float addition = incremental_value_orientation * factor_orientation;
+            view_l.pose.orientation.y += addition * -1.0f;
+            view_r.pose.orientation.y += addition;
+
+            value_changed = true;
+        }
+
+        if (value_changed) {
+            SetXrViewPose(session, 0, view_l.pose);
+            SetXrViewPose(session, 1, view_r.pose);
+        }
+    }
+}
+
+void XRGameBridge::SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
+{
+    if (index > session.stereo_views.size() - 1) {
+        LOG(WARNING) << "Session view array index out of bounds";
+        return;
+    }
+
+    session.stereo_views[index].pose = pose;
+}
+
+void XRGameBridge::SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
+{
+    if (index > session.stereo_views.size() - 1) {
+        LOG(WARNING) << "Session view array index out of bounds";
+        return;
+    }
+
+    session.stereo_views[index].fov = fov;
 }

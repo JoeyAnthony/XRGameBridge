@@ -73,6 +73,9 @@ namespace XRGameBridge {
             return false;
         }
 
+        // Always try to get the external display before creating one ourselves
+        TryGetExternalDisplay();
+
         if (!window_class_is_registered) {
             InitWindowClass(hInstance);
             window_class_is_registered = true;
@@ -90,9 +93,10 @@ namespace XRGameBridge {
             window_style = windowed;
         }
 
+        // Set the new window as a child window of the game's
         const long w = static_cast<long>(width);
         const long h = static_cast<long>(height);
-        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, CW_USEDEFAULT, CW_USEDEFAULT, w, h, NULL, NULL, hInstance, NULL);
+        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, CW_USEDEFAULT, CW_USEDEFAULT, w, h, h_wnd_external, NULL, hInstance, NULL);
         if (!h_wnd) {
             MessageBox(NULL, "Call to CreateWindow failed!", "XR Game Bridge", NULL);
             return false;
@@ -141,5 +145,37 @@ namespace XRGameBridge {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+    }
+
+    HWND GB_Display::TryGetExternalDisplay()
+    {
+        // Make sure we get the root window, assuming all games uses its root window for showing the game and processing input.
+        HWND h_wnd_active = GetActiveWindow();
+        //HWND h_wnd_ancestor = GetAncestor(h_wnd_active, GA_ROOT);
+
+        //if(h_wnd_active == h_wnd_ancestor)
+        //{
+        //
+        //}
+
+        if(h_wnd_active == nullptr)
+        {
+            return nullptr;
+        }
+
+        if(h_wnd_active == h_wnd)
+        {
+            return nullptr;
+        }
+
+        h_wnd_external = h_wnd_active;
+        return h_wnd_active;
+    }
+
+    bool GB_Display::PeekMessageExternal(LPMSG& msg) {
+        if (h_wnd_external == nullptr) {
+            return false;
+        }
+        return PeekMessageA(msg, h_wnd_external, 0, 0, PM_NOREMOVE);
     }
 }

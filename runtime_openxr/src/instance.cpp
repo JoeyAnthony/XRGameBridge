@@ -5,11 +5,13 @@
 #include <set>
 
 #include <easylogging++.h>
+#include <hotkey_windows_impl.h>
+
+#include <game_bridge_structs.h>
 
 #include "actions.h"
 #include "openxr_functions.h"
 #include "swapchain.h"
-#include "game_bridge_structs.h"
 #include "system.h"
 
 //class OpenXRContainers {
@@ -91,7 +93,7 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     }
 
     // Only support a single instance for now
-    if (g_gbinstance != nullptr) {
+    if (g_xr_instance != nullptr) {
         return XR_ERROR_LIMIT_REACHED;
     }
 
@@ -138,14 +140,14 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     }
 
     // Create new instance
-    g_gbinstance = new GB_Instance();
-    *instance = reinterpret_cast<XrInstance>(g_gbinstance);
+    g_xr_instance = new GB_Instance();
+    *instance = reinterpret_cast<XrInstance>(g_xr_instance);
 
     InitializeGameBridge();
 
     // Create sr context
-    g_gbinstance->sr_context = CreateSrContext();
-    if (g_gbinstance->sr_context == nullptr){
+    g_xr_instance->sr_context = CreateSrContext();
+    if (g_xr_instance->sr_context == nullptr){
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -172,10 +174,10 @@ XrResult xrDestroyInstance(XrInstance instance) {
     // Delete actions
     // TODO Make the instance destroy all owned objects here as well
 
-    XRGameBridge::g_gbinstance = nullptr;
+    XRGameBridge::g_xr_instance = nullptr;
 
     // TODO Destroy game bridge instance perhaps with all its components
-    g_game_bridge_instance = nullptr;
+    g_gamebridge_instance = nullptr;
 
     LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
 }
@@ -204,7 +206,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         system.features_enumerated = true;
 
         //GB_Instance gb_instance = instances.at(instance);
-        g_gbinstance->active_graphics_backend = GraphicsBackend::D3D11;
+        g_xr_instance->active_graphics_backend = GraphicsBackend::D3D11;
         system.active_graphics_backend = GraphicsBackend::D3D11;
     }
     catch (std::out_of_range& e) {
@@ -247,7 +249,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
         //GB_Instance gb_instance = instances.at(instance);
         //TODO Do I need this in both? Maybe only in system sincen that the device that renders in the end
-        g_gbinstance->active_graphics_backend = GraphicsBackend::D3D12;
+        g_xr_instance->active_graphics_backend = GraphicsBackend::D3D12;
         system.active_graphics_backend = GraphicsBackend::D3D12;
         LOG(INFO) << "";
     }
@@ -466,7 +468,7 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 }
 
 XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
-    auto& event_manager = g_game_bridge_instance->GetEventManager();
+    auto& event_manager = g_gamebridge_instance->GetEventManager();
 
     uint32_t event_type;
     void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
@@ -490,14 +492,25 @@ void XRGameBridge::InitializeGameBridge() {
     // Set dpi awareness for the application
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
-    if (g_game_bridge_instance == nullptr) {
-        g_game_bridge_instance = new GameBridge(EventManager());
-        auto& event_manager = g_game_bridge_instance->GetEventManager();
+    if (g_gamebridge_instance == nullptr) {
+        g_gamebridge_instance = new GameBridge(EventManager());
+
+        // Initialize hotkey manager
+        HotkeyManagerInitialize hotkey_params{};
+        hotkey_params.game_bridge = g_gamebridge_instance;
+        hotkey_params.implementation = std::make_shared<WindowsHotkeyImplementation>();
+        g_hotkey_manager = new HotkeyManager(hotkey_params);
+
+        // Set-up event streams for the runtime
+        auto& event_manager = g_gamebridge_instance->GetEventManager();
         g_openxr_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE, 300, XR_MAX_EVENT_DATA_SIZE);
         g_openxr_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
 
-
         //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
+
+        g_window_hook = new WindowHooks();
+        g_window_hook->OpenConsole();
+        g_window_hook->ActivateWindowMessageHook();
     }
 }
 

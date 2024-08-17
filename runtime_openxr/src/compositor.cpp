@@ -7,6 +7,7 @@
 #include "instance.h"
 #include "swapchain.h"
 #include "settings.h"
+#include "session.h"
 
 
 namespace XRGameBridge {
@@ -243,7 +244,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+    void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -260,19 +261,14 @@ namespace XRGameBridge {
                 for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
                     auto& view = layer->views[view_num];
 
+                    SetXrViewPose(session, view_num, view.pose);
+                    SetXrViewFov(session, view_num, view.fov);
+
                     // TODO do something with rectangles
                     auto& rect = view.subImage.imageRect;
 
                     auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
                     auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
-
-                    //LOG(INFO)   << " Frame: " << frameEndInfo->displayTime
-                    //            << " Layercount: "  << frameEndInfo->layerCount
-                    //            << " Layernum: "    << layer_num
-                    //            << " viewnum "      << view_num
-                    //            << " swapchain: "   << view.subImage.swapchain
-                    //            << " swapchain index "  << proxy_swapchain.awaited_frame_index
-                    //;
 
                     // Viewport settings
                     const float width = static_cast<float>(system_width) / 2;
@@ -374,6 +370,8 @@ namespace XRGameBridge {
         auto& proxy_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
         auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
 
+       //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
         for (; view_num < view_count; view_num++) {
             // Viewport settings
             const float width = static_cast<float>(system_width) / 2;
@@ -426,6 +424,8 @@ namespace XRGameBridge {
             cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
             cmd_list->DrawInstanced(3, 1, 0, 0);
+
+            //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
         }
     }
 

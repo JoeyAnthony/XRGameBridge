@@ -24,6 +24,9 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo);
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo);
 
+// Constant PI
+constexpr auto M_PI = 3.14159265358979323846;
+
 namespace ch = std::chrono;
 
 namespace XRGameBridge {
@@ -42,6 +45,7 @@ namespace XRGameBridge {
         XrInstance instance;
         XrSystemId system;
         XrViewConfigurationType view_configuration;
+        std::shared_ptr<EventStreamReader> hotkey_events_reader;
 
         // Session state
         std::mutex mutex_session_state_queue;
@@ -59,6 +63,11 @@ namespace XRGameBridge {
         Frame ended_frame = 0;
         bool end_frame_called = true;
         bool should_render = false;
+
+        // Views
+        std::array<XrView,2> stereo_views;
+        // Weaving
+        bool should_weave = true;
 
         // DirectX 12
         ComPtr<ID3D12Device> d3d12_device;
@@ -105,5 +114,11 @@ namespace XRGameBridge {
 
     void ChangeSessionState(GB_Session& session, XrSessionState state);
 
+    void RenderFrameWeaving();
+    void RenderFrameSideBySide();
+
     void UpdateSession(GB_Session& session);
+
+    void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose);
+    void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov);
 }

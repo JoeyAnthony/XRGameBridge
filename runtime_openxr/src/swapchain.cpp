@@ -77,8 +77,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = handle;
     swapchain_creation_count++;
 
-    // TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
-    XRGameBridge::UpdateSession(gb_session);
+    //// TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
+    //XRGameBridge::UpdateSession(gb_session);
 
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
 
@@ -674,17 +674,21 @@ namespace XRGameBridge {
         }
         if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
             // Ignored for D3D12
+            LOG(INFO) << "Test";
         }
         if (XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT & usage_flags) {
             // Ignored for D3D12
+            LOG(INFO) << "Test";
         }
         if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
             // Omitted for D3D12
             //states = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            LOG(INFO) << "Test";
         }
         if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
             // Ignored for D3D12
             //usage |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COMMON;
+            LOG(INFO) << "Test";
         }
     }
 }

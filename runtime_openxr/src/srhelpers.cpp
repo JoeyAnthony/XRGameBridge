@@ -8,7 +8,7 @@ SR::SRContext* XRGameBridge::CreateSrContext()
     if(!g_platform_manager)
     {
         SRPlatformManagerInitialize params{};
-        params.game_bridge = g_game_bridge_instance;
+        params.game_bridge = g_gamebridge_instance;
 
         g_platform_manager = new PlatformManager(params);
     }
