@@ -66,8 +66,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
 find_package(srDirectX)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-		simulatedreality
-		srDirectX::srDirectX
 		3DGameBridge
 )
 
