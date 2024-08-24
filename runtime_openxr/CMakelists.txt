@@ -60,23 +60,38 @@ target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src)
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
 
-# Link dependancies
+# Link dependencies
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
 
 find_package(srDirectX)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-		3DGameBridge
 		simulatedreality
 		srDirectX::srDirectX
+		3DGameBridge
 )
 
-# Copy dependancies
+# Copy 3DGameBridge DLL
 add_custom_command(
     TARGET RuntimeOpenXR POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
 	DEPENDS 3DGameBridge
 )
+
+# Copy all dependencies
+add_custom_command(
+    TARGET RuntimeOpenXR POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:RuntimeOpenXR>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
+	DEPENDS 3DGameBridge
+	COMMAND_EXPAND_LISTS
+)
+# Copy all dependencies
+# add_custom_command(
+    # TARGET RuntimeOpenXR POST_BUILD
+    # COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
+	# DEPENDS 3DGameBridge
+	# COMMAND_EXPAND_LISTS
+# )
 
 # Compile shaders
 add_custom_command(TARGET RuntimeOpenXR POST_BUILD
@@ -95,8 +110,23 @@ endforeach()
 message("DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 
 # Delay loading of Simulated Reality
- target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
+target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_NAME:3DGameBridge>")
+
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:simulatedreality.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityCameras.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityCore.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityDirectX.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityDisplays.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityFaceTrackers.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityHandTrackers.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityOpenGL.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:SimulatedRealityUserModelers.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:DimencoWeaving.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:glog.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:LeapC.dll")
+target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:opencv_world343.dll")
+
 # set_property(TARGET 3DGameBridge PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS true)
 # set_property(TARGET srDirectX::srDirectX PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS true)
- target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_BASE_NAME:3DGameBridge>.dll")
- target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_BASE_NAME:srDirectX::srDirectX>.dll")
+#target_link_options(${PROJECT_NAME} PRIVATE "/DELAYLOAD:$<TARGET_FILE_BASE_NAME:srDirectX::srDirectX>.dll")

@@ -19,18 +19,18 @@ namespace XRGameBridge {
 }
 
 constexpr std::array sr_dlls = {
-"SimulatedRealityDirectX.dll",
-"SimulatedReality.dll",
-"SimulatedRealityCore.dll",
-"SimulatedRealityCameras.dll",
-"SimulatedRealityHandTrackers.dll",
-"SimulatedRealityFaceTrackers.dll",
-"SimulatedRealityUserModelers.dll",
-"SimulatedRealityDisplays.dll",
-"DimencoWeaving.dll",
-"glog.dll",
-"LeapC.dll",
-"opencv_world343.dll"
+L"SimulatedRealityDirectX.dll",
+L"SimulatedReality.dll",
+L"SimulatedRealityCore.dll",
+L"SimulatedRealityCameras.dll",
+L"SimulatedRealityHandTrackers.dll",
+L"SimulatedRealityFaceTrackers.dll",
+L"SimulatedRealityUserModelers.dll",
+L"SimulatedRealityDisplays.dll",
+L"DimencoWeaving.dll",
+L"glog.dll",
+L"LeapC.dll",
+L"opencv_world343.dll"
 };
 
 inline std::string sr_install_path;
