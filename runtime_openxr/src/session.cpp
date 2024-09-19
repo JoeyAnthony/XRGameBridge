@@ -604,23 +604,23 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             value_changed = true;
         }
 
-        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
-            float addition = incremental_value_orientation * factor_orientation;
-            view_l.pose.orientation.y += addition * -1.0f;
-            view_r.pose.orientation.y += addition;
+        //if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
+        //    float addition = incremental_value_orientation * factor_orientation;
+        //    view_l.pose.orientation.y += addition * -1.0f;
+        //    view_r.pose.orientation.y += addition;
 
-            value_changed = true;
-        }
+        //    value_changed = true;
+        //}
 
-        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-            factor_orientation = 1.0f;
+        //if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
+        //    factor_orientation = 1.0f;
 
-            float addition = incremental_value_orientation * factor_orientation;
-            view_l.pose.orientation.y += addition * -1.0f;
-            view_r.pose.orientation.y += addition;
+        //    float addition = incremental_value_orientation * factor_orientation;
+        //    view_l.pose.orientation.y += addition * -1.0f;
+        //    view_r.pose.orientation.y += addition;
 
-            value_changed = true;
-        }
+        //    value_changed = true;
+        //}
 
         if (value_changed) {
             SetXrViewPose(session, 0, view_l.pose);
