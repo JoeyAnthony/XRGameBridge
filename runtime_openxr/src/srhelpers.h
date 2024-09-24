@@ -1,14 +1,30 @@
 #pragma once
-#include "openxr_includes.h"
-#include "platform_manager.h"
 #include <unordered_map>
 
-XR_DEFINE_HANDLE(XrSRContext)
+#include <game_bridge.h>
 
-namespace XRGameBridge
-{
-    SR::SRContext* CreateSrContext();
+#include "openxr_includes.h"
 
-    inline std::unordered_map<XrSRContext, SR::Screen*> g_sr_screens;
-    inline std::unordered_map<XrSRContext, SR::SwitchableLensHint*> g_sr_lenhints;
+namespace SR {
+    class SRContext;
+}
+
+// TODO SR display class to toggle the lens on the screen etc...
+namespace XRGameBridge {
+    /*
+    * SRInstance class
+    * Takes care of the connection to the sr service and is aware of connected SR displays.
+    */
+    class GameBridgeInstance {
+        //std::unordered_map<XrSRContext, SR::Screen*> sr_screens;
+        //std::unordered_map<XrSRContext, SR::SwitchableLensHint*> sr_lenhints;
+
+
+
+    public:
+        GameBridgeInstance();
+        ~GameBridgeInstance();
+        SR::SRContext* GetSrContext();
+        void GetScreen();
+    };
 }

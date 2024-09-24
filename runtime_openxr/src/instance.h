@@ -67,15 +67,28 @@ namespace XRGameBridge {
     //inline size_t XrHandleToInt() { return 0; };
 
     class GB_Instance {
-    public:
         // Cannot be longer than XR_MAX_RUNTIME_NAME_SIZE
         const std::string runtime_name = "XR Game Bridge";
         const uint64_t runtime_version = XR_MAKE_VERSION(RUNTIME_VERSION_MAYOR, RUNTIME_VERSION_MINOR, RUNTIME_VERSION_PATCH);
         GraphicsBackend active_graphics_backend;
-        SR::SRContext* sr_context;
+        GameBridge* gamebridge_instance = nullptr;
+        PlatformManager* platform_manager = nullptr;
 
         // Currently not being used
-        XrInteractionProfileSuggestedBinding suggested_bindings;
+       // XrInteractionProfileSuggestedBinding suggested_bindings;
+    public:
+
+        GB_Instance();
+        ~GB_Instance();
+
+        void InitializeSR();
+        XrResult ActivateGraphicsAPI(GraphicsBackend api);
+
+        GameBridge* GetGameBridgeInstane();
+        PlatformManager* GetPlatformManager();
+        std::string GetRuntimeName();
+        uint64_t GetRuntimeVersion();
+        GraphicsBackend GetActiveGraphicsAPI();
     };
 
     struct GB_ActionSet {
@@ -93,23 +106,18 @@ namespace XRGameBridge {
         std::string localized_name;
     };
 
-    ///! \brief Initialize Game Bridge
-    void InitializeGameBridge();
+    inline GB_Instance* g_xr_instance = nullptr;
+
+    inline WindowHooks* window_hook;
+    inline HotkeyManager* g_hotkey_manager = nullptr;
+    inline std::shared_ptr<EventStreamWriter> g_openxr_event_stream_writer;
+    inline std::shared_ptr<EventStreamReader> g_openxr_event_stream_reader;
 
     ///! \brief Initialize XR Systems
     void InitializeSystems(XrInstance instance);
 
     // Hash class
     inline std::hash<std::string> string_hasher;
-
-    inline GB_Instance* g_xr_instance = nullptr;
-    inline GameBridge* g_gamebridge_instance = nullptr;
-    inline HotkeyManager* g_hotkey_manager = nullptr;
-    inline std::shared_ptr<EventStreamWriter> g_openxr_event_stream_writer;
-    inline std::shared_ptr<EventStreamReader> g_openxr_event_stream_reader;
-
-    inline PlatformManager* g_platform_manager = nullptr;
-    inline WindowHooks* g_window_hook;
 
     // Data
     // The key is the string hash of an action set path. The same hash is being used for action set handles

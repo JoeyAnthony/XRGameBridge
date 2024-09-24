@@ -139,21 +139,38 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
         return XR_ERROR_EXTENSION_NOT_PRESENT;
     }
 
+    /* TODO Make a Game Bridge class
+    * This class will initialize game bridge and SR
+    * After those are initialized, a connected screen can be retreived.
+    * With this the Systems can be initialized.
+    *
+    * There should always be one system, that is the main monitor. This is never an SR screen.
+    * Then later when SR is fulliy initialized, the main screen can be replaced by the SR screen, and the 3D pipeline will be activated.
+    *
+    * Flow:
+    * Initialize main screen ->
+    * Initialize SR on a separate thread ->
+    * Initialize the rutime until resolutions need to be returned ->
+    * Check if SR is initialized and an SR System is created ->
+    * If so Use the SR resolutions, otherwise use the main screen (Or a user set resolution)
+    * When Game Bridge gives an event that a SR screen has been created, swap the systems.
+    *
+    */
+
     // Create new instance
     g_xr_instance = new GB_Instance();
     *instance = reinterpret_cast<XrInstance>(g_xr_instance);
 
-    InitializeGameBridge();
+    g_xr_instance->InitializeSR();
+    InitializeSystems(*instance);
 
-    // Create sr context
-    g_xr_instance->sr_context = CreateSrContext();
-    if (g_xr_instance->sr_context == nullptr){
+    // Check the context
+    if (g_xr_instance->GetPlatformManager()->GetContext() == nullptr) {
+        LOG(ERROR) << "Failed to connect to the SR service";
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
-    InitializeSystems(*instance);
-
-    LOG(INFO) << "New GameBridge Instance created";
+    LOG(INFO) << "XR Instance created";
     return XR_SUCCESS;
 }
 
@@ -161,8 +178,8 @@ XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* inst
     // TODO Make a list of instances to check whether passed instances are valid or not
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 
-    strcpy_s(instanceProperties->runtimeName, XR_MAX_RUNTIME_NAME_SIZE, gb_instance->runtime_name.data());
-    instanceProperties->runtimeVersion = gb_instance->runtime_version;
+    strcpy_s(instanceProperties->runtimeName, XR_MAX_RUNTIME_NAME_SIZE, gb_instance->GetRuntimeName().data());
+    instanceProperties->runtimeVersion = gb_instance->GetRuntimeVersion();
 
     return XR_SUCCESS;
 }
@@ -174,10 +191,7 @@ XrResult xrDestroyInstance(XrInstance instance) {
     // Delete actions
     // TODO Make the instance destroy all owned objects here as well
 
-    XRGameBridge::g_xr_instance = nullptr;
-
-    // TODO Destroy game bridge instance perhaps with all its components
-    g_gamebridge_instance = nullptr;
+    delete XRGameBridge::g_xr_instance;
 
     LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
 }
@@ -206,7 +220,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         system.features_enumerated = true;
 
         //GB_Instance gb_instance = instances.at(instance);
-        g_xr_instance->active_graphics_backend = GraphicsBackend::D3D11;
+        g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D11);
         system.active_graphics_backend = GraphicsBackend::D3D11;
     }
     catch (std::out_of_range& e) {
@@ -249,7 +263,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
         //GB_Instance gb_instance = instances.at(instance);
         //TODO Do I need this in both? Maybe only in system sincen that the device that renders in the end
-        g_xr_instance->active_graphics_backend = GraphicsBackend::D3D12;
+        g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D12);
         system.active_graphics_backend = GraphicsBackend::D3D12;
         LOG(INFO) << "";
     }
@@ -453,7 +467,7 @@ XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrIntera
     // Vendor specific input mappings
 
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    suggestedBindings = &gb_instance->suggested_bindings;
+    //suggestedBindings = &gb_instance->suggested_bindings;
     return XR_SUCCESS;
 }
 
@@ -468,8 +482,6 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 }
 
 XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
-    auto& event_manager = g_gamebridge_instance->GetEventManager();
-
     uint32_t event_type;
     void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
     if (event_type == GB_EVENT_NULL) {
@@ -488,32 +500,78 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     return XR_ERROR_RUNTIME_FAILURE;
 }
 
-void XRGameBridge::InitializeGameBridge() {
-    // Set dpi awareness for the application
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
-
-    if (g_gamebridge_instance == nullptr) {
-        g_gamebridge_instance = new GameBridge(EventManager());
-
-        // Initialize hotkey manager
-        HotkeyManagerInitialize hotkey_params{};
-        hotkey_params.game_bridge = g_gamebridge_instance;
-        hotkey_params.implementation = std::make_shared<WindowsHotkeyImplementation>();
-        g_hotkey_manager = new HotkeyManager(hotkey_params);
-
-        // Set-up event streams for the runtime
-        auto& event_manager = g_gamebridge_instance->GetEventManager();
-        g_openxr_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE, 300, XR_MAX_EVENT_DATA_SIZE);
-        g_openxr_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
-
-        //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
-
-        g_window_hook = new WindowHooks();
-        g_window_hook->OpenConsole();
-        g_window_hook->ActivateWindowMessageHook();
-    }
-}
-
 void XRGameBridge::InitializeSystems(XrInstance instance) {
     CreateXrGameBridgeSystem(instance);
 };
+
+XRGameBridge::GB_Instance::GB_Instance() {
+    // Set dpi awareness for the application
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+
+    // TODO move to input class
+    // Initialize hotkey manager
+    HotkeyManagerInitialize hotkey_params{};
+    hotkey_params.game_bridge = gamebridge_instance;
+    hotkey_params.implementation = std::make_shared<WindowsHotkeyImplementation>();
+    g_hotkey_manager = new HotkeyManager(hotkey_params);
+
+    // TODO move to event xr handler class
+    // Set-up event streams for the runtime
+    auto& event_manager = gamebridge_instance->GetEventManager();
+    g_openxr_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE, 300, XR_MAX_EVENT_DATA_SIZE);
+    g_openxr_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
+
+    //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
+
+    window_hook = new WindowHooks();
+    window_hook->OpenConsole();
+    window_hook->ActivateWindowMessageHook();
+
+    InitializeSR();
+}
+
+XRGameBridge::GB_Instance::~GB_Instance() {
+    delete gamebridge_instance;
+    delete platform_manager;
+}
+
+void XRGameBridge::GB_Instance::InitializeSR() {
+    gamebridge_instance = new GameBridge(EventManager());
+
+    SRPlatformManagerInitialize params{};
+    platform_manager = new PlatformManager(params);
+
+    while (!platform_manager->InitializeSRContext()) {
+        LOG(INFO) << "Failed creating SR context, retrying..";
+    }
+}
+
+XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
+    if (active_graphics_backend == GraphicsBackend::undefined) {
+        active_graphics_backend == api;
+    }
+    else {
+        LOG(ERROR) << "Active graphics api can only be set once";
+        return XR_ERROR_RUNTIME_FAILURE;
+    }
+}
+
+GameBridge* XRGameBridge::GB_Instance::GetGameBridgeInstane() {
+    return gamebridge_instance;
+}
+
+PlatformManager* XRGameBridge::GB_Instance::GetPlatformManager() {
+    return platform_manager;
+}
+
+std::string XRGameBridge::GB_Instance::GetRuntimeName() {
+    return runtime_name;
+}
+
+uint64_t XRGameBridge::GB_Instance::GetRuntimeVersion() {
+    return runtime_version;
+}
+
+GraphicsBackend XRGameBridge::GB_Instance::GetActiveGraphicsAPI() {
+    return active_graphics_backend;
+}

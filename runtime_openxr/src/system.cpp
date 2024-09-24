@@ -378,8 +378,8 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
     system.instance = instance;
     system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
     system.sr_device = XRGameBridge::SRDisplay::SR_DISPLAY;
-    system.sr_screen = SR::Screen::create(*gb_instance->sr_context);
-    system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->sr_context);
+    system.sr_screen = SR::Screen::create(*gb_instance->GetPlatformManager()->GetContext());
+    system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->GetPlatformManager()->GetContext());
     system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionHeight()) };
 
     if(system.sr_screen->getPhysicalResolutionWidth() > 3840)

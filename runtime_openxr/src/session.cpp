@@ -10,12 +10,13 @@
 #include "settings.h"
 #include "compositor.h"
 #include "swapchain.h"
-#include  "instance.h"
+using namespace XRGameBridge;
 
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
+    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 
     LOG(INFO) << "Creating session: " << session_creation_count;
 
@@ -78,7 +79,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
 
     // Get hot-key event stream reader
-    new_session.hotkey_events_reader = XRGameBridge::g_gamebridge_instance->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
+    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstane()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
 
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
@@ -98,8 +99,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
 
     // Create sr context, blocks till there is a connection
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<XRGameBridge::GB_Instance*>(XRGameBridge::g_xr_instance);
-    new_session.sr_context = gb_instance->sr_context;
+    new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
 
     // Start session idle thread
     new_session.StartSessionIdle();
@@ -145,6 +145,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
     XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];
+    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
 
     gb_session.idle_thread.join();
 
@@ -190,7 +191,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     DX12WeaverInitialize params{};
     params.command_queue = gb_session.command_queue.Get();
     params.device = gb_session.d3d12_device.Get();
-    params.game_bridge = XRGameBridge::g_gamebridge_instance;
+    params.game_bridge = gb_instance->GetGameBridgeInstane();
     params.input_resource = gb_session.intermediate_resource.GetBuffers()[0].Get();
     params.render_target = gb_session.window_swapchain.GetImages()[0].Get();
     params.window = gb_session.display.GetWindowHandle();
@@ -512,7 +513,8 @@ void XRGameBridge::RenderFrameSideBySide()
 
 void XRGameBridge::UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
-    EventManager& event_manager = g_gamebridge_instance->GetEventManager();
+    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
+    EventManager& event_manager = gb_instance->GetGameBridgeInstane()->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
     {

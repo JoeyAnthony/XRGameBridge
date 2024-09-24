@@ -3,19 +3,20 @@
 #include "easylogging++.h"
 #include "instance.h"
 
-SR::SRContext* XRGameBridge::CreateSrContext()
-{
-    if(!g_platform_manager)
-    {
-        SRPlatformManagerInitialize params{};
-        params.game_bridge = g_gamebridge_instance;
+#include <game_bridge.h>
+#include <hotkey_windows_impl.h>
 
-        g_platform_manager = new PlatformManager(params);
-    }
+XRGameBridge::GameBridgeInstance::GameBridgeInstance() {
 
-    while(!g_platform_manager->InitializeSRContext())
-    {
-        LOG(INFO) << "Failed creating SR context, retrying..";
-    }
-    return g_platform_manager->GetContext();
+}
+
+XRGameBridge::GameBridgeInstance::~GameBridgeInstance() {
+
+}
+
+SR::SRContext* XRGameBridge::GameBridgeInstance::GetSrContext() {
+    return nullptr;
+}
+
+void XRGameBridge::GameBridgeInstance::GetScreen() {
 }
