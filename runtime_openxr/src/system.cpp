@@ -368,7 +368,7 @@ XrResult xrDestroySpace(XrSpace space) {
 //    return sys_props;
 //}
 
-XrSystemId XRGameBridge::CreateXrGameBridgeSystem(XrInstance instance)
+XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
 {
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 

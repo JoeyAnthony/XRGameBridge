@@ -10,8 +10,8 @@
 #include "settings.h"
 #include "compositor.h"
 #include "swapchain.h"
-using namespace XRGameBridge;
 
+using namespace XRGameBridge;
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
     // TODO refactor local scope static variables
@@ -170,9 +170,9 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // Create debug window
     auto system_resolution = XRGameBridge::GetSystemResolution(gb_system);
 
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
+    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, false);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 1280, 720, true, false);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -521,8 +521,6 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
         std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
 
         for (auto& state : session.session_state_queue) {
-
-
             // Update session state
             XrEventDataSessionStateChanged state_change;
             state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;

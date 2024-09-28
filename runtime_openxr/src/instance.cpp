@@ -161,7 +161,6 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     g_xr_instance = new GB_Instance();
     *instance = reinterpret_cast<XrInstance>(g_xr_instance);
 
-    g_xr_instance->InitializeSR();
     InitializeSystems(*instance);
 
     // Check the context
@@ -482,6 +481,7 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 }
 
 XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
+    // TODO need event stream reader for poll events
     uint32_t event_type;
     void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
     if (event_type == GB_EVENT_NULL) {
@@ -501,12 +501,13 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
 }
 
 void XRGameBridge::InitializeSystems(XrInstance instance) {
-    CreateXrGameBridgeSystem(instance);
+    CreateXrGameBridgeSystems(instance);
 };
 
 XRGameBridge::GB_Instance::GB_Instance() {
     // Set dpi awareness for the application
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+    InitializeSR();
 
     // TODO move to input class
     // Initialize hotkey manager
@@ -523,11 +524,12 @@ XRGameBridge::GB_Instance::GB_Instance() {
 
     //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
 
+#ifdef _DEBUG
     window_hook = new WindowHooks();
     window_hook->OpenConsole();
     window_hook->ActivateWindowMessageHook();
+#endif
 
-    InitializeSR();
 }
 
 XRGameBridge::GB_Instance::~GB_Instance() {

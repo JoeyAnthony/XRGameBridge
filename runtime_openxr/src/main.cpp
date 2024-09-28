@@ -119,6 +119,56 @@ HMODULE LoadwithLdrLoadDLl(std::wstring dll_path)
     return loaded_module;
 }
 
+FARPROC LoadSRWithLoaderLoadDll(HMODULE module, std::string dll_name, std::string gb_dll_name) {
+    std::wstring wdll_name = fs::path(dll_name).wstring();
+    static bool weaving_loaded = false;
+    if (!weaving_loaded) {
+        LoadwithLdrLoadDLl(L"DimencoWeaving.dll");
+        HMODULE mopd = GetModuleHandleW(L"DimencoWeaving.dll");
+        weaving_loaded = true;
+    }
+
+    if (std::find(sr_dlls.begin(), sr_dlls.end(), wdll_name) != sr_dlls.end()) {
+        //fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
+        //HMODULE gb_module = LoadLibraryExW(gb_path.wstring().data(), NULL, NULL);
+
+        module = LoadwithLdrLoadDLl(wdll_name.data());
+        //loaded_module = LoadLibraryExW(wdll_name.data(), NULL, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
+
+        LOG(INFO) << "Loading success";
+        //LOG(INFO) << "Loading dll: " << gb_path.string();
+
+        if (module == NULL) {
+            //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
+            return 0;
+        }
+
+        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
+        return reinterpret_cast<FARPROC>(module);
+    }
+    else if (dll_name.find(gb_dll_name) != std::string::npos) {
+        LOG(INFO) << "Loading dll " << dll_name;
+
+        fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
+        std::wstring wpath = gb_path.wstring();
+        HMODULE gb_module = LoadwithLdrLoadDLl(wpath.data());
+
+        LOG(INFO) << "Loading success";
+        //LOG(INFO) << "Loading dll: " << gb_path.string();
+
+        if (gb_module == NULL) {
+            //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
+            return 0;
+        }
+
+        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
+        return reinterpret_cast<FARPROC>(gb_module);
+    }
+    else {
+
+    }
+}
+
 // Targets are delayed in CMake
 #include <delayimp.h>
 #pragma comment(lib, "ntdll.lib")
@@ -130,15 +180,6 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 #endif
 
     std::string dll_name(pdli->szDll);
-    std::wstring wdll_name = fs::path(dll_name).wstring();
-
-    static bool weaving_loaded = false;
-    if (!weaving_loaded) {
-        LoadwithLdrLoadDLl(L"DimencoWeaving.dll");
-        HMODULE mopd = GetModuleHandleW(L"DimencoWeaving.dll");
-        weaving_loaded = true;
-    }
-
     static HMODULE loaded_module = 0;
 
     //static std::string eos_path;
@@ -170,62 +211,31 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // Otherwise, return your own HMODULE to be used by the
         // helper instead of having it call LoadLibrary itself.
         //LOG(INFO) << "dliNotePreLoadLibrary " << "DLL Name: " << pdli->szDll;
-
-        if (std::find(sr_dlls.begin(), sr_dlls.end(), wdll_name) != sr_dlls.end()) {
-            //fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-            //HMODULE gb_module = LoadLibraryExW(gb_path.wstring().data(), NULL, NULL);
-
-            loaded_module = LoadwithLdrLoadDLl(wdll_name.data());
-            //loaded_module = LoadLibraryExW(wdll_name.data(), NULL, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
-
-            LOG(INFO) << "Loading success";
-            //LOG(INFO) << "Loading dll: " << gb_path.string();
-
-            if (loaded_module == NULL) {
-                //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
-                return 0;
+        LOG(INFO) << "Loading dll " << dll_name;
+        fs::path dll_path = fs::path(dll_name);
+        if (dll_name.find(gb_dll_name) != std::string::npos) {
+            dll_path = fs::path(runtime_path).parent_path() /= dll_name;
+            if (fs::exists(dll_path) == false) {
+                LOG(INFO) << "Debug this!";
             }
 
-            //LOG(INFO) << "Successfully loaded " << gb_dll_name;
-            return reinterpret_cast<FARPROC>(loaded_module);
+            LOG(INFO) << "Try loading " << dll_name << " from: " << dll_path;
+            loaded_module = LoadLibraryA(dll_path.string().data());
         }
-        //else if(dll_name.find(gb_dll_name) != std::string::npos) {
-        //    LOG(INFO) << "Loading dll " << dll_name;
-
-        //    fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-        //    std::wstring wpath = gb_path.wstring();
-        //    HMODULE gb_module = LoadwithLdrLoadDLl(wpath.data());
-
-        //    LOG(INFO) << "Loading success";
-        //    //LOG(INFO) << "Loading dll: " << gb_path.string();
-
-        //    if (gb_module == NULL) {
-        //        //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
-        //        return 0;
-        //    }
-
-        //    //LOG(INFO) << "Successfully loaded " << gb_dll_name;
-        //    return reinterpret_cast<FARPROC>(gb_module);
-        //}
-        else
-        {
-            LOG(INFO) << "Loading dll " << dll_name;
-
-            fs::path dll_path = fs::path(dll_name);
+        else {
             std::wstring wpath = dll_path.wstring();
             loaded_module = LoadLibraryExW(wpath.data(), NULL, NULL);
-
-            LOG(INFO) << "Loading success";
-            //LOG(INFO) << "Loading dll: " << gb_path.string();
-
-            if (loaded_module == NULL) {
-                //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
-                return 0;
-            }
-
-            //LOG(INFO) << "Successfully loaded " << gb_dll_name;
-            return reinterpret_cast<FARPROC>(loaded_module);
         }
+
+        if (loaded_module == NULL) {
+            LOG(ERROR) << "Failed to load " << dll_path << " error: " << GetLastError();
+            return 0;
+        }
+
+        LOG(INFO) << "Loading success";
+        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
+        return reinterpret_cast<FARPROC>(loaded_module);
+
     }
     case dliNotePreGetProcAddress:
         // If you want to return control to the helper, return 0.

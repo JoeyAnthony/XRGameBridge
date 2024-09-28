@@ -76,12 +76,12 @@ namespace XRGameBridge {
 
         // Currently not being used
        // XrInteractionProfileSuggestedBinding suggested_bindings;
+        void InitializeSR();
     public:
 
         GB_Instance();
         ~GB_Instance();
 
-        void InitializeSR();
         XrResult ActivateGraphicsAPI(GraphicsBackend api);
 
         GameBridge* GetGameBridgeInstane();
@@ -108,7 +108,11 @@ namespace XRGameBridge {
 
     inline GB_Instance* g_xr_instance = nullptr;
 
+#ifdef _DEBUG
+    // TODO Hooking tests
     inline WindowHooks* window_hook;
+#endif
+
     inline HotkeyManager* g_hotkey_manager = nullptr;
     inline std::shared_ptr<EventStreamWriter> g_openxr_event_stream_writer;
     inline std::shared_ptr<EventStreamReader> g_openxr_event_stream_reader;
@@ -123,7 +127,7 @@ namespace XRGameBridge {
     // The key is the string hash of an action set path. The same hash is being used for action set handles
     inline std::unordered_map<XrPath, std::string> g_xrpath_storage;
 
-    // TODO a list of instances in the future?
+    // TODO get rid of globals :)
     //inline std::unordered_map<XrInstance, GB_Instance> instances;
     inline std::unordered_map<XrSession, GB_Session> g_sessions;
     inline std::unordered_map<XrSystemId, GB_System> g_systems;
