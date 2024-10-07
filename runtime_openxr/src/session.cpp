@@ -403,7 +403,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose;
 
-    if(gb_session.should_weave)
+    //if(gb_session.should_weave)
+    if (false)
     {
         // Set intermediate resource as render target
         descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
@@ -424,7 +425,8 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // Compose and draw to the intermediate resource
     gb_compositor.ComposeImage(gb_session, frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
 
-    if (gb_session.should_weave) {
+    //if (gb_session.should_weave) {
+    if (false) {
         // Transition intermediate resource to unordered access for the weaver
         gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -579,7 +581,7 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
         // Separation buttons
         bool value_changed = false;
         float incremental_value_pose = 0.002f;
-        float incremental_value_orientation = M_PI / 50.0f;
+        float incremental_value_orientation = M_PI / 100.0f;
         int factor_pose = 1.0f;
         int factor_orientation = 1.0f;
         XrView view_l = session.stereo_views[0];
@@ -604,23 +606,31 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             value_changed = true;
         }
 
-        //if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
-        //    float addition = incremental_value_orientation * factor_orientation;
-        //    view_l.pose.orientation.y += addition * -1.0f;
-        //    view_r.pose.orientation.y += addition;
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
+            factor_orientation = 1.0f;
 
-        //    value_changed = true;
-        //}
+            float addition = incremental_value_orientation * factor_orientation;
+            view_l.pose.orientation.y = 0.0f;
+            view_r.pose.orientation.y = 0.0f;
 
-        //if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-        //    factor_orientation = 1.0f;
+            view_l.pose.orientation.w += addition;
+            view_r.pose.orientation.w += addition * -1.0f;
 
-        //    float addition = incremental_value_orientation * factor_orientation;
-        //    view_l.pose.orientation.y += addition * -1.0f;
-        //    view_r.pose.orientation.y += addition;
+            value_changed = true;
+        }
 
-        //    value_changed = true;
-        //}
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
+            factor_orientation = 1.0f;
+
+            float addition = incremental_value_orientation * factor_orientation;
+            view_l.pose.orientation.y = 0.0f;
+            view_r.pose.orientation.y = 0.0f;
+
+            view_l.pose.orientation.w += addition * -1.0f;
+            view_r.pose.orientation.w += addition;
+
+            value_changed = true;
+        }
 
         if (value_changed) {
             SetXrViewPose(session, 0, view_l.pose);

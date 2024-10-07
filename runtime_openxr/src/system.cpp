@@ -187,7 +187,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     }
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
         //view1.pose.position += gb_ref_space.pose_in_reference_space.position;
-        //LOG(INFO) << "World space not implemented: " << __func__;
+        LOG(INFO) << "World space not implemented: " << __func__;
     }
 
     viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
