@@ -63,10 +63,15 @@ target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party
 # Link dependencies
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
 
+set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
+
 find_package(srDirectX)
+find_package(glm REQUIRED)
+
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
 		3DGameBridge
+        glm::glm
 )
 
 # Copy 3DGameBridge DLL

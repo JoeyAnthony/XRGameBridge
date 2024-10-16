@@ -4,6 +4,9 @@
 #include <chrono>
 #include <mutex>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include "openxr_includes.h"
 #include "window.h"
 #include "swapchain.h"
@@ -65,7 +68,12 @@ namespace XRGameBridge {
         bool should_render = false;
 
         // Views
-        std::array<XrView,2> stereo_views;
+        glm::vec3 position_l;
+        glm::vec3 position_r;
+        glm::fquat rotation_l;
+        glm::fquat rotation_r;
+        std::array<XrView, 2> view_space;
+        std::array<XrView, 2> local_space;
         // Weaving
         bool should_weave = true;
 

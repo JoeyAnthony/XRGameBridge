@@ -66,7 +66,7 @@ namespace XRGameBridge {
         }
     }
 
-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {
+    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
         // TODO better window creation checking code
         static bool window_created = false;
         if (h_wnd != nullptr) {
@@ -116,7 +116,9 @@ namespace XRGameBridge {
         // The parameters to ShowWindow explained:
         // h_wnd: the value returned from CreateWindow
         // nCmdShow: the fourth parameter from WinMain
-        ShowWindow(h_wnd, SW_MAXIMIZE);
+        if (showWindow) {
+            ShowWindow(h_wnd, SW_MAXIMIZE);
+        }
 
         return true;
     }

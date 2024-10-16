@@ -19,7 +19,7 @@ namespace XRGameBridge {
 
     public:
         // Returns the window of the application or false if none exist
-        bool CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true);
+        bool CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true, bool showWindow = true);
         bool DestroyApplicationWindow();
         HWND GetWindowHandle();
         void UpdateWindow();

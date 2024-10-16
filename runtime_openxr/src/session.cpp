@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 #include <shellscalingapi.h>
+#include <glm/glm.hpp>
+#include <glm/ext/scalar_constants.hpp>
 
 #include "easylogging++.h"
 #include "openxr_functions.h"
@@ -57,15 +59,28 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     float fovx = M_PI / 4.0f;
     float fovy = M_PI / 6.0f;
 
-    new_session.stereo_views[0].type = XR_TYPE_VIEW;
-    new_session.stereo_views[0].next = nullptr;
-    new_session.stereo_views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.070f, 0, 0} }; // Orientation, Position
-    new_session.stereo_views[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+    // view space
+    new_session.view_space[0].type = XR_TYPE_VIEW;
+    new_session.view_space[0].next = nullptr;
+    new_session.view_space[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.070f, 0, 0} }; // Orientation, Position
+    new_session.view_space[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
 
-    new_session.stereo_views[1].type = XR_TYPE_VIEW;
-    new_session.stereo_views[1].next = nullptr;
-    new_session.stereo_views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.070f, 0, 0} }; // Orientation, Position
-    new_session.stereo_views[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+    new_session.view_space[1].type = XR_TYPE_VIEW;
+    new_session.view_space[1].next = nullptr;
+    new_session.view_space[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.070f, 0, 0} }; // Orientation, Position
+    new_session.view_space[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+
+    // local space
+    new_session.local_space[0].type = XR_TYPE_VIEW;
+    new_session.local_space[0].next = nullptr;
+    new_session.local_space[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0, 1.7f, 0} }; // Orientation, Position
+    //new_session.local_space[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+
+    new_session.local_space[1].type = XR_TYPE_VIEW;
+    new_session.local_space[1].next = nullptr;
+    new_session.local_space[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0, 1.7f, 0} }; // Orientation, Position
+    //new_session.local_space[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+
 
     // DirectX 12
     if (XRGameBridge::g_runtime_settings.support_d3d12) {
@@ -172,7 +187,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 1280, 720, true, false);
+    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 800, 600, true, false, true);
 
     // Create swapchain info
     XrSwapchainCreateInfo swapchain_info;
@@ -581,11 +596,11 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
         // Separation buttons
         bool value_changed = false;
         float incremental_value_pose = 0.002f;
-        float incremental_value_orientation = M_PI / 100.0f;
+        float incremental_value_orientation = glm::pi<float>() / 10.f;
         int factor_pose = 1.0f;
         int factor_orientation = 1.0f;
-        XrView view_l = session.stereo_views[0];
-        XrView view_r = session.stereo_views[1];
+        XrView view_l = session.view_space[0];
+        XrView view_r = session.view_space[1];
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float addition = incremental_value_pose * factor_pose;
@@ -594,6 +609,9 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             view_r.pose.position.x += addition;
 
             value_changed = true;
+
+            //session.position_l += glm::vec3(view_l.pose.position.x, 0, 0);
+            //session.position_r += glm::vec3(view_r.pose.position.x, 0, 0);
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_SEPARATION) {
@@ -604,33 +622,38 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             view_r.pose.position.x += addition;
 
             value_changed = true;
+
+            //session.position_l += glm::vec3(view_l.pose.position.x, 0, 0);
+            //session.position_r += glm::vec3(view_r.pose.position.x, 0, 0);
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
             factor_orientation = 1.0f;
 
             float addition = incremental_value_orientation * factor_orientation;
-            view_l.pose.orientation.y = 0.0f;
-            view_r.pose.orientation.y = 0.0f;
+            float rotation_axis_y = 1.f;
 
-            view_l.pose.orientation.w += addition;
-            view_r.pose.orientation.w += addition * -1.0f;
+            view_l.pose.orientation.y = rotation_axis_y * glm::sin(addition / 2);
+            view_r.pose.orientation.y = rotation_axis_y * glm::sin(addition / 2 * -1.f);
 
-            value_changed = true;
-        }
-
-        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-            factor_orientation = 1.0f;
-
-            float addition = incremental_value_orientation * factor_orientation;
-            view_l.pose.orientation.y = 0.0f;
-            view_r.pose.orientation.y = 0.0f;
-
-            view_l.pose.orientation.w += addition * -1.0f;
-            view_r.pose.orientation.w += addition;
+            view_l.pose.orientation.w += glm::cos(addition / 2);
+            view_r.pose.orientation.w += glm::cos(addition / 2 * -1.0f);
 
             value_changed = true;
         }
+
+        //if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
+        //    factor_orientation = 1.0f;
+
+        //    float addition = incremental_value_orientation * factor_orientation;
+        //    view_l.pose.orientation.y = 0.0f;
+        //    view_r.pose.orientation.y = 0.0f;
+
+        //    view_l.pose.orientation.w += addition * -1.0f;
+        //    view_r.pose.orientation.w += addition;
+
+        //    value_changed = true;
+        //}
 
         if (value_changed) {
             SetXrViewPose(session, 0, view_l.pose);
@@ -641,20 +664,20 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
 
 void XRGameBridge::SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
 {
-    if (index > session.stereo_views.size() - 1) {
+    if (index > session.view_space.size() - 1) {
         LOG(WARNING) << "Session view array index out of bounds";
         return;
     }
 
-    session.stereo_views[index].pose = pose;
+    session.view_space[index].pose = pose;
 }
 
 void XRGameBridge::SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
 {
-    if (index > session.stereo_views.size() - 1) {
+    if (index > session.view_space.size() - 1) {
         LOG(WARNING) << "Session view array index out of bounds";
         return;
     }
 
-    session.stereo_views[index].fov = fov;
+    session.view_space[index].fov = fov;
 }

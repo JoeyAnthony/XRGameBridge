@@ -261,8 +261,10 @@ namespace XRGameBridge {
                 for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
                     auto& view = layer->views[view_num];
 
-                    SetXrViewPose(session, view_num, view.pose);
-                    SetXrViewFov(session, view_num, view.fov);
+                    // This sets a pose to the session views, which breaks the positions. Not sure why this was here before.
+                    // Probably to update the positions before the update loop was there.
+                    //SetXrViewPose(session, view_num, view.pose);
+                    //SetXrViewFov(session, view_num, view.fov);
 
                     // TODO do something with rectangles
                     auto& rect = view.subImage.imageRect;

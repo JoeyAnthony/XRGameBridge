@@ -159,22 +159,20 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    std::vector<XrView> sr_views;
+    // TODO mono configuration is not supported
     if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        sr_views = { gb_session.stereo_views[0]};
+        *viewCountOutput = gb_session.view_space.size();
     }
     else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        sr_views = std::vector<XrView>{gb_session.stereo_views.begin(), gb_session.stereo_views.end() };
+        *viewCountOutput = gb_session.view_space.size();
     }
-
-    *viewCountOutput = sr_views.size();
 
     // Request for the extension array or the extension array itself
     if (viewCapacityInput == 0) {
         return XR_SUCCESS;
     }
     // Passed array not large enough
-    if (viewCapacityInput < sr_views.size()) {
+    if (viewCapacityInput < gb_session.view_space.size()) {
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
@@ -183,16 +181,26 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     XRGameBridge::GB_ReferenceSpace& gb_ref_space = XRGameBridge::g_reference_spaces[viewLocateInfo->space];
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_VIEW) // Camera space
     {
+        // TODO Save position/orientation in the session or in the spaces array?
         gb_ref_space.pose_in_reference_space.position;
+
+        std::vector<XrView> sr_views;
+        sr_views.insert(sr_views.begin(), gb_session.view_space.begin(), gb_session.view_space.end());
+        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
-        //view1.pose.position += gb_ref_space.pose_in_reference_space.position;
-        LOG(INFO) << "World space not implemented: " << __func__;
+        //LOG(INFO) << "World space not implemented: " << __func__;
+        gb_ref_space.pose_in_reference_space.position;
+        XrView view;
+        //view.pose.position = { 0, 1.72, 0 };
+        //view.pose = gb_ref_space.pose_in_reference_space;
+        std::vector<XrView> sr_views;
+        sr_views = std::vector<XrView>(2, view);
+        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
 
     viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
 
-    memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
 
     return XR_SUCCESS;
 }
@@ -237,10 +245,10 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
     }
 
     if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+        new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
     }
-    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        //new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
+        //new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
     }
 
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
