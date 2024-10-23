@@ -27,9 +27,6 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo);
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo);
 
-// Constant PI
-constexpr auto M_PI = 3.14159265358979323846;
-
 namespace ch = std::chrono;
 
 namespace XRGameBridge {
@@ -68,12 +65,7 @@ namespace XRGameBridge {
         bool should_render = false;
 
         // Views
-        glm::vec3 position_l;
-        glm::vec3 position_r;
-        glm::fquat rotation_l;
-        glm::fquat rotation_r;
-        std::array<XrView, 2> view_space;
-        std::array<XrView, 2> local_space;
+        std::array<XrView, 2> views;
         // Weaving
         bool should_weave = true;
 

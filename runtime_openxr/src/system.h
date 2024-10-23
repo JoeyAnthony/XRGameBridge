@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <glm/glm.hpp>
 
 #include "openxr_includes.h"
 #include "platform_manager.h"
@@ -40,7 +41,8 @@ namespace  XRGameBridge {
         SR_DISPLAY
     };
 
-    struct GB_System {
+    class GB_System {
+    public:
         XrInstance instance;
         XrSystemId id;
         std::array<XrFormFactor, 2> supported_formfactors;
@@ -53,6 +55,51 @@ namespace  XRGameBridge {
 
         SR::Screen* sr_screen;
         SR::SwitchableLensHint* lens_hint;
+
+        // Head params
+        glm::vec3 head_position;
+        glm::vec3 head_direction;
+        float interpupillary_distance_cm = 6.2f; // Also known as interaxial
+
+        // Screen params
+        glm::vec2 physical_screen_resolution;
+        float physical_screen_width = 69;
+        float physical_screen_height = 39;
+        float ppi;
+
+        void GetHeadPosition();
+
+        // Max possible separation on the screen
+        float GetSeparation(float pupil_distance) {
+            // Normalized interaxial
+            float val = interpupillary_distance_cm / physical_screen_width;
+            float separation = glm::clamp(glm::abs(pupil_distance), 0.0f, 10.f);
+
+            if(pupil_distance < 0.0f) {
+                return separation * -1.0f;
+            }
+            return separation;
+        }
+
+        XrFovf GetConvergingFov(glm::vec3 eye_position) {
+            // Convergence is the distance to the physical screen.
+            // By Calculating the fov 
+
+            float half_width = physical_screen_width / 2;
+            float half_height = physical_screen_height / 2;
+            float z = glm::max(eye_position.z, 0.1f);
+            return XrFovf {
+                -(half_width - eye_position.x)  / z,    //Left
+                 (half_width - eye_position.x)  / z,    //Right
+                 (half_height - eye_position.y) / z,    //Up
+                -(half_height - eye_position.y) / z,    //Down
+            };
+        }
+
+        /*
+         * Extra notes
+         * When the screen is closer ro the user, most users cannot handle more than 50% of the real eye separation.
+         */
     };
 
     // Spaces are basically transformation matrices.

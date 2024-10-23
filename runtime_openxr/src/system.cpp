@@ -161,10 +161,10 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 
     // TODO mono configuration is not supported
     if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        *viewCountOutput = gb_session.view_space.size();
+        *viewCountOutput = gb_session.views.size();
     }
     else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        *viewCountOutput = gb_session.view_space.size();
+        *viewCountOutput = gb_session.views.size();
     }
 
     // Request for the extension array or the extension array itself
@@ -172,7 +172,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         return XR_SUCCESS;
     }
     // Passed array not large enough
-    if (viewCapacityInput < gb_session.view_space.size()) {
+    if (viewCapacityInput < gb_session.views.size()) {
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
@@ -185,7 +185,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         gb_ref_space.pose_in_reference_space.position;
 
         std::vector<XrView> sr_views;
-        sr_views.insert(sr_views.begin(), gb_session.view_space.begin(), gb_session.view_space.end());
+        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
         memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
@@ -195,12 +195,11 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         //view.pose.position = { 0, 1.72, 0 };
         //view.pose = gb_ref_space.pose_in_reference_space;
         std::vector<XrView> sr_views;
-        sr_views = std::vector<XrView>(2, view);
+        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
         memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
 
-    viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
-
+    viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT;
 
     return XR_SUCCESS;
 }
@@ -301,7 +300,7 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
         // TODO, Transform to base space? just returning it for now, in the test the local space is 0 anyways
         // Telling the application the view position is valid but never being tracked
         location->pose = gb_space.pose_in_reference_space;
-        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
         return XR_SUCCESS;
     }

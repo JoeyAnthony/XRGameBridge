@@ -1,7 +1,6 @@
 #pragma once
 #include "openxr_includes.h"
 
-
 namespace XRGameBridge {
     class GB_Session;
 
