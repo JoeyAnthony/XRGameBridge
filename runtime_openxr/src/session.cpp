@@ -62,12 +62,12 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // view space
     new_session.views[0].type = XR_TYPE_VIEW;
     new_session.views[0].next = nullptr;
-    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.070f, 0, 0} }; // Orientation, Position
+    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.0f, 0, 0} }; // Orientation, Position
     new_session.views[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
 
     new_session.views[1].type = XR_TYPE_VIEW;
     new_session.views[1].next = nullptr;
-    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.070f, 0, 0} }; // Orientation, Position
+    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0, 0} }; // Orientation, Position
     new_session.views[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
 
     // DirectX 12
@@ -585,19 +585,18 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
 
         // Separation buttons
         bool value_changed = false;
-        float incremental_value_pose = 0.002f;
-        float incremental_value_fov = 1.0f;
-        int factor_orientation = 1.0f;
+        float incremental_value_pose = 0.0005f;
+        float incremental_value_fov = 0.01f;
         XrView view_l = session.views[0];
         XrView view_r = session.views[1];
-        static float eye_z = 68;
+        static float eye_z = 0.68f;
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            view_l.pose.position.x = system.GetSeparation(view_l.pose.position.x += addition * -1.0f);
-            view_r.pose.position.x = system.GetSeparation(view_r.pose.position.x += addition);
+            view_l.pose.position.x = view_l.pose.position.x += addition * -1.0f;
+            view_r.pose.position.x = view_r.pose.position.x += addition;
 
             value_changed = true;
         }
@@ -606,28 +605,36 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            view_l.pose.position.x = system.GetSeparation(view_l.pose.position.x += addition * -1.0f);
-            view_r.pose.position.x = system.GetSeparation(view_r.pose.position.x += addition);
+            view_l.pose.position.x = view_l.pose.position.x += addition * -1.0f;
+            view_r.pose.position.x = view_r.pose.position.x += addition;
 
             value_changed = true;
         }
 
+        static float leye_x = 1.f, reye_x = 1.f;
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
-            float factor_pose = 0.1f;
+            float factor_pose = 1.0f;
             eye_z = incremental_value_fov * factor_pose + eye_z;
             value_changed = true;
+
+            leye_x = incremental_value_fov * 1 + leye_x;
+            reye_x = incremental_value_fov * -1 + reye_x;
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-            float factor_pose = -0.1f;
+            float factor_pose = -1.0f;
             eye_z = incremental_value_fov * factor_pose + eye_z;
             value_changed = true;
+
+            leye_x = incremental_value_fov * -1 + leye_x;
+            reye_x = incremental_value_fov * 1 + reye_x;
         }
 
         // Default depth of 68
         glm::vec3 eye_l {view_l.pose.position.x, view_l.pose.position.y, eye_z};
         glm::vec3 eye_r {view_r.pose.position.x, view_r.pose.position.y, eye_z};
-        view_l.fov = system.GetConvergingFov(eye_l);
+
+        view_l.fov = system.GetConvergingFov({ eye_l });
         view_r.fov = system.GetConvergingFov(eye_r);
 
         if (value_changed) {

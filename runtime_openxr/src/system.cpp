@@ -186,14 +186,13 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 
         std::vector<XrView> sr_views;
         sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
+
         memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
         //LOG(INFO) << "World space not implemented: " << __func__;
-        gb_ref_space.pose_in_reference_space.position;
         XrView view;
-        //view.pose.position = { 0, 1.72, 0 };
-        //view.pose = gb_ref_space.pose_in_reference_space;
+        view.pose = gb_ref_space.pose_in_reference_space;
         std::vector<XrView> sr_views;
         sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
         memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
@@ -247,7 +246,7 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
         new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
     }
     else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
-        //new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
+        // Local space must be 0, we shouldn't need to recalibrate this
     }
 
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
