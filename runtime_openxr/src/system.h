@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <glm/glm.hpp>
+#include <glm/ext/scalar_constants.hpp>
 
 #include "openxr_includes.h"
 #include "platform_manager.h"
@@ -85,20 +86,32 @@ namespace  XRGameBridge {
         }
 
         // Eye positions relative to the center of the screen in meters
-        XrFovf GetConvergingFov(glm::vec3 eye_position) {
+        XrFovf GetConvergingFov(glm::vec3& eye_position) {
+            static glm::vec3 old_position = {0.0f, 0.0f, 0.30f};
+
             float half_width = physical_screen_width_m / 2;
             float half_height = physical_screen_height_m / 2;
 
             float z_scale = half_width / half_height;
+            float z = glm::clamp(eye_position.z, 0.001f, 5.0f); // where to check this and restore valid values?
 
-            float z = glm::max(eye_position.z, 0.001f);
+            float half_pi = glm::pi<float>() / 2;
 
             auto fov = XrFovf {
-                -(half_width + eye_position.x)  / z,    //Left
-                 (half_width - eye_position.x)  / z,    //Right
-                 (half_height - eye_position.y) / z,    //Up
-                -(half_height + eye_position.y) / z,    //Down
+                glm::clamp(-(half_width  + eye_position.x) / z, -half_pi, half_pi),    //Left
+                glm::clamp( (half_width  - eye_position.x) / z, -half_pi, half_pi),    //Right
+                glm::clamp( (half_height - eye_position.y) / z, -half_pi, half_pi),    //Up
+                glm::clamp(-(half_height + eye_position.y) / z, -half_pi, half_pi)    //Down
             };
+
+            // Make sure the view can't be vertically or horizontally flipped
+            if(fov.angleLeft > fov.angleRight || fov.angleDown > fov.angleUp) {
+                // Set to old accepted angles
+                eye_position = old_position;
+                return GetConvergingFov(eye_position);
+            }
+
+            old_position = eye_position;
 
             return fov;
         }

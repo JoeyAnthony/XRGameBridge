@@ -88,8 +88,11 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F7);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F8);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
+
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
+    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
 
     *session = handle;
     session_creation_count++;
@@ -585,11 +588,11 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
 
         // Separation buttons
         bool value_changed = false;
-        float incremental_value_pose = 0.0005f;
-        float incremental_value_fov = 0.01f;
+        const float incremental_value_pose = 0.0005f;
+        const float incremental_value_fov = 0.001f;
         XrView view_l = session.views[0];
         XrView view_r = session.views[1];
-        static float eye_z = 0.68f;
+        static float eye_z = 0.38f;
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float factor_pose = 1.0f;
@@ -611,31 +614,45 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             value_changed = true;
         }
 
-        static float leye_x = 1.f, reye_x = 1.f;
+        static float leye_x = -0.1f, reye_x = 0.1f;
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV) {
+            float factor_pose = 1.0f;
+            float addition = incremental_value_pose * factor_pose;
+
+            leye_x = leye_x += addition * -1.0f;
+            reye_x = reye_x += addition;
+
+            value_changed = true;
+        }
+
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV) {
+            float factor_pose = -1.0f;
+            float addition = incremental_value_pose * factor_pose;
+
+            leye_x = leye_x += addition * -1.0f;
+            reye_x = reye_x += addition;
+
+            value_changed = true;
+        }
+
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
             float factor_pose = 1.0f;
             eye_z = incremental_value_fov * factor_pose + eye_z;
             value_changed = true;
-
-            leye_x = incremental_value_fov * 1 + leye_x;
-            reye_x = incremental_value_fov * -1 + reye_x;
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
             float factor_pose = -1.0f;
             eye_z = incremental_value_fov * factor_pose + eye_z;
             value_changed = true;
-
-            leye_x = incremental_value_fov * -1 + leye_x;
-            reye_x = incremental_value_fov * 1 + reye_x;
         }
 
         // Default depth of 68
-        glm::vec3 eye_l {view_l.pose.position.x, view_l.pose.position.y, eye_z};
-        glm::vec3 eye_r {view_r.pose.position.x, view_r.pose.position.y, eye_z};
+        glm::vec3 eye_l {leye_x, view_l.pose.position.y, eye_z};
+        glm::vec3 eye_r {reye_x, view_r.pose.position.y, eye_z};
 
         view_l.fov = system.GetConvergingFov({ eye_l });
-        view_r.fov = system.GetConvergingFov(eye_r);
+        view_r.fov = system.GetConvergingFov({ eye_r });
 
         if (value_changed) {
             SetXrViewPose(session, 0, view_l.pose);
