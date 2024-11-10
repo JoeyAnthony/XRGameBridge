@@ -86,16 +86,16 @@ namespace  XRGameBridge {
         }
 
         // Eye positions relative to the center of the screen in meters
-        XrFovf GetConvergingFov(glm::vec3& eye_position) {
+        XrFovf GetConvergingFov(const glm::vec3& eye_position) {
             static glm::vec3 old_position = {0.0f, 0.0f, 0.30f};
 
             float half_width = physical_screen_width_m / 2;
             float half_height = physical_screen_height_m / 2;
 
-            float z_scale = half_width / half_height;
             float z = glm::clamp(eye_position.z, 0.001f, 5.0f); // where to check this and restore valid values?
-
             float half_pi = glm::pi<float>() / 2;
+
+            float z_scale = half_width / half_height;
 
             auto fov = XrFovf {
                 glm::clamp(-(half_width  + eye_position.x) / z, -half_pi, half_pi),    //Left
@@ -104,11 +104,11 @@ namespace  XRGameBridge {
                 glm::clamp(-(half_height + eye_position.y) / z, -half_pi, half_pi)    //Down
             };
 
-            // Make sure the view can't be vertically or horizontally flipped
-            if(fov.angleLeft > fov.angleRight || fov.angleDown > fov.angleUp) {
-                // Set to old accepted angles
-                eye_position = old_position;
-                return GetConvergingFov(eye_position);
+            // Make sure the view can't be vertically or horizontally flipped. Also the depth is larger than 0.
+            if(fov.angleLeft > fov.angleRight || fov.angleDown > fov.angleUp || eye_position.z < 0.001f) {
+                // Set to last accepted angles
+                //eye_position = old_position;
+                return GetConvergingFov(old_position);
             }
 
             old_position = eye_position;
