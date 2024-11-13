@@ -550,7 +550,7 @@ void XRGameBridge::GB_Instance::InitializeSR() {
 
 XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::undefined) {
-        active_graphics_backend == api;
+        active_graphics_backend = api;
     }
     else {
         LOG(ERROR) << "Active graphics api can only be set once";

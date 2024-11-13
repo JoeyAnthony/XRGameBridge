@@ -19,28 +19,17 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-
+    GB_System system = g_systems[createInfo->systemId];
     LOG(INFO) << "Creating session: " << session_creation_count;
 
-    try {
-        XRGameBridge::GB_System& system = XRGameBridge::g_systems.at(createInfo->systemId);
-        if (!system.features_enumerated) {
-            LOG(ERROR) << "Graphics requirements call missing";
-            return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
-        }
-
-        if (system.instance != instance) {
-            LOG(ERROR) << "Couldn't find system. System invalid";
-            return XR_ERROR_SYSTEM_INVALID;
-        }
+    if (!system.features_enumerated) {
+        LOG(ERROR) << "Graphics requirements call missing";
+        return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
     }
-    catch (std::out_of_range& e) {
+
+    if (system.instance != instance) {
         LOG(ERROR) << "Couldn't find system. System invalid";
         return XR_ERROR_SYSTEM_INVALID;
-    }
-    catch (std::exception& e) {
-        LOG(ERROR) << "Runtime failure when getting system";
-        return XR_ERROR_RUNTIME_FAILURE;
     }
 
     // Create entry if it doesn't exist
@@ -62,13 +51,17 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // view space
     new_session.views[0].type = XR_TYPE_VIEW;
     new_session.views[0].next = nullptr;
-    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.0f, 0, 0} }; // Orientation, Position
-    new_session.views[0].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.17f, 0, 0} }; // Orientation, Position
 
     new_session.views[1].type = XR_TYPE_VIEW;
     new_session.views[1].next = nullptr;
-    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0, 0} }; // Orientation, Position
-    new_session.views[1].fov = { -fovx, fovx, fovy, -fovy }; // FOV angle left, right, up, down
+    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.17f, 0, 0} }; // Orientation, Position
+
+    // Set FOV per eye
+    glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
+    glm::vec3 eye_r {new_session.reye_x, new_session.views[1].pose.position.y, new_session.eye_z};
+    new_session.views[0].fov = system.GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
+    new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
     // DirectX 12
     if (XRGameBridge::g_runtime_settings.support_d3d12) {
@@ -525,7 +518,7 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     EventManager& event_manager = gb_instance->GetGameBridgeInstane()->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
-    XRGameBridge::GB_System system = g_systems[session.system];
+    GB_System system = g_systems[session.system];
 
     {
         std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
@@ -592,7 +585,6 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
         const float incremental_value_fov = 0.001f;
         XrView view_l = session.views[0];
         XrView view_r = session.views[1];
-        static float eye_z = 0.38f;
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float factor_pose = 1.0f;
@@ -614,13 +606,12 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             value_changed = true;
         }
 
-        static float leye_x = -0.1f, reye_x = 0.1f;
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV) {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            leye_x = leye_x += addition * -1.0f;
-            reye_x = reye_x += addition;
+            session.leye_x = session.leye_x += addition * -1.0f;
+            session.reye_x = session.reye_x += addition;
 
             value_changed = true;
         }
@@ -629,27 +620,26 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            leye_x = leye_x += addition * -1.0f;
-            reye_x = reye_x += addition;
+            session.leye_x = session.leye_x += addition * -1.0f;
+            session.reye_x = session.reye_x += addition;
 
             value_changed = true;
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
             float factor_pose = 1.0f;
-            eye_z = incremental_value_fov * factor_pose + eye_z;
+            session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
             value_changed = true;
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
             float factor_pose = -1.0f;
-            eye_z = incremental_value_fov * factor_pose + eye_z;
+            session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
             value_changed = true;
         }
 
-        // Default depth of 68
-        glm::vec3 eye_l {leye_x, view_l.pose.position.y, eye_z};
-        glm::vec3 eye_r {reye_x, view_r.pose.position.y, eye_z};
+        glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
+        glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
 
         view_l.fov = system.GetConvergingFov({ eye_l });
         view_r.fov = system.GetConvergingFov({ eye_r });
