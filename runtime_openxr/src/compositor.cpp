@@ -106,13 +106,14 @@ namespace XRGameBridge {
         blend_state_blend.AlphaToCoverageEnable = false;
         blend_state_blend.IndependentBlendEnable = false;
 
+        // Inverse blend layered blend state
         blend_state_blend.RenderTarget[0].BlendEnable = true;
         blend_state_blend.RenderTarget[0].LogicOpEnable = false;
-        blend_state_blend.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-        blend_state_blend.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blend_state_blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         blend_state_blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
         blend_state_blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-        blend_state_blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+        blend_state_blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
         blend_state_blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
         blend_state_blend.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
         blend_state_blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;

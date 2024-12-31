@@ -64,8 +64,8 @@ namespace  XRGameBridge {
 
         // Screen params
         glm::vec2 physical_screen_resolution;
-        const float physical_screen_width_m = 0.69f;
-        const float physical_screen_height_m = 0.3880f;
+        float physical_screen_width_m = 0.69f;
+        float physical_screen_height_m = 0.3880f;
         float ppi;
 
         void GetHeadPosition();

@@ -388,6 +388,9 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
     system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->GetPlatformManager()->GetContext());
     system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionHeight()) };
 
+    system.physical_screen_width_m = system.sr_screen->getPhysicalSizeWidth() / 100.f;
+    system.physical_screen_height_m = system.sr_screen->getPhysicalSizeHeight() / 100.f;
+
     if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
     {
         // For when no SR display is connected, and if it's an 8K SR display it should work as well
