@@ -1,4 +1,5 @@
 #include "window.h"
+#include "platform_manager.h"
 
 namespace XRGameBridge {
     void MessageLoop() {
@@ -66,7 +67,7 @@ namespace XRGameBridge {
         }
     }
 
-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
+    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
         // TODO better window creation checking code
         static bool window_created = false;
         if (h_wnd != nullptr) {
@@ -93,10 +94,18 @@ namespace XRGameBridge {
             window_style = windowed;
         }
 
+        // Get position of the SR display
+        int window_x = CW_USEDEFAULT, window_y = CW_USEDEFAULT;
+        if(system.GetIsConnected()) {
+            auto display_rect = system.sr_display->getLocation();
+            window_x = display_rect.left;
+            window_y = display_rect.top;
+        }
+
         // Set the new window as a child window of the game's
         const long w = static_cast<long>(width);
         const long h = static_cast<long>(height);
-        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, CW_USEDEFAULT, CW_USEDEFAULT, w, h, h_wnd_external, NULL, hInstance, NULL);
+        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, window_x, window_y, w, h, h_wnd_external, NULL, hInstance, NULL);
         if (!h_wnd) {
             MessageBox(NULL, "Call to CreateWindow failed!", "XR Game Bridge", NULL);
             return false;
@@ -107,8 +116,8 @@ namespace XRGameBridge {
         SetWindowPos(
             h_wnd,
             HWND_TOPMOST,
-            0,
-            0,
+            window_x,
+            window_y,
             width,
             height,
             SWP_FRAMECHANGED | SWP_NOACTIVATE);

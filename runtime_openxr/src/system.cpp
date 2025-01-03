@@ -18,7 +18,7 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
             *systemId = it->second.id;
             it->second.form_factor = getInfo->formFactor;
 
-            if (it->second.sr_screen != nullptr) {
+            if (it->second.sr_display != nullptr) {
                 available = true;
             }
             break;
@@ -374,6 +374,10 @@ XrResult xrDestroySpace(XrSpace space) {
 //    return sys_props;
 //}
 
+bool XRGameBridge::GB_System::GetIsConnected() {
+    return device_is_connected;
+}
+
 XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
 {
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
@@ -384,17 +388,27 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
     system.instance = instance;
     system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
     system.sr_device = XRGameBridge::SRDisplay::SR_DISPLAY;
-    system.sr_screen = SR::Screen::create(*gb_instance->GetPlatformManager()->GetContext());
-    system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->GetPlatformManager()->GetContext());
-    system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionHeight()) };
+    system.sr_display = gb_instance->GetPlatformManager()->GetDisplay();
+    system.lens_hint = gb_instance->GetPlatformManager()->GetLensHint();
+    system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_display->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_display->getPhysicalResolutionHeight()) };
 
-    system.physical_screen_width_m = system.sr_screen->getPhysicalSizeWidth() / 100.f;
-    system.physical_screen_height_m = system.sr_screen->getPhysicalSizeHeight() / 100.f;
+    system.physical_screen_width_m = system.sr_display->getPhysicalSizeWidth() / 100.f;
+    system.physical_screen_height_m = system.sr_display->getPhysicalSizeHeight() / 100.f;
 
-    if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
+    // Check if an sr display is connected.
+    // This is done by checking if the virtual display coordinates of the screen are all 0 or not.
+    auto display_coordinates = system.sr_display->getLocation();
+    if( display_coordinates.left == 0 &&
+        display_coordinates.bottom == 0 &&
+        display_coordinates.right == 0 &&
+        display_coordinates.top == 0)
     {
         // For when no SR display is connected, and if it's an 8K SR display it should work as well
+        system.device_is_connected = false;
         system.physical_resolution = GetResolutionMainDisplay();
+    }
+    else {
+        system.device_is_connected = true;
     }
 
     g_systems.insert({ system.id, system });

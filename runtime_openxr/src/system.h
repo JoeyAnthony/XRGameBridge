@@ -43,6 +43,7 @@ namespace  XRGameBridge {
     };
 
     class GB_System {
+    // TODO make members private
     public:
         XrInstance instance;
         XrSystemId id;
@@ -53,8 +54,9 @@ namespace  XRGameBridge {
         bool features_enumerated = false;
         GraphicsBackend active_graphics_backend;
         GBVector2i physical_resolution;
+        bool device_is_connected = false;
 
-        SR::Screen* sr_screen;
+        SR::Display* sr_display;
         SR::SwitchableLensHint* lens_hint;
 
         // Head params
@@ -115,6 +117,11 @@ namespace  XRGameBridge {
 
             return fov;
         }
+
+        /*
+         * Returns whether this device is a connected SR display
+         */
+        bool GetIsConnected();
 
         /*
          * Extra notes

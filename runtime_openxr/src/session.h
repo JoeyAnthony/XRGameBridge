@@ -67,7 +67,7 @@ namespace XRGameBridge {
         // Views
         std::array<XrView, 2> views;
         float leye_x = -0.0015f, reye_x = 0.0015f;
-        float eye_z = 0.38f;
+        float eye_z = 0.50f;
         // Weaving
         bool should_weave = true;
 

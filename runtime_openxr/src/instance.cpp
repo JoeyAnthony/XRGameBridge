@@ -185,8 +185,9 @@ XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* inst
 
 XrResult xrDestroyInstance(XrInstance instance) {
 
-    // Delete sessions
+    //window_hook->CloseConsole();
 
+    // Delete sessions
     // Delete actions
     // TODO Make the instance destroy all owned objects here as well
 
@@ -526,7 +527,7 @@ XRGameBridge::GB_Instance::GB_Instance() {
 
 #ifdef _DEBUG
     window_hook = new WindowHooks();
-    window_hook->OpenConsole();
+    //window_hook->OpenConsole();
     window_hook->ActivateWindowMessageHook();
 #endif
 

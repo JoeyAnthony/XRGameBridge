@@ -1,5 +1,6 @@
 #pragma once
 #include "openxr_includes.h"
+#include "system.h"
 
 namespace XRGameBridge {
     class GB_Display {
@@ -19,7 +20,7 @@ namespace XRGameBridge {
 
     public:
         // Returns the window of the application or false if none exist
-        bool CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true, bool showWindow = true);
+        bool CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true, bool showWindow = true);
         bool DestroyApplicationWindow();
         HWND GetWindowHandle();
         void UpdateWindow();
