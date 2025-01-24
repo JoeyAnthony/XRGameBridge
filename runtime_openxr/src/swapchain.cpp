@@ -383,6 +383,9 @@ namespace XRGameBridge {
 
         rtv_heap.Reset();
         srv_heap.Reset();
+
+        // TODO test
+        CloseHandle(fence_event);
     }
 
     uint32_t GB_ProxySwapchain::GetBufferCount() {

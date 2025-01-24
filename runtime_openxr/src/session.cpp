@@ -120,8 +120,8 @@ XrResult xrDestroySession(XrSession session) {
     gb_session.compositor = {};
     gb_session.window_swapchain = {};
     gb_session.intermediate_resource = {};
-    gb_session.display = {};
-    gb_session.sr_context = nullptr;
+    gb_session.window = {};
+    gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
     gb_session.command_queue.Reset();
     gb_session.d3d12_device.Reset();
 
@@ -161,7 +161,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     // TODO Move creation of objects to CreateSession, except for the creation of the window swapchain and the window perhaps.
 
-    if(gb_session.display.TryGetExternalDisplay() != nullptr)
+    if(gb_session.window.TryGetExternalDisplay() != nullptr)
     {
         LOG(INFO) << "Got window";
     }
@@ -169,7 +169,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // Create debug window
     auto system_resolution = GetSystemResolution(gb_system);
 
-    gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
+    gb_session.window.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 
@@ -184,7 +184,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
     // Create swapchain for debug window
-    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &swapchain_info, gb_session.display.GetWindowHandle());
+    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &swapchain_info, gb_session.window.GetWindowHandle());
 
     // Initialize weaver params
     DX12WeaverInitialize params{};
@@ -193,7 +193,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     params.game_bridge = gb_instance->GetGameBridgeInstane();
     params.input_resource = gb_session.intermediate_resource.GetBuffers()[0].Get();
     params.render_target = gb_session.window_swapchain.GetImages()[0].Get();
-    params.window = gb_session.display.GetWindowHandle();
+    params.window = gb_session.window.GetWindowHandle();
 
     // Create weaver
     gb_session.d3d12weaver = new DirectX12Weaver(params);
@@ -235,7 +235,7 @@ XrResult xrEndSession(XrSession session) {
     gb_session.window_swapchain = {};
 
     // Destroy window
-    gb_session.display.DestroyApplicationWindow();
+    gb_session.window.DestroyApplicationWindow();
 
     // Reset state
     gb_session.wait_frame_state = XRGameBridge::NewFrameAllowed;
@@ -470,7 +470,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     window_swapchain.PresentFrame();
 
     // Update window
-    gb_session.display.UpdateWindow();
+    gb_session.window.UpdateWindow();
 
     gb_session.ended_frame = gb_session.started_frame;
 
@@ -548,7 +548,7 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
 
     LPMSG msg = nullptr;
-    if (session.display.PeekMessageExternal(msg)) {
+    if (session.window.PeekMessageExternal(msg)) {
         switch (msg->message) {
         case WM_KEYDOWN:
             if (GetAsyncKeyState(VK_F1) & 0x80) {

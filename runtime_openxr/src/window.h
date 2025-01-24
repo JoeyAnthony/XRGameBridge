@@ -3,7 +3,7 @@
 #include "system.h"
 
 namespace XRGameBridge {
-    class GB_Display {
+    class GB_Window {
         // The main window class name.
         std::string window_class = "Game Bridge Window";
 
@@ -19,6 +19,7 @@ namespace XRGameBridge {
         static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     public:
+        ~GB_Window();
         // Returns the window of the application or false if none exist
         bool CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true, bool showWindow = true);
         bool DestroyApplicationWindow();

@@ -11,7 +11,7 @@ namespace XRGameBridge {
         }
     }
 
-    LRESULT CALLBACK GB_Display::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    LRESULT CALLBACK GB_Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         PAINTSTRUCT ps;
         HDC hdc;
         std::string greeting("Hello, Windows desktop!");
@@ -41,7 +41,7 @@ namespace XRGameBridge {
         return 0;
     }
 
-    bool GB_Display::InitWindowClass(HINSTANCE hInstance)
+    bool GB_Window::InitWindowClass(HINSTANCE hInstance)
     {
         WNDCLASSEX window_ex;
 
@@ -67,7 +67,11 @@ namespace XRGameBridge {
         }
     }
 
-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
+    GB_Window::~GB_Window() {
+        DestroyApplicationWindow();
+    }
+
+    bool GB_Window::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
         // TODO better window creation checking code
         static bool window_created = false;
         if (h_wnd != nullptr) {
@@ -132,7 +136,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    bool GB_Display::DestroyApplicationWindow()
+    bool GB_Window::DestroyApplicationWindow()
     {
         // Must be destroyed from the creation thread
         bool res = DestroyWindow(h_wnd);
@@ -145,11 +149,11 @@ namespace XRGameBridge {
         return res;
     }
 
-    HWND GB_Display::GetWindowHandle() {
+    HWND GB_Window::GetWindowHandle() {
         return h_wnd;
     }
 
-    void GB_Display::UpdateWindow() {
+    void GB_Window::UpdateWindow() {
         // Main message loop:
         MSG msg;
         if (PeekMessageA(&msg, h_wnd, 0, 0, PM_REMOVE)) {
@@ -158,7 +162,7 @@ namespace XRGameBridge {
         }
     }
 
-    HWND GB_Display::TryGetExternalDisplay()
+    HWND GB_Window::TryGetExternalDisplay()
     {
         // Make sure we get the root window, assuming all games uses its root window for showing the game and processing input.
         HWND h_wnd_active = GetActiveWindow();
@@ -183,7 +187,7 @@ namespace XRGameBridge {
         return h_wnd_active;
     }
 
-    bool GB_Display::PeekMessageExternal(LPMSG& msg) {
+    bool GB_Window::PeekMessageExternal(LPMSG& msg) {
         if (h_wnd_external == nullptr) {
             return false;
         }

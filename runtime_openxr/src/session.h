@@ -78,7 +78,7 @@ namespace XRGameBridge {
         GB_ProxySwapchain intermediate_resource;
 
         // Windows
-        GB_Display display;
+        GB_Window window;
         GB_GraphicsDevice window_swapchain;
 
         // SR

@@ -189,6 +189,7 @@ XrResult xrDestroyInstance(XrInstance instance) {
 
     // Delete sessions
     // Delete actions
+    // Delete systems
     // TODO Make the instance destroy all owned objects here as well
 
     delete XRGameBridge::g_xr_instance;
@@ -536,6 +537,22 @@ XRGameBridge::GB_Instance::GB_Instance() {
 XRGameBridge::GB_Instance::~GB_Instance() {
     delete gamebridge_instance;
     delete platform_manager;
+
+    g_sessions.clear();
+    g_systems.clear();
+    g_action_sets.clear();
+    g_actions.clear();
+    g_reference_spaces.clear();
+    g_action_spaces.clear();
+    g_displays.clear();
+    g_xrpath_storage.clear();
+
+    delete g_hotkey_manager;
+    g_openxr_event_stream_writer.reset();
+    g_openxr_event_stream_reader.reset();
+
+    delete window_hook;
+    delete g_xr_instance;
 }
 
 void XRGameBridge::GB_Instance::InitializeSR() {
