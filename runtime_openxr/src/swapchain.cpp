@@ -63,7 +63,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
 
     // Create entry in the list
-    XRGameBridge::GB_ProxySwapchain gb_proxy(handle);
+    XRGameBridge::GB_ProxySwapchain gb_proxy(handle, session);
 
     // Create swap chain
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
@@ -77,9 +77,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = handle;
     swapchain_creation_count++;
 
-    //// TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
-    //XRGameBridge::UpdateSession(gb_session);
-
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
 
     LOG(INFO) << "Successfully created proxy swapchain";
@@ -88,6 +85,9 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 
 XrResult xrDestroySwapchain(XrSwapchain swapchain) {
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[gb_proxy.GetSession()];
+
+    //gb_session.compositor.ResetCommandLists();
     gb_proxy.DestroyResources();
 
     XRGameBridge::g_proxy_swapchains.erase(swapchain);
@@ -172,7 +172,7 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 }
 
 namespace XRGameBridge {
-    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle) : handle(handle) {
+    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle, XrSession session) : handle(handle), session(session) {
     }
 
     bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
@@ -377,6 +377,8 @@ namespace XRGameBridge {
     }
 
     void GB_ProxySwapchain::DestroyResources() {
+        HRESULT res = WaitForSingleObjectEx(fence_event, ch::duration_cast<ch::milliseconds>(ch::seconds(1)).count(), FALSE);
+
         for (int32_t i = 0; i < g_back_buffer_count; i++) {
             back_buffers[i].Reset();
         }
@@ -430,7 +432,7 @@ namespace XRGameBridge {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
-        // Should always be called AFTER GetCurrentBackBufferIndex. So GetCompletedValue van be compared to the new frame fence value.
+        // Should always be called AFTER GetCurrentBackBufferIndex. So GetCompletedValue can be compared to the new frame fence value.
         uint64_t completed_value = fence->GetCompletedValue();
         if (completed_value < fence_values[current_frame_index]) {
             // Fire event on completion
@@ -493,6 +495,10 @@ namespace XRGameBridge {
 
     uint32_t GB_ProxySwapchain::GetHeight() {
         return resolution_y;
+    }
+
+    XrSession GB_ProxySwapchain::GetSession() {
+        return session;
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {

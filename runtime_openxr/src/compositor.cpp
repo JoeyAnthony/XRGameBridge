@@ -155,6 +155,7 @@ namespace XRGameBridge {
         samplerDesc.BorderColor;
         device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
+        fence_values.resize(back_buffer_count, 0);
         command_allocators.resize(back_buffer_count);
         command_lists.resize(back_buffer_count);
         for (uint32_t i = 0; i < back_buffer_count; i++) {
@@ -440,7 +441,7 @@ namespace XRGameBridge {
     void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
     {
         // Go over every layer to signal all proxy swapchain fences
-        // Signals bot projection layers and quad layers
+        // Signals both projection layers and quad layers
 
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
@@ -486,6 +487,31 @@ namespace XRGameBridge {
 
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(resource, state_before, state_after);
         cmd_list->ResourceBarrier(1, &barrier);
+    }
+
+    void GB_Compositor::WaitForGpu() {
+
+        // retrieve last value of the fence and increment by one (Additional API call)
+        auto nextFence = fence->GetCompletedValue() + 1;
+        ThrowIfFailed(command_queue->Signal(fence.Get(), nextFence));
+
+        // Wait until the GPU has completed commands up to this fence point.
+        if (fence->GetCompletedValue() < nextFence) {
+            HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
+            ThrowIfFailed(fence->SetEventOnCompletion(nextFence, eventHandle));
+            WaitForSingleObject(eventHandle, INFINITE);
+            CloseHandle(eventHandle);
+        }
+    }
+
+    void GB_Compositor::ResetCommandLists() {
+        // Reset command lists
+        for (uint32_t i = 0; i < command_lists.size(); i++) {
+            // Right now initializing with pipeline state opaque
+            command_lists[i]->Close();
+            command_allocators[i]->Reset();
+            command_lists[i]->Reset(command_allocators[i].Get(), pipeline_state_opaque.Get());
+        }
     }
 
     ComPtr<ID3D12GraphicsCommandList>& GB_Compositor::GetCommandList(uint32_t index) {

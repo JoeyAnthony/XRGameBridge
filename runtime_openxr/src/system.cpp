@@ -67,7 +67,7 @@ XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId system
 
 XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId, uint32_t viewConfigurationTypeCapacityInput, uint32_t* viewConfigurationTypeCountOutput, XrViewConfigurationType* viewConfigurationTypes) {
     // TODO check if mono as primary is ok
-    const std::array supported_view_configurations = { XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
+    const std::array supported_view_configurations = { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
     *viewConfigurationTypeCountOutput = supported_view_configurations.size();
 
     // Request for the extension array or the extension array itself
@@ -132,7 +132,7 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         res = XR_SUCCESS;
     }
     else if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-
+        LOG(ERROR) << "Mono view configuration requested. Not suppoerted";
     }
     else {
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
@@ -198,7 +198,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
 
-    viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT;
+    viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
 
     return XR_SUCCESS;
 }

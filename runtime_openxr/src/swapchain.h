@@ -37,6 +37,8 @@ namespace XRGameBridge {
     class GB_ProxySwapchain {
         friend GB_Compositor;
         XrSwapchain handle;
+        XrSession session;
+
         std::wstring proxy_name;
         bool is_depth_resource = false;
 
@@ -64,7 +66,7 @@ namespace XRGameBridge {
 
     public:
         GB_ProxySwapchain() = default;
-        GB_ProxySwapchain(XrSwapchain handle);
+        GB_ProxySwapchain(XrSwapchain handle, XrSession session);
 
         // Todo Not sure how to get the initial resource usage if there are multiple specified, for example D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE and D3D12_RESOURCE_STATE_UNORDERED_ACCESS. Can't set them both initially so there exist the initial_usage parameter for now
         bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"");
@@ -88,6 +90,8 @@ namespace XRGameBridge {
 
         uint32_t GetWidth();
         uint32_t GetHeight();
+
+        XrSession GetSession();
     };
 
     // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window

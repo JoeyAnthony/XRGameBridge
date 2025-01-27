@@ -364,7 +364,7 @@ XrResult xrDestroyActionSet(XrActionSet actionSet) {
     try {
         GB_ActionSet& to_delete = g_action_sets.at(actionSet);
 
-        LOG(INFO) << "Unregistered action: " << to_delete.localized_name;
+        LOG(INFO) << "Destroy action: " << to_delete.localized_name;
         g_action_sets.erase(actionSet);
     }
     catch (std::out_of_range& e) {
@@ -529,7 +529,7 @@ XRGameBridge::GB_Instance::GB_Instance() {
 #ifdef _DEBUG
     window_hook = new WindowHooks();
     //window_hook->OpenConsole();
-    window_hook->ActivateWindowMessageHook();
+    //window_hook->ActivateWindowMessageHook();
 #endif
 
 }
@@ -551,8 +551,7 @@ XRGameBridge::GB_Instance::~GB_Instance() {
     g_openxr_event_stream_writer.reset();
     g_openxr_event_stream_reader.reset();
 
-    delete window_hook;
-    delete g_xr_instance;
+    //delete window_hook;
 }
 
 void XRGameBridge::GB_Instance::InitializeSR() {

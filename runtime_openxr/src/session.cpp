@@ -113,17 +113,27 @@ XrResult xrDestroySession(XrSession session) {
     // Also action sets/g_actions attached to the session should be destroyed
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
+    gb_session.compositor.ResetCommandLists();
+    gb_session.compositor = {};
+
+
+    gb_session.intermediate_resource.DestroyResources();
+    gb_session.intermediate_resource = {};
+
+    //gb_session.window = {};
     if (gb_session.d3d12weaver) {
         delete gb_session.d3d12weaver;
     }
 
-    gb_session.compositor = {};
+    gb_session.command_queue->Wait()
+
     gb_session.window_swapchain = {};
-    gb_session.intermediate_resource = {};
-    gb_session.window = {};
-    gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
+
     gb_session.command_queue.Reset();
+
     gb_session.d3d12_device.Reset();
+
+    gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
 
     try {
         XRGameBridge::g_sessions.erase(session);
@@ -188,11 +198,11 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     // Initialize weaver params
     DX12WeaverInitialize params{};
-    params.command_queue = gb_session.command_queue.Get();
-    params.device = gb_session.d3d12_device.Get();
+    params.command_queue = gb_session.command_queue;
+    params.device = gb_session.d3d12_device;
     params.game_bridge = gb_instance->GetGameBridgeInstane();
-    params.input_resource = gb_session.intermediate_resource.GetBuffers()[0].Get();
-    params.render_target = gb_session.window_swapchain.GetImages()[0].Get();
+    params.input_resource = gb_session.intermediate_resource.GetBuffers()[0];
+    params.render_target = gb_session.window_swapchain.GetImages()[0];
     params.window = gb_session.window.GetWindowHandle();
 
     // Create weaver

@@ -1,4 +1,6 @@
 #include "window.h"
+
+#include <Windows.h>
 #include "platform_manager.h"
 
 namespace XRGameBridge {
@@ -78,6 +80,11 @@ namespace XRGameBridge {
             return false;
         }
 
+        // Ensure the application receives unscaled display metrics
+        //SetProcessDpiAwareness(PROCESS_DPI_AWARENESS::PROCESS_PER_MONITOR_DPI_AWARE);
+        const DPI_AWARENESS_CONTEXT context = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
+        SetThreadDpiAwarenessContext(context);
+
         // Always try to get the external display before creating one ourselves
         TryGetExternalDisplay();
 
@@ -104,6 +111,14 @@ namespace XRGameBridge {
             auto display_rect = system.sr_display->getLocation();
             window_x = display_rect.left;
             window_y = display_rect.top;
+            RECT rect(display_rect.left, display_rect.top, display_rect.right, display_rect.bottom);
+            HMONITOR h_monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+
+            MONITORINFO monitor_info;
+            monitor_info.cbSize = sizeof(MONITORINFO);
+            GetMonitorInfoA(h_monitor, &monitor_info);
+            window_x = monitor_info.rcMonitor.left;
+            window_y = monitor_info.rcMonitor.top;
         }
 
         // Set the new window as a child window of the game's
@@ -139,6 +154,11 @@ namespace XRGameBridge {
     bool GB_Window::DestroyApplicationWindow()
     {
         // Must be destroyed from the creation thread
+        if(h_wnd == nullptr) {
+            LOG(INFO) << "No window to destroy: " << GetLastError();
+            return true;
+        }
+
         bool res = DestroyWindow(h_wnd);
         if(!res)
         {

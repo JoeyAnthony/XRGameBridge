@@ -20,6 +20,10 @@ namespace XRGameBridge {
         std::vector<ComPtr<ID3D12CommandAllocator>> command_allocators;
         std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
 
+        HANDLE fence_event;
+        ComPtr<ID3D12Fence> fence;
+        std::vector<uint64_t> fence_values;
+
     public:
         bool Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
 
@@ -33,6 +37,10 @@ namespace XRGameBridge {
         void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
 
         void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
+
+        void WaitForGpu();
+
+        void ResetCommandLists();
 
         void AddResource();
         void RemoveResource();

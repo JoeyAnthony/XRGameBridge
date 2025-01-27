@@ -64,6 +64,8 @@ namespace XRGameBridge {
         bool end_frame_called = true;
         bool should_render = false;
 
+
+
         // Views
         std::array<XrView, 2> views;
         float leye_x = -0.0015f, reye_x = 0.0015f;
