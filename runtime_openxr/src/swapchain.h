@@ -59,10 +59,15 @@ namespace XRGameBridge {
         std::array<ImageState, g_back_buffer_count> current_image_state;
         uint64_t previous_fence_value = 0;
 
+        // Fence values per image to check for
+        std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
+        // Keeps track of which frame a swapchain image should wait
+        std::array<uint32_t, g_back_buffer_count> fence_value_frame_numbers;
+
         // TODO We are using fences for every image instead of every frame, test if we can use fences per frame only instead
-        HANDLE fence_event;
-        ComPtr<ID3D12Fence> fence;
-        std::array<uint64_t, g_back_buffer_count> fence_values;
+        //HANDLE fence_event;
+        //ComPtr<ID3D12Fence> fence;
+        //std::array<uint64_t, g_back_buffer_count> fence_values;
 
     public:
         GB_ProxySwapchain() = default;
@@ -90,6 +95,8 @@ namespace XRGameBridge {
 
         uint32_t GetWidth();
         uint32_t GetHeight();
+
+        void SetReleasedImageFenceValue(uint32_t frameNum, uint32_t fenceValue);
 
         XrSession GetSession();
     };

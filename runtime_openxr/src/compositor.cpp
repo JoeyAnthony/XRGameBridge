@@ -436,49 +436,51 @@ namespace XRGameBridge {
     void GB_Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
         ID3D12CommandList* lists[]{ cmd_list };
         command_queue->ExecuteCommandLists(1, lists);
+
+        WaitForGpu();
     }
 
-    void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
-    {
-        // Go over every layer to signal all proxy swapchain fences
-        // Signals both projection layers and quad layers
+    //void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
+    //{
+    //    // Go over every layer to signal all proxy swapchain fences
+    //    // Signals both projection layers and quad layers
 
-        for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
-            if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
-                auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-                // In every layer get every view
-                for (uint32_t view_num = 0; view_num < layer->viewCount; view_num++) {
-                    // Get the swapchain from the view and signal its fence
-                    auto& view = layer->views[view_num];
-                    auto& gb_proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
+    //    for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
+    //        if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+    //            auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
+    //            // In every layer get every view
+    //            for (uint32_t view_num = 0; view_num < layer->viewCount; view_num++) {
+    //                // Get the swapchain from the view and signal its fence
+    //                auto& view = layer->views[view_num];
+    //                auto& gb_proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
 
-                    //if (layer_num == 0 && view_num == 1) {
-                    //    LOG(INFO) << "sl - "
-                    //        //<< " Layercount: " << frameEndInfo->layerCount
-                    //        //<< " Layernum: " << layer_num
-                    //        //<< " viewnum " << view_num
-                    //        << " swapchain: " << view.subImage.swapchain
-                    //        << " aqcuired index " << gb_proxy_swapchain.current_frame_index
-                    //        << " awaited index " << gb_proxy_swapchain.awaited_frame_index
-                    //        << " released index " << gb_proxy_swapchain.released_frame_index
-                    //        ;
-                    //}
+    //                //if (layer_num == 0 && view_num == 1) {
+    //                //    LOG(INFO) << "sl - "
+    //                //        //<< " Layercount: " << frameEndInfo->layerCount
+    //                //        //<< " Layernum: " << layer_num
+    //                //        //<< " viewnum " << view_num
+    //                //        << " swapchain: " << view.subImage.swapchain
+    //                //        << " aqcuired index " << gb_proxy_swapchain.current_frame_index
+    //                //        << " awaited index " << gb_proxy_swapchain.awaited_frame_index
+    //                //        << " released index " << gb_proxy_swapchain.released_frame_index
+    //                //        ;
+    //                //}
 
-                    command_queue->Signal(gb_proxy_swapchain.fence.Get(), gb_proxy_swapchain.fence_values[gb_proxy_swapchain.awaited_frame_index]);
-                }
-            }
-            else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
-                // TODO, not fully implemented. Not all fields in XrCompositionLayerQuad are used
-                auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
+    //                command_queue->Signal(gb_proxy_swapchain.fence.Get(), gb_proxy_swapchain.fence_values[gb_proxy_swapchain.awaited_frame_index]);
+    //            }
+    //        }
+    //        else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
+    //            // TODO, not fully implemented. Not all fields in XrCompositionLayerQuad are used
+    //            auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
 
-                //TODO increase fence value here instead of in WaitForImage to fix the issue with should_render = false
+    //            //TODO increase fence value here instead of in WaitForImage to fix the issue with should_render = false
 
-                // Get the swapchain from the view and signal its fence
-                auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
-                command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
-            }
-        }
-    }
+    //            // Get the swapchain from the view and signal its fence
+    //            auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
+    //            command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
+    //        }
+    //    }
+    //}
 
     void GB_Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
         if (state_before == state_after) {
@@ -504,7 +506,13 @@ namespace XRGameBridge {
         }
     }
 
+    void GB_Compositor::WaitFence(uint32_t value) {
+
+    }
+
     void GB_Compositor::ResetCommandLists() {
+        WaitForGpu();
+
         // Reset command lists
         for (uint32_t i = 0; i < command_lists.size(); i++) {
             // Right now initializing with pipeline state opaque
@@ -512,6 +520,10 @@ namespace XRGameBridge {
             command_allocators[i]->Reset();
             command_lists[i]->Reset(command_allocators[i].Get(), pipeline_state_opaque.Get());
         }
+    }
+
+    uint32_t GB_Compositor::GetFrameFenceValue(uint32_t frameNumber) {
+        return fence_values[frameNumber];
     }
 
     ComPtr<ID3D12GraphicsCommandList>& GB_Compositor::GetCommandList(uint32_t index) {

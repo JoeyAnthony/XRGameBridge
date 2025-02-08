@@ -23,6 +23,7 @@ namespace XRGameBridge {
         HANDLE fence_event;
         ComPtr<ID3D12Fence> fence;
         std::vector<uint64_t> fence_values;
+        uint8_t frameInFlight = 0;
 
     public:
         bool Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
@@ -34,11 +35,11 @@ namespace XRGameBridge {
         //void ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, XrCompositionLayerProjection& layer);
         void ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer);
         void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
-        void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
+        //void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
 
         void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
 
-        void WaitForGpu();
+        void WaitForFrame();
 
         void ResetCommandLists();
 
@@ -46,6 +47,7 @@ namespace XRGameBridge {
         void RemoveResource();
         void AddSwapchainResources();
         void RemoveSwapchainResources();
+        uint32_t GetFrameFenceValue(uint32_t frameNumber);
 
         ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
         ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);

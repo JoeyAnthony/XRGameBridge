@@ -80,10 +80,13 @@ namespace XRGameBridge {
             return false;
         }
 
-        // Ensure the application receives unscaled display metrics
-        //SetProcessDpiAwareness(PROCESS_DPI_AWARENESS::PROCESS_PER_MONITOR_DPI_AWARE);
-        const DPI_AWARENESS_CONTEXT context = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
-        SetThreadDpiAwarenessContext(context);
+        auto dpi_context = GetThreadDpiAwarenessContext();
+        if (dpi_context != DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) {
+            // Ensure the application receives unscaled display metrics
+            //SetProcessDpiAwareness(PROCESS_DPI_AWARENESS::PROCESS_PER_MONITOR_DPI_AWARE);
+            const DPI_AWARENESS_CONTEXT context = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
+            SetThreadDpiAwarenessContext(context);
+        }
 
         // Always try to get the external display before creating one ourselves
         TryGetExternalDisplay();

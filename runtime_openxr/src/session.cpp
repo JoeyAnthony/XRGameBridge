@@ -474,7 +474,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
 
     // Execute command lists
     gb_compositor.ExecuteCommandList(cmd_list.Get());
-    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
+    //gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
 
     // Present to window
     window_swapchain.PresentFrame();
