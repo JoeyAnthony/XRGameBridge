@@ -125,8 +125,6 @@ XrResult xrDestroySession(XrSession session) {
         delete gb_session.d3d12weaver;
     }
 
-    gb_session.command_queue->Wait()
-
     gb_session.window_swapchain = {};
 
     gb_session.command_queue.Reset();

@@ -41,6 +41,22 @@ namespace XRGameBridge {
         return buffer;
     }
 
+    GB_Compositor::~GB_Compositor() {
+        const uint64_t last_fence_value = fence_value;
+        const uint64_t lastCompletedFence = fence->GetCompletedValue();
+
+        // Signal and increment the fence value.
+        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
+        fence_value++;
+
+        // Wait until the previous frame is finished.
+        if (lastCompletedFence < last_fence_value) {
+            ThrowIfFailed(fence->SetEventOnCompletion(last_fence_value, fence_event));
+            WaitForSingleObject(fence_event, INFINITE);
+        }
+        CloseHandle(fence_event);
+    }
+
     bool GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
         d3d12_device = device;
         command_queue = queue;
@@ -155,7 +171,8 @@ namespace XRGameBridge {
         samplerDesc.BorderColor;
         device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
-        fence_values.resize(back_buffer_count, 0);
+        back_buffer_num = back_buffer_count;
+        frame_fence_values.resize(back_buffer_count, 0);
         command_allocators.resize(back_buffer_count);
         command_lists.resize(back_buffer_count);
         for (uint32_t i = 0; i < back_buffer_count; i++) {
@@ -247,6 +264,17 @@ namespace XRGameBridge {
     }
 
     void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+        // Update the frame in flight.
+        frame_in_flight = frame_in_flight++ % back_buffer_num;
+
+        // If the next frame in flight is still rendering wait until it is ready.
+        if (fence->GetCompletedValue() < frame_fence_values[frame_in_flight]) {
+            // Trigger an event when the fence value is updated.
+            ThrowIfFailed(fence->SetEventOnCompletion(frame_fence_values[frame_in_flight], fence_event));
+            // Wait for the event to trigger.
+            WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
+        }
+
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -257,85 +285,7 @@ namespace XRGameBridge {
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
                 auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-                auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
-
-                // Render every view to the resource
-                for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
-                    auto& view = layer->views[view_num];
-
-                    // This sets a pose to the session views, which breaks the positions. Not sure why this was here before.
-                    // Probably to update the positions before the update loop was there.
-                    //SetXrViewPose(session, view_num, view.pose);
-                    //SetXrViewFov(session, view_num, view.fov);
-
-                    // TODO do something with rectangles
-                    auto& rect = view.subImage.imageRect;
-
-                    auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-                    auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
-
-                    // Viewport settings
-                    const float width = static_cast<float>(system_width) / 2;
-                    const float height = static_cast<float>(system_height);
-                    D3D12_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
-                    D3D12_RECT scissor_rect{ 0, 0, system_width, system_height};
-                    cmd_list->RSSetViewports(1, &view_port);
-                    cmd_list->RSSetScissorRects(1, &scissor_rect);
-
-                    // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
-                    // Transition proxy swapchain resource to pixel shader resource
-                    //TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-                    struct {
-                        uint32_t is_opaque;
-                        uint32_t multiply_alpha;
-                        float convert_to_linear;
-                        float uvmin_x;
-                        float uvmin_y;
-                        float uvmax_x;
-                        float uvmax_y;
-                        float pad;
-                        
-                    } layering_constants;
-                    // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
-                    layering_constants.is_opaque = (layer->layerFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                    // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
-                    layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-                    layering_constants.convert_to_linear = 1;
-
-                    // Normalize uv values
-                    layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain.GetWidth());
-                    layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain.GetHeight());
-                    layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain.GetWidth());
-                    layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain.GetHeight());
-
-                    std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
-                    cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
-
-                    cmd_list->SetGraphicsRootSignature(root_signature.Get());
-
-                    if (layering_constants.is_opaque) {
-                        cmd_list->SetPipelineState(pipeline_state_opaque.Get());
-                    }
-                    else {
-                        cmd_list->SetPipelineState(pipeline_state_blend.Get());
-                    }
-
-                    cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
-
-                    // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-                    auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
-                    cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-                    cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
-
-                    //float blend_factor[4]{ 0.f };
-                    //cmd_list->OMSetBlendFactor(blend_factor);
-
-                    cmd_list->DrawInstanced(3, 1, 0, 0);
-
-                    // Transition proxy swapchain resource back to render target
-                    //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
-                }
+                ComposeProjectionLayer(cmd_list, system_width, system_height, layer);
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
                 auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
@@ -343,6 +293,100 @@ namespace XRGameBridge {
                 // TODO has to be done either after weaving, or also in both views
                 ComposeQuadLayer(cmd_list, system_width, system_height, layer);
             }
+        }
+
+        ExecuteCommandList(cmd_list);
+
+        // Increase the fence value for the currently executing frame.
+        const uint64_t new_fence_value = frame_fence_values[frame_in_flight];
+        frame_fence_values[frame_in_flight] = new_fence_value;
+        // Update the fence value when the GPU is done with execution.
+        ThrowIfFailed(command_queue->Signal(fence.Get(), new_fence_value));
+
+        fence_value++; // This may need to move higher
+    }
+
+    void GB_Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
+        auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
+
+        // Render every view to the resource
+        for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
+            auto& view = layer->views[view_num];
+
+            // This sets a pose to the session views, which breaks the positions. Not sure why this was here before.
+            // Probably to update the positions before the update loop was there.
+            //SetXrViewPose(session, view_num, view.pose);
+            //SetXrViewFov(session, view_num, view.fov);
+
+            // TODO do something with rectangles
+            auto& rect = view.subImage.imageRect;
+
+            auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
+            auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
+            // Set new fence values for the used swapchain image.
+            proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.awaited_frame_index, fence_value);
+
+            // Viewport settings
+            const float width = static_cast<float>(system_width) / 2;
+            const float height = static_cast<float>(system_height);
+            D3D12_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
+            D3D12_RECT scissor_rect{ 0, 0, system_width, system_height };
+            cmd_list->RSSetViewports(1, &view_port);
+            cmd_list->RSSetScissorRects(1, &scissor_rect);
+
+            // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
+            // Transition proxy swapchain resource to pixel shader resource
+            //TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+            struct {
+                uint32_t is_opaque;
+                uint32_t multiply_alpha;
+                float convert_to_linear;
+                float uvmin_x;
+                float uvmin_y;
+                float uvmax_x;
+                float uvmax_y;
+                float pad;
+
+            } layering_constants;
+            // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
+            layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
+            layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+            layering_constants.convert_to_linear = 1;
+
+            // Normalize uv values
+            layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain.GetWidth());
+            layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain.GetHeight());
+            layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain.GetWidth());
+            layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain.GetHeight());
+
+            std::array heaps = { proxy_swapchain.GetSrvHeap().Get(), sampler_heap.Get() };
+            cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+
+            cmd_list->SetGraphicsRootSignature(root_signature.Get());
+
+            if (layering_constants.is_opaque) {
+                cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+            }
+            else {
+                cmd_list->SetPipelineState(pipeline_state_blend.Get());
+            }
+
+            cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
+
+            // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
+            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
+            cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+            cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+
+            //float blend_factor[4]{ 0.f };
+            //cmd_list->OMSetBlendFactor(blend_factor);
+
+            cmd_list->DrawInstanced(3, 1, 0, 0);
+
+            // Transition proxy swapchain resource back to render target
+            //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
         }
     }
 
@@ -373,6 +417,8 @@ namespace XRGameBridge {
 
         auto& proxy_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
         auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
+        // Set new fence values for the used swapchain image.
+        proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.awaited_frame_index, fence_value);
 
        //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -436,8 +482,6 @@ namespace XRGameBridge {
     void GB_Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
         ID3D12CommandList* lists[]{ cmd_list };
         command_queue->ExecuteCommandLists(1, lists);
-
-        WaitForGpu();
     }
 
     //void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
@@ -491,23 +535,24 @@ namespace XRGameBridge {
         cmd_list->ResourceBarrier(1, &barrier);
     }
 
-    void GB_Compositor::WaitForGpu() {
-
-        // retrieve last value of the fence and increment by one (Additional API call)
-        auto nextFence = fence->GetCompletedValue() + 1;
-        ThrowIfFailed(command_queue->Signal(fence.Get(), nextFence));
-
-        // Wait until the GPU has completed commands up to this fence point.
-        if (fence->GetCompletedValue() < nextFence) {
-            HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
-            ThrowIfFailed(fence->SetEventOnCompletion(nextFence, eventHandle));
-            WaitForSingleObject(eventHandle, INFINITE);
-            CloseHandle(eventHandle);
+    XrResult GB_Compositor::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
+        // If the next frame in flight is still rendering wait until it is ready.
+        if (fence->GetCompletedValue() < value) {
+            ThrowIfFailed(fence->SetEventOnCompletion(value, fence_event));
+            HRESULT res = WaitForSingleObjectEx(fence_event, ch::duration_cast<ch::milliseconds>(ch::nanoseconds(timeout)).count(), FALSE);
+            if (res == WAIT_TIMEOUT) {
+                return XR_TIMEOUT_EXPIRED;
+            }
         }
     }
 
-    void GB_Compositor::WaitFence(uint32_t value) {
+    void GB_Compositor::WaitForGpu() {
+        // Schedule a Signal command in the queue.
+        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
 
+        // Wait until the fence has been processed.
+        ThrowIfFailed(fence->SetEventOnCompletion(fence_value, fence_event));
+        WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
     }
 
     void GB_Compositor::ResetCommandLists() {
@@ -523,7 +568,7 @@ namespace XRGameBridge {
     }
 
     uint32_t GB_Compositor::GetFrameFenceValue(uint32_t frameNumber) {
-        return fence_values[frameNumber];
+        return frame_fence_values[frameNumber];
     }
 
     ComPtr<ID3D12GraphicsCommandList>& GB_Compositor::GetCommandList(uint32_t index) {

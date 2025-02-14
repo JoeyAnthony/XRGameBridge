@@ -42,7 +42,6 @@ namespace XRGameBridge {
         std::wstring proxy_name;
         bool is_depth_resource = false;
 
-        //ComPtr<ID3D12CommandQueue> command_queue;
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
         ComPtr<ID3D12DescriptorHeap> rtv_heap;
         ComPtr<ID3D12DescriptorHeap> srv_heap;
@@ -61,13 +60,6 @@ namespace XRGameBridge {
 
         // Fence values per image to check for
         std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
-        // Keeps track of which frame a swapchain image should wait
-        std::array<uint32_t, g_back_buffer_count> fence_value_frame_numbers;
-
-        // TODO We are using fences for every image instead of every frame, test if we can use fences per frame only instead
-        //HANDLE fence_event;
-        //ComPtr<ID3D12Fence> fence;
-        //std::array<uint64_t, g_back_buffer_count> fence_values;
 
     public:
         GB_ProxySwapchain() = default;
