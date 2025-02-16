@@ -42,19 +42,6 @@ namespace XRGameBridge {
     }
 
     GB_Compositor::~GB_Compositor() {
-        const uint64_t last_fence_value = fence_value;
-        const uint64_t lastCompletedFence = fence->GetCompletedValue();
-
-        // Signal and increment the fence value.
-        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-        fence_value++;
-
-        // Wait until the previous frame is finished.
-        if (lastCompletedFence < last_fence_value) {
-            ThrowIfFailed(fence->SetEventOnCompletion(last_fence_value, fence_event));
-            WaitForSingleObject(fence_event, INFINITE);
-        }
-        CloseHandle(fence_event);
     }
 
     bool GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
@@ -197,7 +184,35 @@ namespace XRGameBridge {
             command_lists[i]->Close();
         }
 
+        // Create fence
+        device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+        // Create an event handle to use for frame synchronization.
+        fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (fence_event == nullptr) {
+            HRESULT_FROM_WIN32(GetLastError());
+            return false;
+        }
+
         return true;
+    }
+
+    void GB_Compositor::Deinitialize() {
+        const uint64_t last_fence_value = fence_value;
+        const uint64_t lastCompletedFence = fence->GetCompletedValue();
+
+        // Signal and increment the fence value.
+        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
+        fence_value++;
+
+        // Wait until the previous frame is finished.
+        if (lastCompletedFence < last_fence_value) {
+            ThrowIfFailed(fence->SetEventOnCompletion(last_fence_value, fence_event));
+            WaitForSingleObject(fence_event, INFINITE);
+        }
+
+        ResetCommandLists();
+
+        CloseHandle(fence_event);
     }
 
     bool GB_Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
@@ -263,7 +278,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+    XrResult GB_Compositor::RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) {
         // Update the frame in flight.
         frame_in_flight = frame_in_flight++ % back_buffer_num;
 
@@ -275,6 +290,112 @@ namespace XRGameBridge {
             WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
         }
 
+        // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
+        auto& window_swapchain = gb_session.window_swapchain;
+        int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
+        auto& cmd_list = GetCommandList(frame_in_flight);
+        auto& cmd_allocator = GetCommandAllocator(frame_in_flight);
+
+        // Prepare command list
+        cmd_allocator->Reset();
+        cmd_list->Reset(cmd_allocator.Get(), GetPipelineState().Get());
+
+        // Render weaving
+        if (gb_session.should_weave) {
+            RenderFrameWeaving(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_ProxySwapchain::clear_color);
+        }
+        else {
+            RenderFrameSideBySide(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_ProxySwapchain::clear_color);
+        }
+
+        // Transition swapchain to present
+        TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+
+        // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
+
+        // Close command list
+        cmd_list->Close();
+        ExecuteCommandList(cmd_list.Get());
+
+        // Increase the fence value for the currently executing frame.
+        frame_fence_values[frame_in_flight] = fence_value;
+        // Update the fence value when the GPU is done with execution.
+        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
+
+        fence_value++; // This may need to move higher
+
+
+        // Present to window
+        window_swapchain.PresentFrame();
+
+        return XR_SUCCESS;
+    }
+
+    XrResult GB_Compositor::RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
+
+        // Set intermediate resource as render target
+        CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
+
+        // Compose
+        cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
+        cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
+        cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // Compose and draw to the intermediate resource
+        ComposeImage(gb_session, frameEndInfo, cmd_list, gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
+
+
+        // Transition intermediate resource to unordered access for the weaver
+        TransitionImage(cmd_list, gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        // Transition window swapchain to render target
+        TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+
+        // Set window swapchain as render target
+        CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
+        cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
+        cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
+
+
+        // Set viewport for weaving to window swapchain
+        auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
+        D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
+        D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
+        cmd_list->RSSetViewports(1, &view_port);
+        cmd_list->RSSetScissorRects(1, &scissor_rect);
+
+
+        // Do weaving
+        gb_session.d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
+
+        // Transition to render target
+        TransitionImage(cmd_list, gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        return XR_SUCCESS;
+    }
+
+    XrResult GB_Compositor::RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
+
+        // Transition to render target
+        TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+        // Set window swapchain as render target
+        CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
+
+
+        // Compose
+        cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
+        cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
+        cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // Compose and draw to the intermediate resource
+        ComposeImage(gb_session, frameEndInfo, cmd_list, gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
+
+        return XR_SUCCESS;
+    }
+
+    void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -294,16 +415,6 @@ namespace XRGameBridge {
                 ComposeQuadLayer(cmd_list, system_width, system_height, layer);
             }
         }
-
-        ExecuteCommandList(cmd_list);
-
-        // Increase the fence value for the currently executing frame.
-        const uint64_t new_fence_value = frame_fence_values[frame_in_flight];
-        frame_fence_values[frame_in_flight] = new_fence_value;
-        // Update the fence value when the GPU is done with execution.
-        ThrowIfFailed(command_queue->Signal(fence.Get(), new_fence_value));
-
-        fence_value++; // This may need to move higher
     }
 
     void GB_Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
@@ -484,48 +595,6 @@ namespace XRGameBridge {
         command_queue->ExecuteCommandLists(1, lists);
     }
 
-    //void GB_Compositor::SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo)
-    //{
-    //    // Go over every layer to signal all proxy swapchain fences
-    //    // Signals both projection layers and quad layers
-
-    //    for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
-    //        if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
-    //            auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-    //            // In every layer get every view
-    //            for (uint32_t view_num = 0; view_num < layer->viewCount; view_num++) {
-    //                // Get the swapchain from the view and signal its fence
-    //                auto& view = layer->views[view_num];
-    //                auto& gb_proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-
-    //                //if (layer_num == 0 && view_num == 1) {
-    //                //    LOG(INFO) << "sl - "
-    //                //        //<< " Layercount: " << frameEndInfo->layerCount
-    //                //        //<< " Layernum: " << layer_num
-    //                //        //<< " viewnum " << view_num
-    //                //        << " swapchain: " << view.subImage.swapchain
-    //                //        << " aqcuired index " << gb_proxy_swapchain.current_frame_index
-    //                //        << " awaited index " << gb_proxy_swapchain.awaited_frame_index
-    //                //        << " released index " << gb_proxy_swapchain.released_frame_index
-    //                //        ;
-    //                //}
-
-    //                command_queue->Signal(gb_proxy_swapchain.fence.Get(), gb_proxy_swapchain.fence_values[gb_proxy_swapchain.awaited_frame_index]);
-    //            }
-    //        }
-    //        else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
-    //            // TODO, not fully implemented. Not all fields in XrCompositionLayerQuad are used
-    //            auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
-
-    //            //TODO increase fence value here instead of in WaitForImage to fix the issue with should_render = false
-
-    //            // Get the swapchain from the view and signal its fence
-    //            auto& gb_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
-    //            command_queue->Signal(gb_swapchain.fence.Get(), gb_swapchain.fence_values[gb_swapchain.awaited_frame_index]);
-    //        }
-    //    }
-    //}
-
     void GB_Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
         if (state_before == state_after) {
             return;
@@ -537,7 +606,8 @@ namespace XRGameBridge {
 
     XrResult GB_Compositor::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
         // If the next frame in flight is still rendering wait until it is ready.
-        if (fence->GetCompletedValue() < value) {
+        uint64_t completed_value = fence->GetCompletedValue();
+        if (completed_value < value) {
             ThrowIfFailed(fence->SetEventOnCompletion(value, fence_event));
             HRESULT res = WaitForSingleObjectEx(fence_event, ch::duration_cast<ch::milliseconds>(ch::nanoseconds(timeout)).count(), FALSE);
             if (res == WAIT_TIMEOUT) {
@@ -548,6 +618,7 @@ namespace XRGameBridge {
 
     void GB_Compositor::WaitForGpu() {
         // Schedule a Signal command in the queue.
+        fence_value++;
         ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
 
         // Wait until the fence has been processed.
@@ -556,14 +627,14 @@ namespace XRGameBridge {
     }
 
     void GB_Compositor::ResetCommandLists() {
+        // Reset command lists
         WaitForGpu();
 
-        // Reset command lists
         for (uint32_t i = 0; i < command_lists.size(); i++) {
             // Right now initializing with pipeline state opaque
+            command_lists[i]->Reset(command_allocators[i].Get(), pipeline_state_opaque.Get());
             command_lists[i]->Close();
             command_allocators[i]->Reset();
-            command_lists[i]->Reset(command_allocators[i].Get(), pipeline_state_opaque.Get());
         }
     }
 

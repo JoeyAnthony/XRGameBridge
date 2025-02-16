@@ -2,6 +2,7 @@
 #include "openxr_includes.h"
 
 namespace XRGameBridge {
+    class GB_GraphicsDevice;
     class GB_Session;
 
     class GB_Compositor {
@@ -20,19 +21,24 @@ namespace XRGameBridge {
         std::vector<ComPtr<ID3D12CommandAllocator>> command_allocators;
         std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
 
-        HANDLE fence_event;
+        HANDLE fence_event = nullptr;
         ComPtr<ID3D12Fence> fence;
-        uint64_t fence_value;
+        uint64_t fence_value = 0;
         std::vector<uint64_t> frame_fence_values;
         uint8_t frame_in_flight = 0;
-        uint8_t back_buffer_num;
+        uint8_t back_buffer_num = 0;
 
     public:
         ~GB_Compositor();
 
         bool Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count);
+        void Deinitialize();
 
         bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
+
+        XrResult RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo);
+        XrResult RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]);
+        XrResult RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]);
 
         //void InitShaders(const ComPtr<ID3D12Device>& device);
         void ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height);

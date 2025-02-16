@@ -61,6 +61,8 @@ namespace XRGameBridge {
         // Fence values per image to check for
         std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
 
+        static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
+
     public:
         GB_ProxySwapchain() = default;
         GB_ProxySwapchain(XrSwapchain handle, XrSession session);
@@ -88,7 +90,7 @@ namespace XRGameBridge {
         uint32_t GetWidth();
         uint32_t GetHeight();
 
-        void SetReleasedImageFenceValue(uint32_t frameNum, uint32_t fenceValue);
+        void SetReleasedImageFenceValue(uint32_t frameNum, uint64_t fenceValue);
 
         XrSession GetSession();
     };

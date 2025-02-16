@@ -113,17 +113,12 @@ XrResult xrDestroySession(XrSession session) {
     // Also action sets/g_actions attached to the session should be destroyed
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    gb_session.compositor.ResetCommandLists();
-    gb_session.compositor = {};
-
-
     gb_session.intermediate_resource.DestroyResources();
-    gb_session.intermediate_resource = {};
+
+    gb_session.compositor.Deinitialize();
 
     //gb_session.window = {};
-    if (gb_session.d3d12weaver) {
-        delete gb_session.d3d12weaver;
-    }
+    delete gb_session.d3d12weaver;
 
     gb_session.window_swapchain = {};
 
@@ -181,18 +176,19 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 
-    // Create swapchain info
-    XrSwapchainCreateInfo swapchain_info;
-    swapchain_info.width = system_resolution.x;
-    swapchain_info.height = system_resolution.y;
-    swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
-
     // Create intermediate resources for weaving render target
+    gb_session.intermediate_resource = GB_ProxySwapchain(0, session); // Handle 0 is not being used by xrCreateSwapchain
     gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
 
+    // Create swapchain info for the window swapchain
+    XrSwapchainCreateInfo window_swapchain_info;
+    window_swapchain_info.width = system_resolution.x;
+    window_swapchain_info.height = system_resolution.y;
+    window_swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
+
     // Create swapchain for debug window
-    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &swapchain_info, gb_session.window.GetWindowHandle());
+    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &window_swapchain_info, gb_session.window.GetWindowHandle());
 
     // Initialize weaver params
     DX12WeaverInitialize params{};
@@ -397,85 +393,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
 
-    // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
-    auto& window_swapchain = gb_session.window_swapchain;
-    int32_t index = window_swapchain.AcquireNextImage();
-    auto& cmd_list = gb_compositor.GetCommandList(index);
-    auto& cmd_allocator = gb_compositor.GetCommandAllocator(index);
-    float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
-
-    // Prepare command list
-    cmd_allocator->Reset();
-    cmd_list->Reset(cmd_allocator.Get(), gb_compositor.GetPipelineState().Get());
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose;
-
-    if(gb_session.should_weave)
-    //if (false)
-    {
-        // Set intermediate resource as render target
-        descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
-    }
-    else
-    {
-        // Transition to render target
-        gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        // Set window swapchain as render target
-        descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
-    }
-
-    cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
-    cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
-    cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    // Compose and draw to the intermediate resource
-    gb_compositor.ComposeImage(gb_session, frameEndInfo, cmd_list.Get(), gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
-
-    if (gb_session.should_weave) {
-    //if (false) {
-        // Transition intermediate resource to unordered access for the weaver
-        gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-        // Transition window swapchain to render target
-        gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-
-        // Set window swapchain as render target
-        CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), index, window_swapchain.GetRtvDescriptorSize());
-        cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
-        cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
-
-
-        // Set viewport for weaving to window swapchain
-        auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
-        D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
-        D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
-        cmd_list->RSSetViewports(1, &view_port);
-        cmd_list->RSSetScissorRects(1, &scissor_rect);
-
-
-        // Do weaving
-        gb_session.d3d12weaver->Weave(cmd_list.Get(), native_resolution.x, native_resolution.y, 0, 0);
-
-        // Transition to render target
-        gb_compositor.TransitionImage(cmd_list.Get(), gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    }
-
-    // Transition swapchain to present
-    gb_compositor.TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
-    // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
-
-    // Close command list
-    cmd_list->Close();
-
-    // Execute command lists
-    gb_compositor.ExecuteCommandList(cmd_list.Get());
-    //gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
-
-    // Present to window
-    window_swapchain.PresentFrame();
+    gb_compositor.RenderFrame(gb_session, frameEndInfo);
 
     // Update window
     gb_session.window.UpdateWindow();
@@ -510,14 +428,6 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
 
     std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
     session.session_state_queue.push_back(state);
-}
-
-void XRGameBridge::RenderFrameWeaving()
-{
-}
-
-void XRGameBridge::RenderFrameSideBySide()
-{
 }
 
 void XRGameBridge::UpdateSession(GB_Session& session) {

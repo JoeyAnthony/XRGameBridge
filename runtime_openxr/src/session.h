@@ -118,9 +118,6 @@ namespace XRGameBridge {
 
     void ChangeSessionState(GB_Session& session, XrSessionState state);
 
-    void RenderFrameWeaving();
-    void RenderFrameSideBySide();
-
     void UpdateSession(GB_Session& session);
 
     void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose);

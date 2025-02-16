@@ -87,7 +87,7 @@ XrResult xrDestroySwapchain(XrSwapchain swapchain) {
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[gb_proxy.GetSession()];
 
-    //gb_session.compositor.ResetCommandLists();
+    gb_session.compositor.ResetCommandLists();
     gb_proxy.DestroyResources();
 
     XRGameBridge::g_proxy_swapchains.erase(swapchain);
@@ -265,9 +265,10 @@ namespace XRGameBridge {
                 auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
                 D3D12_CLEAR_VALUE clear_value{
-                    format,
-                    0.5f
+                    format
                 };
+
+                memcpy(clear_value.Color, clear_color, sizeof(float)*4);
 
                 res = device->CreateCommittedResource(
                     &heap_properties,
@@ -368,7 +369,10 @@ namespace XRGameBridge {
     }
 
     void GB_ProxySwapchain::DestroyResources() {
-        for (int32_t i = 0; i < g_back_buffer_count; i++) {
+        GB_Session& gb_session = XRGameBridge::g_sessions[session];
+        GB_Compositor& compositor = gb_session.compositor;
+        for (int32_t i = 0; i < GetBufferCount(); i++) {
+            compositor.WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
             back_buffers[i].Reset();
         }
 
@@ -377,7 +381,7 @@ namespace XRGameBridge {
     }
 
     uint32_t GB_ProxySwapchain::GetBufferCount() {
-        return g_back_buffer_count;
+        return back_buffers.size();
     }
 
     std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_ProxySwapchain::GetBuffers() {
@@ -464,8 +468,8 @@ namespace XRGameBridge {
         return resolution_y;
     }
 
-    void GB_ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint32_t fence_value) {
-        assert(fence_value > back_buffer_fence_values[back_buffer_frame_num]); // New fence value should always be larger.
+    void GB_ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) {
+        assert(fence_value >= back_buffer_fence_values[back_buffer_frame_num]); // New fence value should always be larger.
         back_buffer_fence_values[back_buffer_frame_num] = fence_value;
     }
 
