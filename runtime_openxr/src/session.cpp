@@ -499,7 +499,7 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
 
         // Separation buttons
         bool value_changed = false;
-        const float incremental_value_pose = 0.0005f;
+        const float incremental_value_pose = 0.001f;
         const float incremental_value_fov = 0.001f;
         XrView view_l = session.views[0];
         XrView view_r = session.views[1];

@@ -100,10 +100,10 @@ namespace  XRGameBridge {
             float z_scale = half_width / half_height;
 
             auto fov = XrFovf {
-                glm::clamp(-(half_width  + eye_position.x) / z, -half_pi, half_pi),    //Left
-                glm::clamp( (half_width  - eye_position.x) / z, -half_pi, half_pi),    //Right
-                glm::clamp( (half_height - eye_position.y) / z, -half_pi, half_pi),    //Up
-                glm::clamp(-(half_height + eye_position.y) / z, -half_pi, half_pi)    //Down
+                glm::clamp(glm::atan(-(half_width + eye_position.x) / z), -half_pi, half_pi),    //Left
+                glm::clamp(glm::atan( (half_width  - eye_position.x) / z), -half_pi, half_pi),    //Right
+                glm::clamp(glm::atan( (half_height - eye_position.y) / z), -half_pi, half_pi),    //Up
+                glm::clamp(glm::atan(-(half_height + eye_position.y) / z), -half_pi, half_pi)    //Down
             };
 
             // Make sure the view can't be vertically or horizontally flipped. Also the depth is larger than 0.
