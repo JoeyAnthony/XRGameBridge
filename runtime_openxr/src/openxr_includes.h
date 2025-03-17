@@ -48,3 +48,9 @@ namespace XRGameBridge {
         uint64_t y;
     };
 }
+
+#ifdef WIN32
+    // Declare functions here so system.h doesn't have to be included in openxr_includes.h
+    XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time);
+    XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter);
+#endif

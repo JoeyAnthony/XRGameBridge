@@ -342,6 +342,16 @@ XrResult xrDestroySpace(XrSpace space) {
     return XR_ERROR_HANDLE_INVALID;
 }
 
+XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time) {
+    *time = performanceCounter->QuadPart;
+    return XR_SUCCESS;
+}
+
+XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter) {
+    performanceCounter->QuadPart = time;
+    return XR_SUCCESS;
+}
+
 //XRGameBridge::GBVector2i XRGameBridge::GetDummyScreenResolution() {
 //    //TODO dependent on the SR screen, hopefully we can set reset this later on runtime. It would be cool to setup everything without having to connect to the sr service since that might take some time.
 //    // MS docs: The width/height of the client area for a full-screen window on the primary display monitor, in pixels.

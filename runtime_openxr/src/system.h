@@ -28,6 +28,10 @@ XrResult xrCreateActionSpace(XrSession session, const XrActionSpaceCreateInfo* c
 XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLocation* location);
 XrResult xrDestroySpace(XrSpace space);
 
+// Misc
+XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time);
+XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter);
+
 namespace  XRGameBridge {
     // System dummy values
     enum class GraphicsBackend {

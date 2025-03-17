@@ -70,7 +70,7 @@ namespace XRGameBridge {
         // Cannot be longer than XR_MAX_RUNTIME_NAME_SIZE
         const std::string runtime_name = "XR Game Bridge";
         const uint64_t runtime_version = XR_MAKE_VERSION(RUNTIME_VERSION_MAYOR, RUNTIME_VERSION_MINOR, RUNTIME_VERSION_PATCH);
-        GraphicsBackend active_graphics_backend;
+        GraphicsBackend active_graphics_backend = GraphicsBackend::undefined;
         GameBridge* gamebridge_instance = nullptr;
         PlatformManager* platform_manager = nullptr;
 
