@@ -32,7 +32,7 @@ XrResult xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoid
         *function = openxr_functions.at(name);
     }
     catch (std::out_of_range& e) {
-        //LOG(WARNING) << "FUNCTION UNSUPPORTED: " << name << " Error: " << e.what();
+        LOG(WARNING) << "FUNCTION UNSUPPORTED: " << name << " Error: " << e.what();
         return XR_ERROR_FUNCTION_UNSUPPORTED;
     }
     catch (std::exception& e) {
@@ -185,9 +185,11 @@ XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* inst
 
 XrResult xrDestroyInstance(XrInstance instance) {
 
-    // Delete sessions
+    //window_hook->CloseConsole();
 
+    // Delete sessions
     // Delete actions
+    // Delete systems
     // TODO Make the instance destroy all owned objects here as well
 
     delete XRGameBridge::g_xr_instance;
@@ -281,6 +283,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
 //#ifdef _DEBUG
 //    // Enable the D3D12 debug layer.
+//    LOG(WARNING) << "DirectX 12 Debug device is being used";
 //    {
 //        ComPtr<ID3D12Debug> debugController;
 //        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
@@ -362,7 +365,7 @@ XrResult xrDestroyActionSet(XrActionSet actionSet) {
     try {
         GB_ActionSet& to_delete = g_action_sets.at(actionSet);
 
-        LOG(INFO) << "Unregistered action: " << to_delete.localized_name;
+        LOG(INFO) << "Destroy action: " << to_delete.localized_name;
         g_action_sets.erase(actionSet);
     }
     catch (std::out_of_range& e) {
@@ -526,8 +529,8 @@ XRGameBridge::GB_Instance::GB_Instance() {
 
 #ifdef _DEBUG
     window_hook = new WindowHooks();
-    window_hook->OpenConsole();
-    window_hook->ActivateWindowMessageHook();
+    //window_hook->OpenConsole();
+    //window_hook->ActivateWindowMessageHook();
 #endif
 
 }
@@ -535,6 +538,21 @@ XRGameBridge::GB_Instance::GB_Instance() {
 XRGameBridge::GB_Instance::~GB_Instance() {
     delete gamebridge_instance;
     delete platform_manager;
+
+    g_sessions.clear();
+    g_systems.clear();
+    g_action_sets.clear();
+    g_actions.clear();
+    g_reference_spaces.clear();
+    g_action_spaces.clear();
+    g_displays.clear();
+    g_xrpath_storage.clear();
+
+    delete g_hotkey_manager;
+    g_openxr_event_stream_writer.reset();
+    g_openxr_event_stream_reader.reset();
+
+    //delete window_hook;
 }
 
 void XRGameBridge::GB_Instance::InitializeSR() {
@@ -550,7 +568,8 @@ void XRGameBridge::GB_Instance::InitializeSR() {
 
 XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::undefined) {
-        active_graphics_backend == api;
+        active_graphics_backend = api;
+        return XR_SUCCESS;
     }
     else {
         LOG(ERROR) << "Active graphics api can only be set once";

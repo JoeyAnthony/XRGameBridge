@@ -63,7 +63,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
 
     // Create entry in the list
-    XRGameBridge::GB_ProxySwapchain gb_proxy(handle);
+    XRGameBridge::GB_ProxySwapchain gb_proxy(handle, session);
 
     // Create swap chain
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
@@ -77,9 +77,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = handle;
     swapchain_creation_count++;
 
-    //// TODO Quick solution to process the ready event. Eventually we just need an event queue with a mutex.
-    //XRGameBridge::UpdateSession(gb_session);
-
     XRGameBridge::g_proxy_swapchains[handle] = gb_proxy;
 
     LOG(INFO) << "Successfully created proxy swapchain";
@@ -88,6 +85,9 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 
 XrResult xrDestroySwapchain(XrSwapchain swapchain) {
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[gb_proxy.GetSession()];
+
+    gb_session.compositor.ResetCommandLists();
     gb_proxy.DestroyResources();
 
     XRGameBridge::g_proxy_swapchains.erase(swapchain);
@@ -172,7 +172,8 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 }
 
 namespace XRGameBridge {
-    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle) : handle(handle) {
+    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle, XrSession session) : handle(handle), session(session) {
+        back_buffer_fence_values.fill(0);
     }
 
     bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
@@ -190,7 +191,6 @@ namespace XRGameBridge {
         HRESULT res = 0;
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
-        fence_values.fill(0);
 
         for (uint32_t i = 0; i < g_back_buffer_count; i++) {
             // Set resource_usage to save the state the application expects the buffer to be in
@@ -265,9 +265,10 @@ namespace XRGameBridge {
                 auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
                 D3D12_CLEAR_VALUE clear_value{
-                    format,
-                    0.5f
+                    format
                 };
+
+                memcpy(clear_value.Color, clear_color, sizeof(float)*4);
 
                 res = device->CreateCommittedResource(
                     &heap_properties,
@@ -364,20 +365,14 @@ namespace XRGameBridge {
             }
         }
 
-        // Create fence
-        device->CreateFence(fence_values[current_frame_index], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-        // Create an event handle to use for frame synchronization.
-        fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (fence_event == nullptr) {
-            HRESULT_FROM_WIN32(GetLastError());
-            return false;
-        }
-
         return true;
     }
 
     void GB_ProxySwapchain::DestroyResources() {
-        for (int32_t i = 0; i < g_back_buffer_count; i++) {
+        GB_Session& gb_session = XRGameBridge::g_sessions[session];
+        GB_Compositor& compositor = gb_session.compositor;
+        for (int32_t i = 0; i < GetBufferCount(); i++) {
+            compositor.WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
             back_buffers[i].Reset();
         }
 
@@ -386,7 +381,7 @@ namespace XRGameBridge {
     }
 
     uint32_t GB_ProxySwapchain::GetBufferCount() {
-        return g_back_buffer_count;
+        return back_buffers.size();
     }
 
     std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_ProxySwapchain::GetBuffers() {
@@ -415,8 +410,8 @@ namespace XRGameBridge {
 
         // set current frame values to the values of the next frame
         current_frame_index = next_index;
+        current_image_state[current_frame_index] = IMAGE_STATE_ACQUIRED;
         index = current_frame_index;
-        current_image_state[next_index] = IMAGE_STATE_ACQUIRED;
         return XR_SUCCESS;
     }
 
@@ -427,24 +422,10 @@ namespace XRGameBridge {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
-        // Should always be called AFTER GetCurrentBackBufferIndex. So GetCompletedValue van be compared to the new frame fence value.
-        uint64_t completed_value = fence->GetCompletedValue();
-        if (completed_value < fence_values[current_frame_index]) {
-            // Fire event on completion
-            fence->SetEventOnCompletion(fence_values[current_frame_index], fence_event);
-            // Wait for the fence to be signaled and fire the event
-            HRESULT res = WaitForSingleObjectEx(fence_event, ch::duration_cast<ch::milliseconds>(ch::nanoseconds(timeout)).count(), FALSE);
-            if (res == WAIT_TIMEOUT) {
-                return XR_TIMEOUT_EXPIRED;
-            }
-        }
-
-        // TODO wait for fence -> transition image -> set event on the same fence -> wait again on the same fence
-        // This is so we can guarantee that the image is free and in the correct state to be used by the application
-        //TransitionBackBufferImage(COMMAND_RESOURCE_INDEX_TRANSITION, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        // Remark: fence value will be incremented until the swapchain is destroyed. 
-        fence_values[current_frame_index]++;
+        GB_Session& gb_session = XRGameBridge::g_sessions[session];
+        GB_Compositor& compositor = gb_session.compositor;
+        
+        compositor.WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
 
         // Set the image state to render target because we have waited for the image to be freed so it can be used by the application again.
         current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
@@ -461,11 +442,6 @@ namespace XRGameBridge {
         if (current_image_state[awaited_frame_index] != IMAGE_STATE_RENDER_TARGET) {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
-
-        // TODO moved this call to compositor for now
-        // Schedule a Signal command in the queue. for the currently rendered frame
-        //command_queue->Signal(fence.Get(), fence_values[current_frame_index]);
-
 
         /// TODO (ONLY FOR SETTING TO IMAGE_STATE_WEAVING) test if this works with multi threaded rendering applications. It could be that after release, another thread will immediately call AcquireSwapchainImage, which will now return CALL_ORDER_INVALID since the weaving still has to happen on the first thread.
         // Set the image state to IMAGE_STATE_RELEASED. After this the image can be weaved. The image can also be reacquired by the application though.
@@ -490,6 +466,15 @@ namespace XRGameBridge {
 
     uint32_t GB_ProxySwapchain::GetHeight() {
         return resolution_y;
+    }
+
+    void GB_ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) {
+        assert(fence_value >= back_buffer_fence_values[back_buffer_frame_num]); // New fence value should always be larger.
+        back_buffer_fence_values[back_buffer_frame_num] = fence_value;
+    }
+
+    XrSession GB_ProxySwapchain::GetSession() {
+        return session;
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {

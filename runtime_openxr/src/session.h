@@ -4,6 +4,9 @@
 #include <chrono>
 #include <mutex>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include "openxr_includes.h"
 #include "window.h"
 #include "swapchain.h"
@@ -23,9 +26,6 @@ XrResult xrRequestExitSession(XrSession session);
 XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, XrFrameState* frameState);
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo);
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo);
-
-// Constant PI
-constexpr auto M_PI = 3.14159265358979323846;
 
 namespace ch = std::chrono;
 
@@ -64,8 +64,12 @@ namespace XRGameBridge {
         bool end_frame_called = true;
         bool should_render = false;
 
+
+
         // Views
-        std::array<XrView,2> stereo_views;
+        std::array<XrView, 2> views;
+        float leye_x = -0.0015f, reye_x = 0.0015f;
+        float eye_z = 0.50f;
         // Weaving
         bool should_weave = true;
 
@@ -76,7 +80,7 @@ namespace XRGameBridge {
         GB_ProxySwapchain intermediate_resource;
 
         // Windows
-        GB_Display display;
+        GB_Window window;
         GB_GraphicsDevice window_swapchain;
 
         // SR
@@ -113,9 +117,6 @@ namespace XRGameBridge {
     inline std::vector<GB_FrameTimer> g_frames;
 
     void ChangeSessionState(GB_Session& session, XrSessionState state);
-
-    void RenderFrameWeaving();
-    void RenderFrameSideBySide();
 
     void UpdateSession(GB_Session& session);
 

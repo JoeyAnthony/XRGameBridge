@@ -1,5 +1,8 @@
 #include "window.h"
 
+#include <Windows.h>
+#include "platform_manager.h"
+
 namespace XRGameBridge {
     void MessageLoop() {
         // Main message loop:
@@ -10,7 +13,7 @@ namespace XRGameBridge {
         }
     }
 
-    LRESULT CALLBACK GB_Display::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    LRESULT CALLBACK GB_Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         PAINTSTRUCT ps;
         HDC hdc;
         std::string greeting("Hello, Windows desktop!");
@@ -40,7 +43,7 @@ namespace XRGameBridge {
         return 0;
     }
 
-    bool GB_Display::InitWindowClass(HINSTANCE hInstance)
+    bool GB_Window::InitWindowClass(HINSTANCE hInstance)
     {
         WNDCLASSEX window_ex;
 
@@ -66,11 +69,23 @@ namespace XRGameBridge {
         }
     }
 
-    bool GB_Display::CreateApplicationWindow(HINSTANCE hInstance, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen) {
+    GB_Window::~GB_Window() {
+        DestroyApplicationWindow();
+    }
+
+    bool GB_Window::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
         // TODO better window creation checking code
         static bool window_created = false;
         if (h_wnd != nullptr) {
             return false;
+        }
+
+        auto dpi_context = GetThreadDpiAwarenessContext();
+        if (dpi_context != DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) {
+            // Ensure the application receives unscaled display metrics
+            //SetProcessDpiAwareness(PROCESS_DPI_AWARENESS::PROCESS_PER_MONITOR_DPI_AWARE);
+            const DPI_AWARENESS_CONTEXT context = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
+            SetThreadDpiAwarenessContext(context);
         }
 
         // Always try to get the external display before creating one ourselves
@@ -93,10 +108,26 @@ namespace XRGameBridge {
             window_style = windowed;
         }
 
+        // Get position of the SR display
+        int window_x = CW_USEDEFAULT, window_y = CW_USEDEFAULT;
+        if(system.GetIsConnected()) {
+            auto display_rect = system.sr_display->getLocation();
+            window_x = display_rect.left;
+            window_y = display_rect.top;
+            RECT rect(display_rect.left, display_rect.top, display_rect.right, display_rect.bottom);
+            HMONITOR h_monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+
+            MONITORINFO monitor_info;
+            monitor_info.cbSize = sizeof(MONITORINFO);
+            GetMonitorInfoA(h_monitor, &monitor_info);
+            window_x = monitor_info.rcMonitor.left;
+            window_y = monitor_info.rcMonitor.top;
+        }
+
         // Set the new window as a child window of the game's
         const long w = static_cast<long>(width);
         const long h = static_cast<long>(height);
-        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, CW_USEDEFAULT, CW_USEDEFAULT, w, h, h_wnd_external, NULL, hInstance, NULL);
+        h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, window_x, window_y, w, h, h_wnd_external, NULL, hInstance, NULL);
         if (!h_wnd) {
             MessageBox(NULL, "Call to CreateWindow failed!", "XR Game Bridge", NULL);
             return false;
@@ -107,8 +138,8 @@ namespace XRGameBridge {
         SetWindowPos(
             h_wnd,
             HWND_TOPMOST,
-            0,
-            0,
+            window_x,
+            window_y,
             width,
             height,
             SWP_FRAMECHANGED | SWP_NOACTIVATE);
@@ -116,14 +147,21 @@ namespace XRGameBridge {
         // The parameters to ShowWindow explained:
         // h_wnd: the value returned from CreateWindow
         // nCmdShow: the fourth parameter from WinMain
-        ShowWindow(h_wnd, SW_MAXIMIZE);
+        if (showWindow) {
+            ShowWindow(h_wnd, SW_MAXIMIZE);
+        }
 
         return true;
     }
 
-    bool GB_Display::DestroyApplicationWindow()
+    bool GB_Window::DestroyApplicationWindow()
     {
         // Must be destroyed from the creation thread
+        if(h_wnd == nullptr) {
+            LOG(INFO) << "No window to destroy: " << GetLastError();
+            return true;
+        }
+
         bool res = DestroyWindow(h_wnd);
         if(!res)
         {
@@ -134,11 +172,11 @@ namespace XRGameBridge {
         return res;
     }
 
-    HWND GB_Display::GetWindowHandle() {
+    HWND GB_Window::GetWindowHandle() {
         return h_wnd;
     }
 
-    void GB_Display::UpdateWindow() {
+    void GB_Window::UpdateWindow() {
         // Main message loop:
         MSG msg;
         if (PeekMessageA(&msg, h_wnd, 0, 0, PM_REMOVE)) {
@@ -147,7 +185,7 @@ namespace XRGameBridge {
         }
     }
 
-    HWND GB_Display::TryGetExternalDisplay()
+    HWND GB_Window::TryGetExternalDisplay()
     {
         // Make sure we get the root window, assuming all games uses its root window for showing the game and processing input.
         HWND h_wnd_active = GetActiveWindow();
@@ -172,7 +210,7 @@ namespace XRGameBridge {
         return h_wnd_active;
     }
 
-    bool GB_Display::PeekMessageExternal(LPMSG& msg) {
+    bool GB_Window::PeekMessageExternal(LPMSG& msg) {
         if (h_wnd_external == nullptr) {
             return false;
         }

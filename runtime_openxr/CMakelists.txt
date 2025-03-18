@@ -49,11 +49,14 @@ add_library(RuntimeOpenXR SHARED
 # Don't let Visual Studio build the shaders with wrong settings
 set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 
-target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
-target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
-target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
+# Khronos definitions
 #target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_VULKAN)
 #target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_OPENGL)
+
+# Windows definitions
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
+target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
 
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
@@ -63,10 +66,25 @@ target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party
 # Link dependencies
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
 
+set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
+
 find_package(srDirectX)
+
+include(FetchContent)
+
+FetchContent_Declare(
+	glm
+	GIT_REPOSITORY	https://github.com/g-truc/glm.git
+	GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
+)
+
+FetchContent_MakeAvailable(glm)
+#find_package(glm REQUIRED)
+
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
 		3DGameBridge
+        glm::glm
 )
 
 # Copy 3DGameBridge DLL

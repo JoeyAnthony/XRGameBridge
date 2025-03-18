@@ -226,6 +226,8 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
             std::wstring wpath = dll_path.wstring();
             loaded_module = LoadLibraryExW(wpath.data(), NULL, NULL);
         }
+        //else if(dll_name.find(gb_dll_name) != std::string::npos) {
+        //    LOG(INFO) << "Loading dll " << dll_name;
 
         if (loaded_module == NULL) {
             LOG(ERROR) << "Failed to load " << dll_path << " error: " << GetLastError();

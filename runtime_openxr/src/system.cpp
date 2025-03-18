@@ -18,7 +18,7 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
             *systemId = it->second.id;
             it->second.form_factor = getInfo->formFactor;
 
-            if (it->second.sr_screen != nullptr) {
+            if (it->second.sr_display != nullptr) {
                 available = true;
             }
             break;
@@ -67,7 +67,7 @@ XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId system
 
 XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId, uint32_t viewConfigurationTypeCapacityInput, uint32_t* viewConfigurationTypeCountOutput, XrViewConfigurationType* viewConfigurationTypes) {
     // TODO check if mono as primary is ok
-    const std::array supported_view_configurations = { XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
+    const std::array supported_view_configurations = { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
     *viewConfigurationTypeCountOutput = supported_view_configurations.size();
 
     // Request for the extension array or the extension array itself
@@ -132,7 +132,7 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         res = XR_SUCCESS;
     }
     else if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-
+        LOG(ERROR) << "Mono view configuration requested. Not suppoerted";
     }
     else {
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
@@ -159,22 +159,20 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    std::vector<XrView> sr_views;
+    // TODO mono configuration is not supported
     if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        sr_views = { gb_session.stereo_views[0]};
+        *viewCountOutput = gb_session.views.size();
     }
     else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        sr_views = std::vector<XrView>{gb_session.stereo_views.begin(), gb_session.stereo_views.end() };
+        *viewCountOutput = gb_session.views.size();
     }
-
-    *viewCountOutput = sr_views.size();
 
     // Request for the extension array or the extension array itself
     if (viewCapacityInput == 0) {
         return XR_SUCCESS;
     }
     // Passed array not large enough
-    if (viewCapacityInput < sr_views.size()) {
+    if (viewCapacityInput < gb_session.views.size()) {
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
@@ -183,16 +181,24 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     XRGameBridge::GB_ReferenceSpace& gb_ref_space = XRGameBridge::g_reference_spaces[viewLocateInfo->space];
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_VIEW) // Camera space
     {
+        // TODO Save position/orientation in the session or in the spaces array?
         gb_ref_space.pose_in_reference_space.position;
+
+        std::vector<XrView> sr_views;
+        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
+
+        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
     if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
-        //view1.pose.position += gb_ref_space.pose_in_reference_space.position;
         //LOG(INFO) << "World space not implemented: " << __func__;
+        XrView view;
+        view.pose = gb_ref_space.pose_in_reference_space;
+        std::vector<XrView> sr_views;
+        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
+        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
     }
 
     viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
-
-    memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
 
     return XR_SUCCESS;
 }
@@ -237,10 +243,10 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
     }
 
     if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+        new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
     }
-    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        //new_space.pose_in_reference_space.position = {0.0f, 1.7f, 0.f};
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
+        // Local space must be 0, we shouldn't need to recalibrate this
     }
 
     const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
@@ -293,7 +299,7 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
         // TODO, Transform to base space? just returning it for now, in the test the local space is 0 anyways
         // Telling the application the view position is valid but never being tracked
         location->pose = gb_space.pose_in_reference_space;
-        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
         return XR_SUCCESS;
     }
@@ -336,6 +342,16 @@ XrResult xrDestroySpace(XrSpace space) {
     return XR_ERROR_HANDLE_INVALID;
 }
 
+XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time) {
+    *time = performanceCounter->QuadPart;
+    return XR_SUCCESS;
+}
+
+XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter) {
+    performanceCounter->QuadPart = time;
+    return XR_SUCCESS;
+}
+
 //XRGameBridge::GBVector2i XRGameBridge::GetDummyScreenResolution() {
 //    //TODO dependent on the SR screen, hopefully we can set reset this later on runtime. It would be cool to setup everything without having to connect to the sr service since that might take some time.
 //    // MS docs: The width/height of the client area for a full-screen window on the primary display monitor, in pixels.
@@ -368,6 +384,10 @@ XrResult xrDestroySpace(XrSpace space) {
 //    return sys_props;
 //}
 
+bool XRGameBridge::GB_System::GetIsConnected() {
+    return device_is_connected;
+}
+
 XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
 {
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
@@ -378,14 +398,27 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
     system.instance = instance;
     system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
     system.sr_device = XRGameBridge::SRDisplay::SR_DISPLAY;
-    system.sr_screen = SR::Screen::create(*gb_instance->GetPlatformManager()->GetContext());
-    system.lens_hint = SR::SwitchableLensHint::create(*gb_instance->GetPlatformManager()->GetContext());
-    system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_screen->getPhysicalResolutionHeight()) };
+    system.sr_display = gb_instance->GetPlatformManager()->GetDisplay();
+    system.lens_hint = gb_instance->GetPlatformManager()->GetLensHint();
+    system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_display->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_display->getPhysicalResolutionHeight()) };
 
-    if(system.sr_screen->getPhysicalResolutionWidth() > 3840)
+    system.physical_screen_width_m = system.sr_display->getPhysicalSizeWidth() / 100.f;
+    system.physical_screen_height_m = system.sr_display->getPhysicalSizeHeight() / 100.f;
+
+    // Check if an sr display is connected.
+    // This is done by checking if the virtual display coordinates of the screen are all 0 or not.
+    auto display_coordinates = system.sr_display->getLocation();
+    if( display_coordinates.left == 0 &&
+        display_coordinates.bottom == 0 &&
+        display_coordinates.right == 0 &&
+        display_coordinates.top == 0)
     {
         // For when no SR display is connected, and if it's an 8K SR display it should work as well
+        system.device_is_connected = false;
         system.physical_resolution = GetResolutionMainDisplay();
+    }
+    else {
+        system.device_is_connected = true;
     }
 
     g_systems.insert({ system.id, system });

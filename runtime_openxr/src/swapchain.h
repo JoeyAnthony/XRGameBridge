@@ -37,10 +37,11 @@ namespace XRGameBridge {
     class GB_ProxySwapchain {
         friend GB_Compositor;
         XrSwapchain handle;
+        XrSession session;
+
         std::wstring proxy_name;
         bool is_depth_resource = false;
 
-        //ComPtr<ID3D12CommandQueue> command_queue;
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
         ComPtr<ID3D12DescriptorHeap> rtv_heap;
         ComPtr<ID3D12DescriptorHeap> srv_heap;
@@ -57,14 +58,14 @@ namespace XRGameBridge {
         std::array<ImageState, g_back_buffer_count> current_image_state;
         uint64_t previous_fence_value = 0;
 
-        // TODO We are using fences for every image instead of every frame, test if we can use fences per frame only instead
-        HANDLE fence_event;
-        ComPtr<ID3D12Fence> fence;
-        std::array<uint64_t, g_back_buffer_count> fence_values;
+        // Fence values per image to check for
+        std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
+
+        static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 
     public:
         GB_ProxySwapchain() = default;
-        GB_ProxySwapchain(XrSwapchain handle);
+        GB_ProxySwapchain(XrSwapchain handle, XrSession session);
 
         // Todo Not sure how to get the initial resource usage if there are multiple specified, for example D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE and D3D12_RESOURCE_STATE_UNORDERED_ACCESS. Can't set them both initially so there exist the initial_usage parameter for now
         bool CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"");
@@ -88,6 +89,10 @@ namespace XRGameBridge {
 
         uint32_t GetWidth();
         uint32_t GetHeight();
+
+        void SetReleasedImageFenceValue(uint32_t frameNum, uint64_t fenceValue);
+
+        XrSession GetSession();
     };
 
     // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window
