@@ -41,12 +41,12 @@ namespace XRGameBridge {
         return buffer;
     }
 
-    GB_Compositor::~GB_Compositor() {
+    GB_DX12Compositor::~GB_DX12Compositor() {
     }
 
-    bool GB_Compositor::Initialize(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, uint32_t back_buffer_count) {
-        d3d12_device = device;
-        command_queue = queue;
+    bool GB_DX12Compositor::Initialize(const XrGraphicsBindingD3D12KHR* d3d12, uint32_t back_buffer_count) {
+        d3d12_device = d3d12->device;
+        command_queue = d3d12->queue;
         HRESULT res = 0;
         // Create the root signature.
         {
@@ -55,12 +55,12 @@ namespace XRGameBridge {
             // This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
             feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 
-            if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
+            if (FAILED(d3d12_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
                 feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
                 LOG(ERROR) << "D3D12 Failed checking support for root signature 1.1, falling back to 1.0";
                 return false;
 
-                //if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
+                //if (FAILED(d3d12_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
                 //    LOG(ERROR) << "D3D12 Failed checking support for root signature 1.0";
                 //}
             }
@@ -94,7 +94,7 @@ namespace XRGameBridge {
                 ThrowIfFailed(res);
                 return false;
             }
-            res = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature));
+            res = d3d12_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature));
             if (FAILED(res)) {
                 LOG(ERROR) << "D3D12 Error, failed creating root signature";
                 ThrowIfFailed(res);
@@ -137,7 +137,7 @@ namespace XRGameBridge {
         samplerHeapDesc.NumDescriptors = 1;
         samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
         samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        res = device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&sampler_heap));
+        res = d3d12_device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&sampler_heap));
         if (FAILED(res)) {
             LOG(ERROR) << "D3D12 Error, failed to create descriptor heap";
             ThrowIfFailed(res);
@@ -156,7 +156,7 @@ namespace XRGameBridge {
         samplerDesc.MaxAnisotropy = 1;
         samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
         samplerDesc.BorderColor;
-        device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
+        d3d12_device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
         back_buffer_num = back_buffer_count;
         frame_fence_values.resize(back_buffer_count, 0);
@@ -185,7 +185,7 @@ namespace XRGameBridge {
         }
 
         // Create fence
-        device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+        d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
         // Create an event handle to use for frame synchronization.
         fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
         if (fence_event == nullptr) {
@@ -196,7 +196,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_Compositor::Deinitialize() {
+    void GB_DX12Compositor::Deinitialize() {
         const uint64_t last_fence_value = fence_value;
         const uint64_t lastCompletedFence = fence->GetCompletedValue();
 
@@ -215,7 +215,23 @@ namespace XRGameBridge {
         CloseHandle(fence_event);
     }
 
-    bool GB_Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
+    bool GB_DX12Compositor::CreateWeaver() {
+        // Initialize weaver params
+        DX12WeaverInitialize params{};
+        params.command_queue = command_queue;
+        params.device = d3d12_device;
+        params.game_bridge = GetGameBridgeInstane();
+        params.input_resource = intermediate_resource.GetBuffers()[0];
+        params.render_target = window_swapchain.GetImages()[0];
+        params.window = window.GetWindowHandle();
+
+        d3d12weaver = new DirectX12Weaver(params);
+        d3d12weaver->InitializeWeaver(gb_session.sr_context);
+        sr_context->initialize();
+        return true;
+    }
+
+    bool GB_DX12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
     {
         // Create the pipeline state, which includes loading shaders.
         {
@@ -278,7 +294,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    XrResult GB_Compositor::RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) {
+    XrResult GB_DX12Compositor::RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) {
         // Update the frame in flight.
         frame_in_flight = frame_in_flight++ % back_buffer_num;
 
@@ -331,7 +347,7 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    XrResult GB_Compositor::RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
+    XrResult GB_DX12Compositor::RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
 
         // Set intermediate resource as render target
         CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
@@ -367,7 +383,7 @@ namespace XRGameBridge {
 
 
         // Do weaving
-        gb_session.d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
+        d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
 
         // Transition to render target
         TransitionImage(cmd_list, gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -375,7 +391,7 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    XrResult GB_Compositor::RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
+    XrResult GB_DX12Compositor::RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
 
         // Transition to render target
         TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -395,7 +411,7 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    void GB_Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+    void GB_DX12Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -417,7 +433,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
+    void GB_DX12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
         auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
         // Render every view to the resource
@@ -501,7 +517,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer) {
+    void GB_DX12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer) {
         // TODO do something with rectangles
         auto& rect = layer->subImage.imageRect;
 
@@ -590,12 +606,12 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
+    void GB_DX12Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
         ID3D12CommandList* lists[]{ cmd_list };
         command_queue->ExecuteCommandLists(1, lists);
     }
 
-    void GB_Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
+    void GB_DX12Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
         if (state_before == state_after) {
             return;
         }
@@ -604,7 +620,7 @@ namespace XRGameBridge {
         cmd_list->ResourceBarrier(1, &barrier);
     }
 
-    XrResult GB_Compositor::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
+    XrResult GB_DX12Compositor::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
         // If the next frame in flight is still rendering wait until it is ready.
         uint64_t completed_value = fence->GetCompletedValue();
         if (completed_value < value) {
@@ -616,7 +632,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_Compositor::WaitForGpu() {
+    void GB_DX12Compositor::WaitForGpu() {
         // Schedule a Signal command in the queue.
         fence_value++;
         ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
@@ -626,7 +642,7 @@ namespace XRGameBridge {
         WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
     }
 
-    void GB_Compositor::ResetCommandLists() {
+    void GB_DX12Compositor::ResetCommandLists() {
         // Reset command lists
         WaitForGpu();
 
@@ -638,19 +654,19 @@ namespace XRGameBridge {
         }
     }
 
-    uint32_t GB_Compositor::GetFrameFenceValue(uint32_t frameNumber) {
+    uint32_t GB_DX12Compositor::GetFrameFenceValue(uint32_t frameNumber) {
         return frame_fence_values[frameNumber];
     }
 
-    ComPtr<ID3D12GraphicsCommandList>& GB_Compositor::GetCommandList(uint32_t index) {
+    ComPtr<ID3D12GraphicsCommandList>& GB_DX12Compositor::GetCommandList(uint32_t index) {
         return command_lists[index];
     }
 
-    ComPtr<ID3D12CommandAllocator>& GB_Compositor::GetCommandAllocator(uint32_t index) {
+    ComPtr<ID3D12CommandAllocator>& GB_DX12Compositor::GetCommandAllocator(uint32_t index) {
         return command_allocators[index];
     }
 
-    ComPtr<ID3D12PipelineState>& GB_Compositor::GetPipelineState()
+    ComPtr<ID3D12PipelineState>& GB_DX12Compositor::GetPipelineState()
     {
         return pipeline_state_opaque;
     }

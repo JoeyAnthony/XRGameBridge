@@ -64,14 +64,15 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
     // DirectX 12
-    if (XRGameBridge::g_runtime_settings.support_d3d12) {
-        const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (createInfo->next);
-        new_session.d3d12_device = d3d12_bindings->device;
-        new_session.command_queue = d3d12_bindings->queue;
-        LOG(INFO) << "Create session with DirectX 12";
+    if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
+        // Create dx11 compositor
+    }
+    else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
+
     }
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";
+        return XR_ERROR_RUNTIME_FAILURE;
     }
 
     // Get hot-key event stream reader
@@ -89,13 +90,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 
     *session = handle;
     session_creation_count++;
-
-    // TODO Not sure where to put the compositor, it has to be initialized by the session, but you render to a system
-    // Maybe a system should own a compositor, but it is created and destroyed by the client?
-    if (new_session.compositor.Initialize(new_session.d3d12_device, new_session.command_queue, 2) == false) {
-        LOG(ERROR) << "Failed to create compositor";
-        return XR_ERROR_RUNTIME_FAILURE;
-    }
 
     // Create sr context, blocks till there is a connection
     new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
@@ -189,20 +183,6 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     // Create swapchain for debug window
     gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &window_swapchain_info, gb_session.window.GetWindowHandle());
-
-    // Initialize weaver params
-    DX12WeaverInitialize params{};
-    params.command_queue = gb_session.command_queue;
-    params.device = gb_session.d3d12_device;
-    params.game_bridge = gb_instance->GetGameBridgeInstane();
-    params.input_resource = gb_session.intermediate_resource.GetBuffers()[0];
-    params.render_target = gb_session.window_swapchain.GetImages()[0];
-    params.window = gb_session.window.GetWindowHandle();
-
-    // Create weaver
-    gb_session.d3d12weaver = new DirectX12Weaver(params);
-    gb_session.d3d12weaver->InitializeWeaver(gb_session.sr_context);
-    gb_session.sr_context->initialize();
 
     // Send all state changes
     XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);

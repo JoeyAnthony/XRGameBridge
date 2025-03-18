@@ -73,11 +73,8 @@ namespace XRGameBridge {
         // Weaving
         bool should_weave = true;
 
-        // DirectX 12
-        ComPtr<ID3D12Device> d3d12_device;
-        ComPtr<ID3D12CommandQueue> command_queue;
-        GB_Compositor compositor;
-        GB_ProxySwapchain intermediate_resource;
+        // Compositor
+        GB_Compositor* compositor;
 
         // Windows
         GB_Window window;
@@ -85,7 +82,6 @@ namespace XRGameBridge {
 
         // SR
         SR::SRContext* sr_context;
-        DirectX12Weaver* d3d12weaver;
 
         std::thread idle_thread;
         void StartSessionIdle();

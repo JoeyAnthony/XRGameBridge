@@ -5,6 +5,7 @@
 
 #include "openxr_includes.h"
 #include "platform_manager.h"
+#include "types.h"
 
 // System
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId);
@@ -33,15 +34,6 @@ XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LA
 XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter);
 
 namespace  XRGameBridge {
-    // System dummy values
-    enum class GraphicsBackend {
-        undefined = 0,
-        D3D11 = 1,
-        D3D12 = 2,
-        Vulkan = 3,
-        OpenGL = 4
-    };
-
     enum class SRDisplay {
         SR_DISPLAY
     };

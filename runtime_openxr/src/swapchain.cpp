@@ -370,7 +370,7 @@ namespace XRGameBridge {
 
     void GB_ProxySwapchain::DestroyResources() {
         GB_Session& gb_session = XRGameBridge::g_sessions[session];
-        GB_Compositor& compositor = gb_session.compositor;
+        GB_DX12Compositor& compositor = gb_session.compositor;
         for (int32_t i = 0; i < GetBufferCount(); i++) {
             compositor.WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
             back_buffers[i].Reset();
@@ -423,7 +423,7 @@ namespace XRGameBridge {
         }
 
         GB_Session& gb_session = XRGameBridge::g_sessions[session];
-        GB_Compositor& compositor = gb_session.compositor;
+        GB_DX12Compositor& compositor = gb_session.compositor;
         
         compositor.WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
 

@@ -16,7 +16,7 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 
 namespace XRGameBridge {
     // Forward declaration for GB_ProxySwapchain friend
-    class GB_Compositor;
+    class GB_DX12Compositor;
 
     enum ImageState {
         IMAGE_STATE_WAITING,
@@ -35,7 +35,7 @@ namespace XRGameBridge {
     // TODO Use resources instead of creating multiple swap chains? Is that better?
     // UEVR create a lot of swap chains so let's just use images....
     class GB_ProxySwapchain {
-        friend GB_Compositor;
+        friend GB_DX12Compositor;
         XrSwapchain handle;
         XrSession session;
 
