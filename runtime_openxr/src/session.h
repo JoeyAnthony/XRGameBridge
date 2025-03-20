@@ -14,6 +14,7 @@
 
 #include "srhelpers.h"
 #include "weaver_directx_12.h"
+#include "Renderer.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session);
 XrResult xrDestroySession(XrSession session);
@@ -74,11 +75,7 @@ namespace XRGameBridge {
         bool should_weave = true;
 
         // Compositor
-        GB_Compositor* compositor;
-
-        // Windows
-        GB_Window window;
-        GB_GraphicsDevice window_swapchain;
+        Renderer renderer;
 
         // SR
         SR::SRContext* sr_context;

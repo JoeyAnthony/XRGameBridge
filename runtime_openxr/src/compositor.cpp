@@ -215,22 +215,6 @@ namespace XRGameBridge {
         CloseHandle(fence_event);
     }
 
-    bool GB_DX12Compositor::CreateWeaver() {
-        // Initialize weaver params
-        DX12WeaverInitialize params{};
-        params.command_queue = command_queue;
-        params.device = d3d12_device;
-        params.game_bridge = GetGameBridgeInstane();
-        params.input_resource = intermediate_resource.GetBuffers()[0];
-        params.render_target = window_swapchain.GetImages()[0];
-        params.window = window.GetWindowHandle();
-
-        d3d12weaver = new DirectX12Weaver(params);
-        d3d12weaver->InitializeWeaver(gb_session.sr_context);
-        sr_context->initialize();
-        return true;
-    }
-
     bool GB_DX12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
     {
         // Create the pipeline state, which includes loading shaders.

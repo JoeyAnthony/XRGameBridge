@@ -43,16 +43,12 @@ namespace XRGameBridge {
         // DirectX 12
         ComPtr<ID3D12Device> d3d12_device;
         ComPtr<ID3D12CommandQueue> command_queue;
-        GB_ProxySwapchain intermediate_resource;
-        // SR
-        DirectX12Weaver* d3d12weaver;
 
     public:
         ~GB_DX12Compositor();
 
         bool Initialize(const XrGraphicsBindingD3D12KHR* d3d12, uint32_t back_buffer_count);
         void Deinitialize();
-        bool CreateWeaver();
 
         bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
 

@@ -107,19 +107,6 @@ XrResult xrDestroySession(XrSession session) {
     // Also action sets/g_actions attached to the session should be destroyed
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    gb_session.intermediate_resource.DestroyResources();
-
-    gb_session.compositor.Deinitialize();
-
-    //gb_session.window = {};
-    delete gb_session.d3d12weaver;
-
-    gb_session.window_swapchain = {};
-
-    gb_session.command_queue.Reset();
-
-    gb_session.d3d12_device.Reset();
-
     gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
 
     try {
@@ -156,34 +143,6 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
-    // TODO Move creation of objects to CreateSession, except for the creation of the window swapchain and the window perhaps.
-
-    if(gb_session.window.TryGetExternalDisplay() != nullptr)
-    {
-        LOG(INFO) << "Got window";
-    }
-
-    // Create debug window
-    auto system_resolution = GetSystemResolution(gb_system);
-
-    gb_session.window.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
-    // Debugging with non full screen mode
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
-
-    // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource = GB_ProxySwapchain(0, session); // Handle 0 is not being used by xrCreateSwapchain
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
-
-    // Create swapchain info for the window swapchain
-    XrSwapchainCreateInfo window_swapchain_info;
-    window_swapchain_info.width = system_resolution.x;
-    window_swapchain_info.height = system_resolution.y;
-    window_swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
-
-    // Create swapchain for debug window
-    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &window_swapchain_info, gb_session.window.GetWindowHandle());
-
     // Send all state changes
     XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
@@ -207,19 +166,6 @@ XrResult xrEndSession(XrSession session) {
         LOG(WARNING) << "Trying to stop the session but the frame mutex is in use";
         return XR_ERROR_SESSION_NOT_STOPPING;
     }
-
-    // Destroy resources created by BeginSession
-    delete gb_session.d3d12weaver;
-    gb_session.d3d12weaver = nullptr;
-
-    // Not necessary as it uses ComPtr for resources
-    gb_session.intermediate_resource.DestroyResources();
-
-    // Reset window swapchain
-    gb_session.window_swapchain = {};
-
-    // Destroy window
-    gb_session.window.DestroyApplicationWindow();
 
     // Reset state
     gb_session.wait_frame_state = XRGameBridge::NewFrameAllowed;
@@ -349,7 +295,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
     XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    auto& gb_compositor = gb_session.compositor;
 
     if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
@@ -373,7 +318,7 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
 
-    gb_compositor.RenderFrame(gb_session, frameEndInfo);
+    gb_session.renderer.RenderFrame(gb_session, frameEndInfo);
 
     // Update window
     gb_session.window.UpdateWindow();
