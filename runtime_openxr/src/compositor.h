@@ -18,6 +18,7 @@ namespace XRGameBridge {
         virtual void WaitForGpu() = 0;
         virtual void ResetCommandLists() = 0;
         virtual uint32_t GetFrameFenceValue(uint32_t frameNumber) = 0;
+        virtual void Destroy() = 0;
     };
 
     class GB_DX12Compositor : public GB_Compositor{
@@ -48,7 +49,7 @@ namespace XRGameBridge {
         ~GB_DX12Compositor();
 
         bool Initialize(const XrGraphicsBindingD3D12KHR* d3d12, uint32_t back_buffer_count);
-        void Deinitialize();
+        void Destroy() override;
 
         bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
 

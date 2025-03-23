@@ -196,7 +196,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_DX12Compositor::Deinitialize() {
+    void GB_DX12Compositor::Destroy() {
         const uint64_t last_fence_value = fence_value;
         const uint64_t lastCompletedFence = fence->GetCompletedValue();
 
@@ -302,10 +302,10 @@ namespace XRGameBridge {
 
         // Render weaving
         if (gb_session.should_weave) {
-            RenderFrameWeaving(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_ProxySwapchain::clear_color);
+            RenderFrameWeaving(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_D3D12ProxySwapchain::clear_color);
         }
         else {
-            RenderFrameSideBySide(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_ProxySwapchain::clear_color);
+            RenderFrameSideBySide(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_D3D12ProxySwapchain::clear_color);
         }
 
         // Transition swapchain to present

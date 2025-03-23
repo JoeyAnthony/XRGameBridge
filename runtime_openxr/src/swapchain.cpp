@@ -58,17 +58,19 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     //TODO Get compositor from the session and create descriptor on it for the new swapchain
 
     static size_t swapchain_creation_count = 1;
+    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
 
     // Create entry in the list
-    XRGameBridge::GB_ProxySwapchain gb_proxy(handle, session);
+    // TODO should work for different graphics apis
+    XRGameBridge::D3D12Renderer* renderer = static_cast<XRGameBridge::D3D12Renderer*>(gb_session.renderer);
+    XRGameBridge::GB_D3D12ProxySwapchain gb_proxy(handle, renderer);
 
     // Create swap chain
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
 
-    if (gb_proxy.CreateResources(gb_session.d3d12_device, createInfo) == false) {
+    if (gb_proxy.CreateResources(createInfo) == false) {
         LOG(ERROR) << "Failed to create proxy swapchain";
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -85,9 +87,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 
 XrResult xrDestroySwapchain(XrSwapchain swapchain) {
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[gb_proxy.GetSession()];
 
-    gb_session.compositor.ResetCommandLists();
+    gb_proxy.GetRenderer()->GetCompositor()->ResetCommandLists();
     gb_proxy.DestroyResources();
 
     XRGameBridge::g_proxy_swapchains.erase(swapchain);
@@ -111,14 +112,15 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
-    if (XRGameBridge::g_runtime_settings.support_d3d12) {
+    if (gb_render_target.GetRenderer()->GetGraphicsBackend() == XRGameBridge::GraphicsBackend::D3D12) {
+        XRGameBridge::GB_D3D12ProxySwapchain d3d12_proxy = static_cast<XRGameBridge::GB_D3D12ProxySwapchain>(gb_render_target);
         if (images[0].type != XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR) {
             LOG(ERROR) << "structure type incompatible";
             return XR_ERROR_VALIDATION_FAILURE;
         }
 
         std::vector<XrSwapchainImageD3D12KHR> xr_images;
-        auto directx_images = gb_render_target.GetBuffers();
+        auto directx_images = d3d12_proxy.GetBuffers();
         for (uint32_t i = 0; i < count; i++) {
             XrSwapchainImageD3D12KHR image{};
             image.type = XrStructureType::XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
@@ -172,11 +174,11 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 }
 
 namespace XRGameBridge {
-    GB_ProxySwapchain::GB_ProxySwapchain(XrSwapchain handle, XrSession session) : handle(handle), session(session) {
+    GB_D3D12ProxySwapchain::GB_D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer) : handle(handle), d3d12_renderer(renderer) {
         back_buffer_fence_values.fill(0);
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
+    bool GB_D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
         D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
         GetResourceStateFlags(createInfo->usageFlags, flags, states);
@@ -184,10 +186,12 @@ namespace XRGameBridge {
             states = D3D12_RESOURCE_STATE_RENDER_TARGET;
         }
 
-        return CreateResources(device, createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
+        return CreateResources(createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
     }
 
-    bool GB_ProxySwapchain::CreateResources(const ComPtr<ID3D12Device>& device, uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
+    bool GB_D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
+        ID3D12Device* device = d3d12_renderer->d3d12_device.Get();
+
         HRESULT res = 0;
         // Reinitialize the values in the array
         current_image_state.fill(IMAGE_STATE_RELEASED);
@@ -368,11 +372,10 @@ namespace XRGameBridge {
         return true;
     }
 
-    void GB_ProxySwapchain::DestroyResources() {
-        GB_Session& gb_session = XRGameBridge::g_sessions[session];
-        GB_DX12Compositor& compositor = gb_session.compositor;
+    void GB_D3D12ProxySwapchain::DestroyResources() {
+        GB_Compositor* compositor = d3d12_renderer->GetCompositor();
         for (int32_t i = 0; i < GetBufferCount(); i++) {
-            compositor.WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
+            compositor->WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
             back_buffers[i].Reset();
         }
 
@@ -380,28 +383,28 @@ namespace XRGameBridge {
         srv_heap.Reset();
     }
 
-    uint32_t GB_ProxySwapchain::GetBufferCount() {
+    uint32_t GB_D3D12ProxySwapchain::GetBufferCount() {
         return back_buffers.size();
     }
 
-    std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_ProxySwapchain::GetBuffers() {
+    std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_D3D12ProxySwapchain::GetBuffers() {
         return back_buffers;
     }
 
-    ComPtr<ID3D12DescriptorHeap>& GB_ProxySwapchain::GetRtvHeap() {
+    ComPtr<ID3D12DescriptorHeap>& GB_D3D12ProxySwapchain::GetRtvHeap() {
         return rtv_heap;
     }
 
-    ComPtr<ID3D12DescriptorHeap>& GB_ProxySwapchain::GetSrvHeap() {
+    ComPtr<ID3D12DescriptorHeap>& GB_D3D12ProxySwapchain::GetSrvHeap() {
         return srv_heap;
     }
 
-    uint32_t GB_ProxySwapchain::GetRtvDescriptorSize()
+    uint32_t GB_D3D12ProxySwapchain::GetRtvDescriptorSize()
     {
         return rtv_descriptor_size;
     }
 
-    XrResult GB_ProxySwapchain::AcquireNextImage(uint32_t& index) {
+    XrResult GB_D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
         uint32_t next_index = (current_frame_index + 1) % g_back_buffer_count;
 
         if (current_image_state[next_index] != IMAGE_STATE_RELEASED) {
@@ -417,15 +420,12 @@ namespace XRGameBridge {
 
     // Wait for the gpu to be done with the image so we can use it for drawing
     // Must only be called after GetCurrentBackBufferIndex to be sure that the image index is not in use anymore
-    XrResult GB_ProxySwapchain::WaitForImage(const XrDuration& timeout) {
+    XrResult GB_D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
         if (current_image_state[current_frame_index] != IMAGE_STATE_ACQUIRED) {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
-        GB_Session& gb_session = XRGameBridge::g_sessions[session];
-        GB_DX12Compositor& compositor = gb_session.compositor;
-        
-        compositor.WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
+        d3d12_renderer->GetCompositor()->WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
 
         // Set the image state to render target because we have waited for the image to be freed so it can be used by the application again.
         current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
@@ -434,7 +434,7 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    XrResult GB_ProxySwapchain::ReleaseImage() {
+    XrResult GB_D3D12ProxySwapchain::ReleaseImage() {
         // TODO Should release the oldest image in the swap chain according to the spec, this already happens implicitly when acquiring images from the swap chain.
         // When Acquiring, an image is released that has already been presented, that index is then used to render a new image to.
 
@@ -460,21 +460,21 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    uint32_t GB_ProxySwapchain::GetWidth() {
+    uint32_t GB_D3D12ProxySwapchain::GetWidth() {
         return resolution_x;
     }
 
-    uint32_t GB_ProxySwapchain::GetHeight() {
+    uint32_t GB_D3D12ProxySwapchain::GetHeight() {
         return resolution_y;
     }
 
-    void GB_ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) {
+    void GB_D3D12ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) {
         assert(fence_value >= back_buffer_fence_values[back_buffer_frame_num]); // New fence value should always be larger.
         back_buffer_fence_values[back_buffer_frame_num] = fence_value;
     }
 
-    XrSession GB_ProxySwapchain::GetSession() {
-        return session;
+    Renderer* GB_D3D12ProxySwapchain::GetRenderer() {
+        return d3d12_renderer;
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {

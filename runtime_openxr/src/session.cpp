@@ -19,7 +19,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    GB_System system = g_systems[createInfo->systemId];
+    GB_System& system = g_systems[createInfo->systemId];
     LOG(INFO) << "Creating session: " << session_creation_count;
 
     if (!system.features_enumerated) {
@@ -63,12 +63,13 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.views[0].fov = system.GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
     new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
-    // DirectX 12
+    // Create Renderer
     if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
-        // Create dx11 compositor
+        return XR_ERROR_RUNTIME_FAILURE;
     }
     else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
-
+        new_session.renderer = new D3D12Renderer();
+        new_session.renderer->Initialize(gb_instance, createInfo->next);
     }
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";
@@ -318,10 +319,10 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
 
-    gb_session.renderer.RenderFrame(gb_session, frameEndInfo);
+    gb_session.renderer->RenderFrame(frameEndInfo);
 
     // Update window
-    gb_session.window.UpdateWindow();
+    gb_session.renderer->Update();
 
     gb_session.ended_frame = gb_session.started_frame;
 
@@ -390,21 +391,21 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     // Not allowed to send messages after this function
     event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
 
-    LPMSG msg = nullptr;
-    if (session.window.PeekMessageExternal(msg)) {
-        switch (msg->message) {
-        case WM_KEYDOWN:
-            if (GetAsyncKeyState(VK_F1) & 0x80) {
-                LOG(INFO) << "Pressed";
-            }
-            break;
-        case WM_KEYUP:
-            if (GetAsyncKeyState(VK_F1) & 0x00) {
-                LOG(INFO) << "Released";
-            }
-            break;
-        }
-    }
+    //LPMSG msg = nullptr;
+    //if (session.window.PeekMessageExternal(msg)) {
+    //    switch (msg->message) {
+    //    case WM_KEYDOWN:
+    //        if (GetAsyncKeyState(VK_F1) & 0x80) {
+    //            LOG(INFO) << "Pressed";
+    //        }
+    //        break;
+    //    case WM_KEYUP:
+    //        if (GetAsyncKeyState(VK_F1) & 0x00) {
+    //            LOG(INFO) << "Released";
+    //        }
+    //        break;
+    //    }
+    //}
 
     // Check if the F1 key is up
     static bool f1_pressed = false;
