@@ -77,7 +77,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
 
     // Get hot-key event stream reader
-    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstane()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
+    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstance()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
 
     XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
@@ -359,7 +359,7 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
 void XRGameBridge::UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
     XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
-    EventManager& event_manager = gb_instance->GetGameBridgeInstane()->GetEventManager();
+    EventManager& event_manager = gb_instance->GetGameBridgeInstance()->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
     GB_System system = g_systems[session.system];

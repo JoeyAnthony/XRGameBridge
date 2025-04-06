@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include <array>
 
-#include "D3D12Renderer.h"
 #include "openxr_includes.h"
 
 XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityInput, uint32_t* formatCountOutput, int64_t* formats);
@@ -18,7 +17,7 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 namespace XRGameBridge {
     class D3D12Renderer;
     // Forward declaration for GB_ProxySwapchain friend
-    class GB_DX12Compositor;
+    class GB_D3D12Compositor;
 
     enum ImageState {
         IMAGE_STATE_WAITING,
@@ -59,7 +58,7 @@ namespace XRGameBridge {
     // TODO Use resources instead of creating multiple swap chains? Is that better?
     // UEVR creates a lot of swap chains so let's just use images....
     class GB_D3D12ProxySwapchain: public GB_ProxySwapchain {
-        friend GB_DX12Compositor;
+        friend GB_D3D12Compositor;
         XrSwapchain handle;
         D3D12Renderer* d3d12_renderer;
 
@@ -121,9 +120,17 @@ namespace XRGameBridge {
         Renderer* GetRenderer() override;
     };
 
+    class GB_GraphicsDevice {
+    public:
+        static void CreateDXGIFactory(IDXGIFactory4** factory);
+        static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+    };
+
     // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window
     // TODO Remark, this swapchain does not have synchronization objects, this is because we already wait for fences on proxy swapchains, which implicitly waits for this swapchains resources.
-    class GB_GraphicsDevice {
+    class GB_D3D12WindowSwapchain {
+        D3D12Renderer* d3d12_renderer;
+
         ComPtr<IDXGISwapChain3> swap_chain;
         ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
         ComPtr<ID3D12DescriptorHeap> m_srvHeap;
@@ -134,11 +141,8 @@ namespace XRGameBridge {
         uint32_t frame_index = 0;
 
     public:
-        static void CreateDXGIFactory(IDXGIFactory4** factory);
-        static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
-
         // Creates device
-        bool CreateSwapChain(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, const XrSwapchainCreateInfo* createInfo, HWND hwnd);
+        bool CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd);
 
         std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetImages();
         ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
@@ -147,9 +151,12 @@ namespace XRGameBridge {
 
         uint32_t AcquireNextImage();
         void PresentFrame();
+
+        GB_D3D12WindowSwapchain(D3D12Renderer* renderer);
     };
 
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states);
 
+    // Global of swapchains
     inline std::unordered_map<XrSwapchain, GB_D3D12ProxySwapchain> g_proxy_swapchains;
 }

@@ -528,10 +528,13 @@ namespace XRGameBridge {
         *ppAdapter = adapter.Detach();
     }
 
-    bool GB_GraphicsDevice::CreateSwapChain(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12CommandQueue>& queue, const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
+    bool GB_D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
+        ID3D12Device* device = d3d12_renderer->d3d12_device.Get();
+        ID3D12CommandQueue* queue = d3d12_renderer->d3d12_command_queue.Get();
+
         // TODO On failure all objects here should be destroyed
         Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
-        CreateDXGIFactory(&factory);
+        GB_GraphicsDevice::CreateDXGIFactory(&factory);
 
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
         swapChainDesc.Width = createInfo->width;
@@ -549,10 +552,9 @@ namespace XRGameBridge {
         DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
         fsSwapChainDesc.Windowed = TRUE;
 
-
         // Swap chain needs the queue so that it can force a flush on it.
         ComPtr<IDXGISwapChain1> swapChain;
-        HRESULT res = factory->CreateSwapChainForHwnd(queue.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
+        HRESULT res = factory->CreateSwapChainForHwnd(queue, hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
         if (FAILED(res)) {
             LOG(ERROR) << "Failed to create d3d12 swap chain";
             return false;
@@ -614,35 +616,38 @@ namespace XRGameBridge {
         return true;
     }
 
-    std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_GraphicsDevice::GetImages() {
+    std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_D3D12WindowSwapchain::GetImages() {
         return back_buffers;
     }
 
-    ComPtr<ID3D12DescriptorHeap>& GB_GraphicsDevice::GetRtvHeap() {
+    ComPtr<ID3D12DescriptorHeap>& GB_D3D12WindowSwapchain::GetRtvHeap() {
         return m_rtvHeap;
     }
 
-    ComPtr<ID3D12DescriptorHeap>& GB_GraphicsDevice::GetSrvHeap() {
+    ComPtr<ID3D12DescriptorHeap>& GB_D3D12WindowSwapchain::GetSrvHeap() {
         return m_srvHeap;
     }
 
-    uint32_t GB_GraphicsDevice::GetRtvDescriptorSize() {
+    uint32_t GB_D3D12WindowSwapchain::GetRtvDescriptorSize() {
         return rtv_descriptor_size;
     }
 
-    uint32_t GB_GraphicsDevice::AcquireNextImage() {
+    uint32_t GB_D3D12WindowSwapchain::AcquireNextImage() {
         // TODO get image index from the swapchain
         return swap_chain->GetCurrentBackBufferIndex();
     }
 
     // Called from xrEndFrame, cause then we know the application is done with rendering this image.
-    void GB_GraphicsDevice::PresentFrame() {
+    void GB_D3D12WindowSwapchain::PresentFrame() {
         // TODO Transitioning images state without waiting on the queue to finish, not sure this will break eventually. Maybe dx12 is synchronizing implicitly?
         //TransitionBackBufferImage(COMMAND_RESOURCE_INDEX_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         swap_chain->Present(1, 0);
 
 
         // barrier to render target
+    }
+
+    GB_D3D12WindowSwapchain::GB_D3D12WindowSwapchain(D3D12Renderer* renderer) : d3d12_renderer(renderer) {
     }
 
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {

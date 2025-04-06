@@ -2,14 +2,12 @@
 #include "openxr_includes.h"
 
 namespace XRGameBridge {
-    class GB_GraphicsDevice;
+    class GB_D3D12WindowSwapchain;
     class GB_Session;
 
     class GB_Compositor {
     public:
         virtual XrResult RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) = 0;
-        virtual XrResult RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) = 0;
-        virtual XrResult RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) = 0;
 
         /*
         * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.
@@ -21,7 +19,7 @@ namespace XRGameBridge {
         virtual void Destroy() = 0;
     };
 
-    class GB_DX12Compositor : public GB_Compositor{
+    class GB_D3D12Compositor : public GB_Compositor{
         ComPtr<ID3D12RootSignature> root_signature;
 
         ComPtr<ID3D12PipelineState> pipeline_state_opaque;
@@ -46,7 +44,7 @@ namespace XRGameBridge {
         ComPtr<ID3D12CommandQueue> command_queue;
 
     public:
-        ~GB_DX12Compositor();
+        ~GB_D3D12Compositor();
 
         bool Initialize(const XrGraphicsBindingD3D12KHR* d3d12, uint32_t back_buffer_count);
         void Destroy() override;
@@ -68,8 +66,8 @@ namespace XRGameBridge {
 
         // Interface functions
         XrResult RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) override;
-        XrResult RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) override;
-        XrResult RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_GraphicsDevice& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) override;
+        XrResult RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]);
+        XrResult RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]);
 
         /*
         * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.

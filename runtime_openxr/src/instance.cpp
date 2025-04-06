@@ -577,7 +577,7 @@ XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     }
 }
 
-GameBridge* XRGameBridge::GB_Instance::GetGameBridgeInstane() {
+GameBridge* XRGameBridge::GB_Instance::GetGameBridgeInstance() {
     return gamebridge_instance;
 }
 

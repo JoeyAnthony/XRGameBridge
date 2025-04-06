@@ -22,16 +22,12 @@ namespace XRGameBridge {
         d3d12_device = d3d12_bindings->device;
         d3d12_command_queue = d3d12_bindings->queue;
 
-        GB_DX12Compositor* d3d12_compositor = new GB_DX12Compositor();
-        if (d3d12_compositor->Initialize(d3d12_bindings, backbuffer_count) == false) {
+        if (compositor.Initialize(d3d12_bindings, backbuffer_count) == false) {
             LOG(ERROR) << "Failed to create compositor";
             return XR_ERROR_RUNTIME_FAILURE;
         }
 
-        compositor = d3d12_compositor;
-
-
-        CreateWeaver();
+        CreateWeaver(instance);
         CreateIntermediateTexture();
         CreateSystemWindow();
         CreateWindowSwapchain();
@@ -52,19 +48,20 @@ namespace XRGameBridge {
         return XR_SUCCESS;
     }
 
-    XrResult D3D12Renderer::CreateWeaver() {
+    XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
         // Initialize weaver params
         DX12WeaverInitialize params{};
         params.command_queue = d3d12_command_queue;
         params.device = d3d12_device;
-        params.game_bridge = GetGameBridgeInstance();
+        params.game_bridge = instance->GetGameBridgeInstance();
         params.input_resource = intermediate_resource->GetBuffers()[0];
         params.render_target = window_swapchain.GetImages()[0];
         params.window = window.GetWindowHandle();
 
+        SR::SRContext* context = instance->GetPlatformManager()->GetContext();
         d3d12weaver = new DirectX12Weaver(params);
-        d3d12weaver->InitializeWeaver(gb_session.sr_context);
-        sr_context->initialize();
+        d3d12weaver->InitializeWeaver(context);
+        context->initialize();
 
         return XR_SUCCESS;
     }
@@ -86,6 +83,8 @@ namespace XRGameBridge {
 
     XrResult D3D12Renderer::CreateWindowSwapchain() {
         // Create swapchain info for the window swapchain
+        window_swapchain = GB_D3D12WindowSwapchain(this);
+
         auto system_resolution = GetSystemResolution(gb_system);
         XrSwapchainCreateInfo window_swapchain_info;
         window_swapchain_info.width = system_resolution.x;
@@ -94,7 +93,7 @@ namespace XRGameBridge {
         window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
         // Create swapchain for debug window
-        window_swapchain.CreateSwapChain(d3d12_device, d3d12_command_queue, &window_swapchain_info, window.GetWindowHandle());
+        window_swapchain.CreateSwapChain(&window_swapchain_info, window.GetWindowHandle());
 
         return XR_SUCCESS;
     }
@@ -104,7 +103,7 @@ namespace XRGameBridge {
     }
 
     GB_Compositor* const D3D12Renderer::GetCompositor() {
-        return compositor;
+        return &compositor;
     }
 
     D3D12Renderer::~D3D12Renderer() {
@@ -114,13 +113,10 @@ namespace XRGameBridge {
 
         intermediate_resource->DestroyResources();
 
-        compositor->Destroy();
+        compositor.Destroy();
 
         //gb_session.window = {};
         delete d3d12weaver;
-
-        // Reset window swapchain
-        window_swapchain = {};
 
         // Destroy window
         window.DestroyApplicationWindow();

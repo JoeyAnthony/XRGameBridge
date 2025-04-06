@@ -29,15 +29,15 @@ class D3D12Renderer : public Renderer{
         GB_System gb_system;
 
         // Graphics
-        GB_Compositor* compositor;
+        GB_D3D12Compositor compositor;
         DirectX12Weaver* d3d12weaver;
         GB_D3D12ProxySwapchain* intermediate_resource;
         // Windowing
         GB_Window window;
-        GB_GraphicsDevice window_swapchain;
+        GB_D3D12WindowSwapchain window_swapchain;
 
         XrResult CreateIntermediateTexture();
-        XrResult CreateWeaver();
+        XrResult CreateWeaver(GB_Instance* instance);
         XrResult CreateSystemWindow();
         XrResult CreateWindowSwapchain();
 

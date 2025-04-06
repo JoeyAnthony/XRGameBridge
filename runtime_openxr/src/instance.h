@@ -84,7 +84,7 @@ namespace XRGameBridge {
 
         XrResult ActivateGraphicsAPI(GraphicsBackend api);
 
-        GameBridge* GetGameBridgeInstane();
+        GameBridge* GetGameBridgeInstance();
         PlatformManager* GetPlatformManager();
         std::string GetRuntimeName();
         uint64_t GetRuntimeVersion();
