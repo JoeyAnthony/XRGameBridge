@@ -15,9 +15,8 @@ XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitI
 XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo);
 
 namespace XRGameBridge {
+    class Renderer;
     class D3D12Renderer;
-    // Forward declaration for GB_ProxySwapchain friend
-    class GB_D3D12Compositor;
 
     enum ImageState {
         IMAGE_STATE_WAITING,
@@ -34,6 +33,10 @@ namespace XRGameBridge {
     constexpr unsigned short g_back_buffer_count = 2;
 
     class GB_ProxySwapchain {
+    public:
+        virtual ~GB_ProxySwapchain() = default;
+
+    private:
         virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") = 0;
         virtual void DestroyResources() = 0;
 
@@ -55,11 +58,8 @@ namespace XRGameBridge {
         virtual Renderer* GetRenderer() = 0;
     };
 
-    // TODO Use resources instead of creating multiple swap chains? Is that better?
-    // UEVR creates a lot of swap chains so let's just use images....
     class GB_D3D12ProxySwapchain: public GB_ProxySwapchain {
-        friend GB_D3D12Compositor;
-        XrSwapchain handle;
+        XrSwapchain xr_handle;
         D3D12Renderer* d3d12_renderer;
 
         std::wstring proxy_name;
@@ -84,40 +84,40 @@ namespace XRGameBridge {
         // Fence values per image to check for
         std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
 
-        static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
+    public:
+        void Initialize(XrSwapchain handle, D3D12Renderer* renderer);
+
+        // Overriden initializer
+        bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
+        // Resource initializer
+        bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
+
+        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetBuffers();
+
+        // Interface functions
+        void DestroyResources() override;
+        // Returns the oldest image index
+        XrResult AcquireNextImage(uint32_t& index) override;
+        // Waits for an image that has been weaved
+        XrResult WaitForImage(const XrDuration& timeout) override;
+        // Make the image available for weaving
+        XrResult ReleaseImage() override;
+        uint32_t GetWidth() override;
+        uint32_t GetHeight() override;
+        uint32_t GetBufferCount() override;
+        void SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) override;
 
         ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
         ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
         uint32_t GetRtvDescriptorSize();
-
-    public:
-        GB_D3D12ProxySwapchain() = default;
-        GB_D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer);
-
-        // Todo Not sure how to get the initial resource usage if there are multiple specified, for example D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE and D3D12_RESOURCE_STATE_UNORDERED_ACCESS. Can't set them both initially so there exist the initial_usage parameter for now
-        bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
-        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetBuffers();
-
-        // Interface functions
-        bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
-        void DestroyResources() override;
-
-        // Returns the oldest image index
-        XrResult AcquireNextImage(uint32_t& index) override;
-
-        // Waits for an image that has been weaved
-        XrResult WaitForImage(const XrDuration& timeout) override;
-
-        // Make the image available for weaving
-        XrResult ReleaseImage() override;
-
-        uint32_t GetWidth() override;
-        uint32_t GetHeight() override;
-        uint32_t GetBufferCount() override;
-
-        void SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) override;
+        uint32_t GetCbcSrvUavDescriptorSize();
+        uint32_t GetAwaitedImageIndex();
 
         Renderer* GetRenderer() override;
+
+        GB_D3D12ProxySwapchain();
+
+        static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
     };
 
     class GB_GraphicsDevice {
@@ -126,8 +126,6 @@ namespace XRGameBridge {
         static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
     };
 
-    // TODO swapchain is only necessary if we render to the XR Game Bridge window, otherwise we render to the back buffer of UEVR window
-    // TODO Remark, this swapchain does not have synchronization objects, this is because we already wait for fences on proxy swapchains, which implicitly waits for this swapchains resources.
     class GB_D3D12WindowSwapchain {
         D3D12Renderer* d3d12_renderer;
 
@@ -141,6 +139,8 @@ namespace XRGameBridge {
         uint32_t frame_index = 0;
 
     public:
+        void Initialize(D3D12Renderer* renderer);
+
         // Creates device
         bool CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd);
 
@@ -148,11 +148,11 @@ namespace XRGameBridge {
         ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
         ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
         uint32_t GetRtvDescriptorSize();
-
+        uint32_t GetCbcSrvUavDescriptorSize();
         uint32_t AcquireNextImage();
         void PresentFrame();
 
-        GB_D3D12WindowSwapchain(D3D12Renderer* renderer);
+        GB_D3D12WindowSwapchain();
     };
 
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states);

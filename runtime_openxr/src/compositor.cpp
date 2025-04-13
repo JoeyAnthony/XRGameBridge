@@ -41,9 +41,6 @@ namespace XRGameBridge {
         return buffer;
     }
 
-    GB_D3D12Compositor::~GB_D3D12Compositor() {
-    }
-
     bool GB_D3D12Compositor::Initialize(const XrGraphicsBindingD3D12KHR* d3d12, uint32_t back_buffer_count) {
         d3d12_device = d3d12->device;
         command_queue = d3d12->queue;
@@ -74,8 +71,6 @@ namespace XRGameBridge {
             root_parameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
             root_parameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
             root_parameters[2].InitAsConstants(8, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
-
-
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
             if (feature_data.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_1) {
@@ -158,61 +153,7 @@ namespace XRGameBridge {
         samplerDesc.BorderColor;
         d3d12_device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
-        back_buffer_num = back_buffer_count;
-        frame_fence_values.resize(back_buffer_count, 0);
-        command_allocators.resize(back_buffer_count);
-        command_lists.resize(back_buffer_count);
-        for (uint32_t i = 0; i < back_buffer_count; i++) {
-            // Create present command allocator and command list resources
-            res = d3d12_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command_allocators[i]));
-            if (FAILED(res)) {
-                LOG(ERROR) << "D3D12 Error, failed to create command allocator";
-                ThrowIfFailed(res);
-                return false;
-            }
-
-            // TODO use initial pipeline state here later. First check if it works without.
-            res = d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), pipeline_state_opaque.Get(), IID_PPV_ARGS(&command_lists[i]));
-            if (FAILED(res)) {
-                LOG(ERROR) << "D3D12 Error, Failed creating compositor command list";
-                ThrowIfFailed(res);
-                return false;
-            }
-
-            std::wstring name = std::format(L"Compositor Command List {}", i);
-            command_lists[i]->SetName(name.c_str());
-            command_lists[i]->Close();
-        }
-
-        // Create fence
-        d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-        // Create an event handle to use for frame synchronization.
-        fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (fence_event == nullptr) {
-            HRESULT_FROM_WIN32(GetLastError());
-            return false;
-        }
-
         return true;
-    }
-
-    void GB_D3D12Compositor::Destroy() {
-        const uint64_t last_fence_value = fence_value;
-        const uint64_t lastCompletedFence = fence->GetCompletedValue();
-
-        // Signal and increment the fence value.
-        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-        fence_value++;
-
-        // Wait until the previous frame is finished.
-        if (lastCompletedFence < last_fence_value) {
-            ThrowIfFailed(fence->SetEventOnCompletion(last_fence_value, fence_event));
-            WaitForSingleObject(fence_event, INFINITE);
-        }
-
-        ResetCommandLists();
-
-        CloseHandle(fence_event);
     }
 
     bool GB_D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state)
@@ -278,124 +219,7 @@ namespace XRGameBridge {
         return true;
     }
 
-    XrResult GB_D3D12Compositor::RenderFrame(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo) {
-        // Update the frame in flight.
-        frame_in_flight = frame_in_flight++ % back_buffer_num;
-
-        // If the next frame in flight is still rendering wait until it is ready.
-        if (fence->GetCompletedValue() < frame_fence_values[frame_in_flight]) {
-            // Trigger an event when the fence value is updated.
-            ThrowIfFailed(fence->SetEventOnCompletion(frame_fence_values[frame_in_flight], fence_event));
-            // Wait for the event to trigger.
-            WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
-        }
-
-        // TODO Don't want to keep swapchains in the swapchain anymore, either move them to the compositor, or the system.
-        auto& window_swapchain = gb_session.window_swapchain;
-        int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
-        auto& cmd_list = GetCommandList(frame_in_flight);
-        auto& cmd_allocator = GetCommandAllocator(frame_in_flight);
-
-        // Prepare command list
-        cmd_allocator->Reset();
-        cmd_list->Reset(cmd_allocator.Get(), GetPipelineState().Get());
-
-        // Render weaving
-        if (gb_session.should_weave) {
-            RenderFrameWeaving(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_D3D12ProxySwapchain::clear_color);
-        }
-        else {
-            RenderFrameSideBySide(gb_session, frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, GB_D3D12ProxySwapchain::clear_color);
-        }
-
-        // Transition swapchain to present
-        TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
-        // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
-
-        // Close command list
-        cmd_list->Close();
-        ExecuteCommandList(cmd_list.Get());
-
-        // Increase the fence value for the currently executing frame.
-        frame_fence_values[frame_in_flight] = fence_value;
-        // Update the fence value when the GPU is done with execution.
-        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-
-        fence_value++; // This may need to move higher
-
-
-        // Present to window
-        window_swapchain.PresentFrame();
-
-        return XR_SUCCESS;
-    }
-
-    XrResult GB_D3D12Compositor::RenderFrameWeaving(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
-
-        // Set intermediate resource as render target
-        CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(gb_session.intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, gb_session.intermediate_resource.GetRtvDescriptorSize());
-
-        // Compose
-        cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
-        cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
-        cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        // Compose and draw to the intermediate resource
-        ComposeImage(gb_session, frameEndInfo, cmd_list, gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
-
-
-        // Transition intermediate resource to unordered access for the weaver
-        TransitionImage(cmd_list, gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-        // Transition window swapchain to render target
-        TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-
-        // Set window swapchain as render target
-        CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
-        cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
-        cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
-
-
-        // Set viewport for weaving to window swapchain
-        auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[gb_session.system]);
-        D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
-        D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
-        cmd_list->RSSetViewports(1, &view_port);
-        cmd_list->RSSetScissorRects(1, &scissor_rect);
-
-
-        // Do weaving
-        d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
-
-        // Transition to render target
-        TransitionImage(cmd_list, gb_session.intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        return XR_SUCCESS;
-    }
-
-    XrResult GB_D3D12Compositor::RenderFrameSideBySide(GB_Session& gb_session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4]) {
-
-        // Transition to render target
-        TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        // Set window swapchain as render target
-        CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
-
-
-        // Compose
-        cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
-        cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
-        cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        // Compose and draw to the intermediate resource
-        ComposeImage(gb_session, frameEndInfo, cmd_list, gb_session.intermediate_resource.GetWidth(), gb_session.intermediate_resource.GetHeight());
-
-        return XR_SUCCESS;
-    }
-
-    void GB_D3D12Compositor::ComposeImage(GB_Session& session, const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height) {
+    void GB_D3D12Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
         // TODO uses the command queue and the frame struct from endframe to compose the whole frame
         // TODO after that it executes the command list to render to the actual swapchain and set the fences on every proxy swapchain image
 
@@ -406,18 +230,18 @@ namespace XRGameBridge {
         for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
             if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
                 auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-                ComposeProjectionLayer(cmd_list, system_width, system_height, layer);
+                ComposeProjectionLayer(cmd_list, system_width, system_height, layer, new_fence_value);
             }
             else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
                 auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
 
                 // TODO has to be done either after weaving, or also in both views
-                ComposeQuadLayer(cmd_list, system_width, system_height, layer);
+                ComposeQuadLayer(cmd_list, system_width, system_height, layer, new_fence_value);
             }
         }
     }
 
-    void GB_D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
+    void GB_D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
         auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
         // Render every view to the resource
@@ -433,9 +257,9 @@ namespace XRGameBridge {
             auto& rect = view.subImage.imageRect;
 
             auto& proxy_swapchain = g_proxy_swapchains[view.subImage.swapchain];
-            auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
+            auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.GetAwaitedImageIndex()];
             // Set new fence values for the used swapchain image.
-            proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.awaited_frame_index, fence_value);
+            proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.GetAwaitedImageIndex(), new_fence_value);
 
             // Viewport settings
             const float width = static_cast<float>(system_width) / 2;
@@ -487,7 +311,7 @@ namespace XRGameBridge {
             cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
             // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
+            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.GetAwaitedImageIndex(), proxy_swapchain.GetCbcSrvUavDescriptorSize());
             cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
             cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
@@ -501,7 +325,7 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer) {
+    void GB_D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
         // TODO do something with rectangles
         auto& rect = layer->subImage.imageRect;
 
@@ -527,9 +351,9 @@ namespace XRGameBridge {
         }
 
         auto& proxy_swapchain = g_proxy_swapchains[layer->subImage.swapchain];
-        auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.awaited_frame_index];
+        auto proxy_resource = proxy_swapchain.GetBuffers()[proxy_swapchain.GetAwaitedImageIndex()];
         // Set new fence values for the used swapchain image.
-        proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.awaited_frame_index, fence_value);
+        proxy_swapchain.SetReleasedImageFenceValue(proxy_swapchain.GetAwaitedImageIndex(), new_fence_value);
 
        //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -580,7 +404,7 @@ namespace XRGameBridge {
             cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
             // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.awaited_frame_index, proxy_swapchain.cbc_srv_uav_descriptor_size);
+            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain.GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain.GetAwaitedImageIndex(), proxy_swapchain.GetCbcSrvUavDescriptorSize());
             cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
             cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
@@ -590,68 +414,11 @@ namespace XRGameBridge {
         }
     }
 
-    void GB_D3D12Compositor::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
-        ID3D12CommandList* lists[]{ cmd_list };
-        command_queue->ExecuteCommandLists(1, lists);
-    }
-
-    void GB_D3D12Compositor::TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after) {
-        if (state_before == state_after) {
-            return;
-        }
-
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(resource, state_before, state_after);
-        cmd_list->ResourceBarrier(1, &barrier);
-    }
-
-    XrResult GB_D3D12Compositor::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
-        // If the next frame in flight is still rendering wait until it is ready.
-        uint64_t completed_value = fence->GetCompletedValue();
-        if (completed_value < value) {
-            ThrowIfFailed(fence->SetEventOnCompletion(value, fence_event));
-            HRESULT res = WaitForSingleObjectEx(fence_event, ch::duration_cast<ch::milliseconds>(ch::nanoseconds(timeout)).count(), FALSE);
-            if (res == WAIT_TIMEOUT) {
-                return XR_TIMEOUT_EXPIRED;
-            }
-        }
-    }
-
-    void GB_D3D12Compositor::WaitForGpu() {
-        // Schedule a Signal command in the queue.
-        fence_value++;
-        ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-
-        // Wait until the fence has been processed.
-        ThrowIfFailed(fence->SetEventOnCompletion(fence_value, fence_event));
-        WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
-    }
-
-    void GB_D3D12Compositor::ResetCommandLists() {
-        // Reset command lists
-        WaitForGpu();
-
-        for (uint32_t i = 0; i < command_lists.size(); i++) {
-            // Right now initializing with pipeline state opaque
-            command_lists[i]->Reset(command_allocators[i].Get(), pipeline_state_opaque.Get());
-            command_lists[i]->Close();
-            command_allocators[i]->Reset();
-        }
-    }
-
-    uint32_t GB_D3D12Compositor::GetFrameFenceValue(uint32_t frameNumber) {
-        return frame_fence_values[frameNumber];
-    }
-
-    ComPtr<ID3D12GraphicsCommandList>& GB_D3D12Compositor::GetCommandList(uint32_t index) {
-        return command_lists[index];
-    }
-
-    ComPtr<ID3D12CommandAllocator>& GB_D3D12Compositor::GetCommandAllocator(uint32_t index) {
-        return command_allocators[index];
-    }
-
-    ComPtr<ID3D12PipelineState>& GB_D3D12Compositor::GetPipelineState()
+    ComPtr<ID3D12PipelineState>& GB_D3D12Compositor::GetDefaultPipelineState()
     {
         return pipeline_state_opaque;
+    }
+
+    GB_D3D12Compositor::GB_D3D12Compositor() {
     }
 }

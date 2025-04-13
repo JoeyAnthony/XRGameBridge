@@ -43,6 +43,7 @@ add_library(RuntimeOpenXR SHARED
         src/d3d12Renderer.h
         src/d3d12Renderer.cpp
 		src/types.h
+		src/result.h
 
 		${SHADERS}
 

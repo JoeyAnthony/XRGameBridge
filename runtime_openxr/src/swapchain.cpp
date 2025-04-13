@@ -66,7 +66,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     // Create entry in the list
     // TODO should work for different graphics apis
     XRGameBridge::D3D12Renderer* renderer = static_cast<XRGameBridge::D3D12Renderer*>(gb_session.renderer);
-    XRGameBridge::GB_D3D12ProxySwapchain gb_proxy(handle, renderer);
+    XRGameBridge::GB_D3D12ProxySwapchain gb_proxy;
+    gb_proxy.Initialize(handle, renderer);
 
     // Create swap chain
 
@@ -88,7 +89,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 XrResult xrDestroySwapchain(XrSwapchain swapchain) {
     auto& gb_proxy = XRGameBridge::g_proxy_swapchains[swapchain];
 
-    gb_proxy.GetRenderer()->GetCompositor()->ResetCommandLists();
     gb_proxy.DestroyResources();
 
     XRGameBridge::g_proxy_swapchains.erase(swapchain);
@@ -174,7 +174,9 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
 }
 
 namespace XRGameBridge {
-    GB_D3D12ProxySwapchain::GB_D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer) : handle(handle), d3d12_renderer(renderer) {
+    void GB_D3D12ProxySwapchain::Initialize(XrSwapchain handle, D3D12Renderer* renderer) {
+        xr_handle = handle;
+        d3d12_renderer = renderer;
         back_buffer_fence_values.fill(0);
     }
 
@@ -190,7 +192,7 @@ namespace XRGameBridge {
     }
 
     bool GB_D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
-        ID3D12Device* device = d3d12_renderer->d3d12_device.Get();
+        ID3D12Device* device = d3d12_renderer->GetDevice().Get();
 
         HRESULT res = 0;
         // Reinitialize the values in the array
@@ -272,7 +274,7 @@ namespace XRGameBridge {
                     format
                 };
 
-                memcpy(clear_value.Color, clear_color, sizeof(float)*4);
+                memcpy(clear_value.Color, clear_color, sizeof(float) * 4);
 
                 res = device->CreateCommittedResource(
                     &heap_properties,
@@ -292,12 +294,12 @@ namespace XRGameBridge {
 
             // Choose name for debugging
             if (resource_name.empty()) {
-                std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(handle), i);
+                std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(xr_handle), i);
                 name = com_name_prefix + name;
                 proxy_name = name;
             }
             else {
-                std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(handle), i);
+                std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
                 proxy_name = name;
             }
 
@@ -373,9 +375,11 @@ namespace XRGameBridge {
     }
 
     void GB_D3D12ProxySwapchain::DestroyResources() {
+        d3d12_renderer->ResetCommandLists();
+
         GB_Compositor* compositor = d3d12_renderer->GetCompositor();
         for (int32_t i = 0; i < GetBufferCount(); i++) {
-            compositor->WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
+            d3d12_renderer->WaitFenceSwapchain(back_buffer_fence_values[i], XR_INFINITE_DURATION);
             back_buffers[i].Reset();
         }
 
@@ -404,6 +408,14 @@ namespace XRGameBridge {
         return rtv_descriptor_size;
     }
 
+    uint32_t GB_D3D12ProxySwapchain::GetCbcSrvUavDescriptorSize() {
+        return cbc_srv_uav_descriptor_size;
+    }
+
+    uint32_t GB_D3D12ProxySwapchain::GetAwaitedImageIndex() {
+        return awaited_frame_index;
+    }
+
     XrResult GB_D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
         uint32_t next_index = (current_frame_index + 1) % g_back_buffer_count;
 
@@ -425,7 +437,7 @@ namespace XRGameBridge {
             return XR_ERROR_CALL_ORDER_INVALID;
         }
 
-        d3d12_renderer->GetCompositor()->WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
+        d3d12_renderer->WaitFenceSwapchain(back_buffer_fence_values[current_frame_index], timeout);
 
         // Set the image state to render target because we have waited for the image to be freed so it can be used by the application again.
         current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
@@ -475,6 +487,11 @@ namespace XRGameBridge {
 
     Renderer* GB_D3D12ProxySwapchain::GetRenderer() {
         return d3d12_renderer;
+    }
+
+    GB_D3D12ProxySwapchain::GB_D3D12ProxySwapchain(): xr_handle(nullptr), d3d12_renderer(nullptr) {
+        current_image_state.fill(ImageState::IMAGE_STATE_WAITING);
+        back_buffer_fence_values.fill(0);
     }
 
     void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {
@@ -529,8 +546,8 @@ namespace XRGameBridge {
     }
 
     bool GB_D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
-        ID3D12Device* device = d3d12_renderer->d3d12_device.Get();
-        ID3D12CommandQueue* queue = d3d12_renderer->d3d12_command_queue.Get();
+        ID3D12Device* device = d3d12_renderer->GetDevice().Get();
+        ID3D12CommandQueue* queue = d3d12_renderer->GetCommandQueue().Get();
 
         // TODO On failure all objects here should be destroyed
         Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
@@ -616,6 +633,10 @@ namespace XRGameBridge {
         return true;
     }
 
+    void GB_D3D12WindowSwapchain::Initialize(D3D12Renderer* renderer) {
+        d3d12_renderer = renderer;
+    }
+
     std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GB_D3D12WindowSwapchain::GetImages() {
         return back_buffers;
     }
@@ -630,6 +651,10 @@ namespace XRGameBridge {
 
     uint32_t GB_D3D12WindowSwapchain::GetRtvDescriptorSize() {
         return rtv_descriptor_size;
+    }
+
+    uint32_t GB_D3D12WindowSwapchain::GetCbcSrvUavDescriptorSize() {
+        return GetCbcSrvUavDescriptorSize();
     }
 
     uint32_t GB_D3D12WindowSwapchain::AcquireNextImage() {
@@ -647,7 +672,7 @@ namespace XRGameBridge {
         // barrier to render target
     }
 
-    GB_D3D12WindowSwapchain::GB_D3D12WindowSwapchain(D3D12Renderer* renderer) : d3d12_renderer(renderer) {
+    GB_D3D12WindowSwapchain::GB_D3D12WindowSwapchain(): d3d12_renderer(nullptr) {
     }
 
     void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {

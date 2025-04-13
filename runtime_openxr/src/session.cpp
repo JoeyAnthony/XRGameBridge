@@ -69,7 +69,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
     else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
         new_session.renderer = new D3D12Renderer();
-        new_session.renderer->Initialize(gb_instance, createInfo->next);
+        new_session.renderer->Initialize(gb_instance, createInfo->systemId,createInfo->next);
     }
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";

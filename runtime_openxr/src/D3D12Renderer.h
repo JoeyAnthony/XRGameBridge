@@ -6,17 +6,16 @@
 #include "window.h"
 #include "D3D12Renderer.h"
 #include "openxr_includes.h"
-
-// 3D Game Bridge forward declaration
-class DirectX12Weaver;
+#include "weaver_directx_12.h"
 
 namespace XRGameBridge {
     class GB_Instance;
 
     class Renderer {
     public:
+        virtual ~Renderer() = default;
         virtual XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) = 0;
-        virtual void RenderFrame(const XrFrameEndInfo* frameEndInfo) = 0;
+        virtual XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) = 0;
         virtual void EnableSrWindow(bool enable) = 0;
         virtual void EnableWeaving(bool enable = true) = 0;
         virtual void Update() = 0;
@@ -24,37 +23,72 @@ namespace XRGameBridge {
         virtual GB_Compositor* const GetCompositor() = 0;
     };
 
-class D3D12Renderer : public Renderer{
-        const uint8_t backbuffer_count = 2;
-        GB_System gb_system;
+    class D3D12Renderer : public Renderer {
+        const uint8_t back_buffer_count = 2;
+        XrSystemId xr_system;
+        bool should_weave = true;
 
         // Graphics
         GB_D3D12Compositor compositor;
         DirectX12Weaver* d3d12weaver;
-        GB_D3D12ProxySwapchain* intermediate_resource;
+        GB_D3D12ProxySwapchain intermediate_resource;
         // Windowing
         GB_Window window;
         GB_D3D12WindowSwapchain window_swapchain;
 
-        XrResult CreateIntermediateTexture();
-        XrResult CreateWeaver(GB_Instance* instance);
-        XrResult CreateSystemWindow();
-        XrResult CreateWindowSwapchain();
-
-    public:
         // D3D12
         ComPtr<ID3D12Device> d3d12_device;
         ComPtr<ID3D12CommandQueue> d3d12_command_queue;
+        // TODO map holding an array of descriptors for each swapchain handle?
+        std::vector<ComPtr<ID3D12CommandAllocator>> command_allocators;
+        std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
+        // Fence data
+        HANDLE fence_event = nullptr;
+        ComPtr<ID3D12Fence> fence;
+        uint64_t fence_value = 0;
+        std::vector<uint64_t> frame_fence_values;
+        uint8_t frame_in_flight = 0;
 
+
+        // Initialization
+        XrResult CreateIntermediateTexture(GB_System& gb_system);
+        XrResult CreateWeaver(GB_Instance* instance);
+        XrResult CreateSystemWindow(GB_System& gb_system);
+        XrResult CreateWindowSwapchain(GB_System& gb_system);
+        bool CreateCommandLists();
+        bool CreateFenceObjects();
+        bool DestroyFences();
+
+        // Pipeline functions
+        XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
+        XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
+
+        void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
+        void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
+
+    public:
         XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) override;
 
-        void RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
+        XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
         void EnableSrWindow(bool enable) override;
         void EnableWeaving(bool enable = true) override;
         void Update() override;
         GraphicsBackend GetGraphicsBackend() override;
         GB_Compositor* const GetCompositor() override;
 
-        ~D3D12Renderer();
+        /*
+        * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.
+        */
+        XrResult WaitFenceSwapchain(uint32_t value, XrDuration timeout);
+        void WaitForGpu();
+        void ResetCommandLists();
+        uint32_t GetFrameFenceValue(uint32_t frameNumber);
+
+        ComPtr<ID3D12Device>& GetDevice();
+        ComPtr<ID3D12CommandQueue>& GetCommandQueue();
+        ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
+        ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
+
+        ~D3D12Renderer() override;
     };
 }
