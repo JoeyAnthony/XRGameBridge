@@ -40,8 +40,15 @@ add_library(RuntimeOpenXR SHARED
 		src/dxhelpers.cpp
 		src/srhelpers.h
 		src/srhelpers.cpp
-        src/d3d12Renderer.h
-        src/d3d12Renderer.cpp
+		src/xrrendering.h
+        src/d3d12renderer.h
+        src/d3d12renderer.cpp
+		src/d3d11renderer.h
+		src/d3d11renderer.cpp
+		src/d3d11compositor.h
+		src/d3d11compositor.cpp
+		src/d3d11swapchain.h
+		src/d3d11swapchain.cpp
 		src/types.h
 		src/result.h
 

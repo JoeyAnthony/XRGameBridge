@@ -41,14 +41,6 @@ inline void ThrowIfFailed(HRESULT hr) {
 // Extra
 #include "easylogging++.h"
 
-namespace XRGameBridge {
-    // Data types
-    struct GBVector2i {
-        uint64_t x;
-        uint64_t y;
-    };
-}
-
 #ifdef WIN32
     // Declare functions here so system.h doesn't have to be included in openxr_includes.h
     XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time);

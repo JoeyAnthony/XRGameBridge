@@ -5,7 +5,7 @@
 
 #include "openxr_includes.h"
 
-inline XrResult xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE]) { LOG(INFO) << "Called " << __func__;return XR_ERROR_RUNTIME_FAILURE;}
+inline XrResult xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE]) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
 inline XrResult xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[XR_MAX_STRUCTURE_NAME_SIZE]) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
 
 
@@ -36,79 +36,78 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 //XrResult xrGetDisplayRefreshRateFB(XrSession session, float* displayRefreshRate);
 //XrResult xrRequestDisplayRefreshRateFB(XrSession session, float displayRefreshRate);
 
-namespace XRGameBridge {
-    const std::unordered_map<std::string, PFN_xrVoidFunction> openxr_functions {
-        { "rGetInstanceProcAddr",                       reinterpret_cast<PFN_xrVoidFunction>(xrGetInstanceProcAddr)},
-        { "xrEnumerateInstanceExtensionProperties",     reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateInstanceExtensionProperties) },
-        { "xrCreateInstance",                           reinterpret_cast<PFN_xrVoidFunction>(xrCreateInstance) },
-        { "xrDestroyInstance",                          reinterpret_cast<PFN_xrVoidFunction>(xrDestroyInstance) },
-        { "xrGetInstanceProperties",                    reinterpret_cast<PFN_xrVoidFunction>(xrGetInstanceProperties) },
-        { "xrPollEvent",                                reinterpret_cast<PFN_xrVoidFunction>(xrPollEvent) },
-        { "xrResultToString",                           reinterpret_cast<PFN_xrVoidFunction>(xrResultToString) },
-        { "xrStructureTypeToString",                    reinterpret_cast<PFN_xrVoidFunction>(xrStructureTypeToString) },
-        { "xrGetSystem",                                reinterpret_cast<PFN_xrVoidFunction>(xrGetSystem) },
-        { "xrGetSystemProperties",                      reinterpret_cast<PFN_xrVoidFunction>(xrGetSystemProperties) },
-        { "xrEnumerateEnvironmentBlendModes",           reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateEnvironmentBlendModes) },
-        { "xrCreateSession",                            reinterpret_cast<PFN_xrVoidFunction>(xrCreateSession) },
-        { "xrDestroySession",                           reinterpret_cast<PFN_xrVoidFunction>(xrDestroySession) },
-        { "xrEnumerateReferenceSpaces",                 reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateReferenceSpaces) },
-        { "xrCreateReferenceSpace",                     reinterpret_cast<PFN_xrVoidFunction>(xrCreateReferenceSpace) },
-        { "xrGetReferenceSpaceBoundsRect",              reinterpret_cast<PFN_xrVoidFunction>(xrGetReferenceSpaceBoundsRect) },
-        { "xrCreateActionSpace",                        reinterpret_cast<PFN_xrVoidFunction>(xrCreateActionSpace) },
-        { "xrLocateSpace",                              reinterpret_cast<PFN_xrVoidFunction>(xrLocateSpace) },
-        { "xrDestroySpace",                             reinterpret_cast<PFN_xrVoidFunction>(xrDestroySpace) },
-        { "xrEnumerateViewConfigurations",              reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateViewConfigurations) },
-        { "xrGetViewConfigurationProperties",           reinterpret_cast<PFN_xrVoidFunction>(xrGetViewConfigurationProperties) },
-        { "xrEnumerateViewConfigurationViews",          reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateViewConfigurationViews) },
-        { "xrEnumerateSwapchainFormats",                reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainFormats) },
-        { "xrCreateSwapchain",                          reinterpret_cast<PFN_xrVoidFunction>(xrCreateSwapchain) },
-        { "xrDestroySwapchain",                         reinterpret_cast<PFN_xrVoidFunction>(xrDestroySwapchain) },
-        { "xrEnumerateSwapchainImages",                 reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainImages) },
-        { "xrAcquireSwapchainImage",                    reinterpret_cast<PFN_xrVoidFunction>(xrAcquireSwapchainImage) },
-        { "xrWaitSwapchainImage",                       reinterpret_cast<PFN_xrVoidFunction>(xrWaitSwapchainImage) },
-        { "xrReleaseSwapchainImage",                    reinterpret_cast<PFN_xrVoidFunction>(xrReleaseSwapchainImage) },
-        { "xrBeginSession",                             reinterpret_cast<PFN_xrVoidFunction>(xrBeginSession) },
-        { "xrEndSession",                               reinterpret_cast<PFN_xrVoidFunction>(xrEndSession) },
-        { "xrRequestExitSession",                       reinterpret_cast<PFN_xrVoidFunction>(xrRequestExitSession) },
-        { "xrWaitFrame",                                reinterpret_cast<PFN_xrVoidFunction>(xrWaitFrame) },
-        { "xrBeginFrame",                               reinterpret_cast<PFN_xrVoidFunction>(xrBeginFrame) },
-        { "xrEndFrame",                                 reinterpret_cast<PFN_xrVoidFunction>(xrEndFrame) },
-        { "xrLocateViews",                              reinterpret_cast<PFN_xrVoidFunction>(xrLocateViews) },
-        { "xrStringToPath",                             reinterpret_cast<PFN_xrVoidFunction>(xrStringToPath) },
-        { "xrPathToString",                             reinterpret_cast<PFN_xrVoidFunction>(xrPathToString) },
-        { "xrCreateActionSet",                          reinterpret_cast<PFN_xrVoidFunction>(xrCreateActionSet) },
-        { "xrDestroyActionSet",                         reinterpret_cast<PFN_xrVoidFunction>(xrDestroyActionSet) },
-        { "xrCreateAction",                             reinterpret_cast<PFN_xrVoidFunction>(xrCreateAction) },
-        { "xrDestroyAction",                            reinterpret_cast<PFN_xrVoidFunction>(xrDestroyAction) },
-        { "xrSuggestInteractionProfileBindings",        reinterpret_cast<PFN_xrVoidFunction>(xrSuggestInteractionProfileBindings) },
-        { "xrAttachSessionActionSets",                  reinterpret_cast<PFN_xrVoidFunction>(xrAttachSessionActionSets) },
-        { "xrGetCurrentInteractionProfile",             reinterpret_cast<PFN_xrVoidFunction>(xrGetCurrentInteractionProfile) },
-        { "xrGetActionStateBoolean",                    reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateBoolean) },
-        { "xrGetActionStateFloat",                      reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateFloat) },
-        { "xrGetActionStateVector2f",                   reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateVector2f) },
-        { "xrGetActionStatePose",                       reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStatePose) },
-        { "xrSyncActions",                              reinterpret_cast<PFN_xrVoidFunction>(xrSyncActions) },
-        { "xrEnumerateBoundSourcesForAction",           reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateBoundSourcesForAction) },
-        { "xrGetInputSourceLocalizedName",              reinterpret_cast<PFN_xrVoidFunction>(xrGetInputSourceLocalizedName) },
-        { "xrApplyHapticFeedback",                      reinterpret_cast<PFN_xrVoidFunction>(xrApplyHapticFeedback) },
-        { "xrStopHapticFeedback",                       reinterpret_cast<PFN_xrVoidFunction>(xrStopHapticFeedback) },
-        { "xrConvertWin32PerformanceCounterToTimeKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertWin32PerformanceCounterToTimeKHR) },
-        { "xrConvertTimeToWin32PerformanceCounterKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertTimeToWin32PerformanceCounterKHR) },
+
+const std::unordered_map<std::string, PFN_xrVoidFunction> openxr_functions {
+    { "rGetInstanceProcAddr", reinterpret_cast<PFN_xrVoidFunction>(xrGetInstanceProcAddr)},
+    { "xrEnumerateInstanceExtensionProperties",     reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateInstanceExtensionProperties) },
+    { "xrCreateInstance",                           reinterpret_cast<PFN_xrVoidFunction>(xrCreateInstance) },
+    { "xrDestroyInstance",                          reinterpret_cast<PFN_xrVoidFunction>(xrDestroyInstance) },
+    { "xrGetInstanceProperties",                    reinterpret_cast<PFN_xrVoidFunction>(xrGetInstanceProperties) },
+    { "xrPollEvent",                                reinterpret_cast<PFN_xrVoidFunction>(xrPollEvent) },
+    { "xrResultToString",                           reinterpret_cast<PFN_xrVoidFunction>(xrResultToString) },
+    { "xrStructureTypeToString",                    reinterpret_cast<PFN_xrVoidFunction>(xrStructureTypeToString) },
+    { "xrGetSystem",                                reinterpret_cast<PFN_xrVoidFunction>(xrGetSystem) },
+    { "xrGetSystemProperties",                      reinterpret_cast<PFN_xrVoidFunction>(xrGetSystemProperties) },
+    { "xrEnumerateEnvironmentBlendModes",           reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateEnvironmentBlendModes) },
+    { "xrCreateSession",                            reinterpret_cast<PFN_xrVoidFunction>(xrCreateSession) },
+    { "xrDestroySession",                           reinterpret_cast<PFN_xrVoidFunction>(xrDestroySession) },
+    { "xrEnumerateReferenceSpaces",                 reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateReferenceSpaces) },
+    { "xrCreateReferenceSpace",                     reinterpret_cast<PFN_xrVoidFunction>(xrCreateReferenceSpace) },
+    { "xrGetReferenceSpaceBoundsRect",              reinterpret_cast<PFN_xrVoidFunction>(xrGetReferenceSpaceBoundsRect) },
+    { "xrCreateActionSpace",                        reinterpret_cast<PFN_xrVoidFunction>(xrCreateActionSpace) },
+    { "xrLocateSpace",                              reinterpret_cast<PFN_xrVoidFunction>(xrLocateSpace) },
+    { "xrDestroySpace",                             reinterpret_cast<PFN_xrVoidFunction>(xrDestroySpace) },
+    { "xrEnumerateViewConfigurations",              reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateViewConfigurations) },
+    { "xrGetViewConfigurationProperties",           reinterpret_cast<PFN_xrVoidFunction>(xrGetViewConfigurationProperties) },
+    { "xrEnumerateViewConfigurationViews",          reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateViewConfigurationViews) },
+    { "xrEnumerateSwapchainFormats",                reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainFormats) },
+    { "xrCreateSwapchain",                          reinterpret_cast<PFN_xrVoidFunction>(xrCreateSwapchain) },
+    { "xrDestroySwapchain",                         reinterpret_cast<PFN_xrVoidFunction>(xrDestroySwapchain) },
+    { "xrEnumerateSwapchainImages",                 reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainImages) },
+    { "xrAcquireSwapchainImage",                    reinterpret_cast<PFN_xrVoidFunction>(xrAcquireSwapchainImage) },
+    { "xrWaitSwapchainImage",                       reinterpret_cast<PFN_xrVoidFunction>(xrWaitSwapchainImage) },
+    { "xrReleaseSwapchainImage",                    reinterpret_cast<PFN_xrVoidFunction>(xrReleaseSwapchainImage) },
+    { "xrBeginSession",                             reinterpret_cast<PFN_xrVoidFunction>(xrBeginSession) },
+    { "xrEndSession",                               reinterpret_cast<PFN_xrVoidFunction>(xrEndSession) },
+    { "xrRequestExitSession",                       reinterpret_cast<PFN_xrVoidFunction>(xrRequestExitSession) },
+    { "xrWaitFrame",                                reinterpret_cast<PFN_xrVoidFunction>(xrWaitFrame) },
+    { "xrBeginFrame",                               reinterpret_cast<PFN_xrVoidFunction>(xrBeginFrame) },
+    { "xrEndFrame",                                 reinterpret_cast<PFN_xrVoidFunction>(xrEndFrame) },
+    { "xrLocateViews",                              reinterpret_cast<PFN_xrVoidFunction>(xrLocateViews) },
+    { "xrStringToPath",                             reinterpret_cast<PFN_xrVoidFunction>(xrStringToPath) },
+    { "xrPathToString",                             reinterpret_cast<PFN_xrVoidFunction>(xrPathToString) },
+    { "xrCreateActionSet",                          reinterpret_cast<PFN_xrVoidFunction>(xrCreateActionSet) },
+    { "xrDestroyActionSet",                         reinterpret_cast<PFN_xrVoidFunction>(xrDestroyActionSet) },
+    { "xrCreateAction",                             reinterpret_cast<PFN_xrVoidFunction>(xrCreateAction) },
+    { "xrDestroyAction",                            reinterpret_cast<PFN_xrVoidFunction>(xrDestroyAction) },
+    { "xrSuggestInteractionProfileBindings",        reinterpret_cast<PFN_xrVoidFunction>(xrSuggestInteractionProfileBindings) },
+    { "xrAttachSessionActionSets",                  reinterpret_cast<PFN_xrVoidFunction>(xrAttachSessionActionSets) },
+    { "xrGetCurrentInteractionProfile",             reinterpret_cast<PFN_xrVoidFunction>(xrGetCurrentInteractionProfile) },
+    { "xrGetActionStateBoolean",                    reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateBoolean) },
+    { "xrGetActionStateFloat",                      reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateFloat) },
+    { "xrGetActionStateVector2f",                   reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateVector2f) },
+    { "xrGetActionStatePose",                       reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStatePose) },
+    { "xrSyncActions",                              reinterpret_cast<PFN_xrVoidFunction>(xrSyncActions) },
+    { "xrEnumerateBoundSourcesForAction",           reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateBoundSourcesForAction) },
+    { "xrGetInputSourceLocalizedName",              reinterpret_cast<PFN_xrVoidFunction>(xrGetInputSourceLocalizedName) },
+    { "xrApplyHapticFeedback",                      reinterpret_cast<PFN_xrVoidFunction>(xrApplyHapticFeedback) },
+    { "xrStopHapticFeedback",                       reinterpret_cast<PFN_xrVoidFunction>(xrStopHapticFeedback) },
+    { "xrConvertWin32PerformanceCounterToTimeKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertWin32PerformanceCounterToTimeKHR) },
+    { "xrConvertTimeToWin32PerformanceCounterKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertTimeToWin32PerformanceCounterKHR) },
 
         // Graphics extensions
-        { "xrGetD3D11GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D11GraphicsRequirementsKHR) },
-        { "xrGetD3D12GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D12GraphicsRequirementsKHR) }
-    };
+    { "xrGetD3D11GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D11GraphicsRequirementsKHR) },
+    { "xrGetD3D12GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D12GraphicsRequirementsKHR) }
+};
 
-    const std::vector<XrExtensionProperties> supported_extensions{
-        // Microsoft Windows extensions
-        { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME, XR_EXT_win32_appcontainer_compatible_SPEC_VERSION },
-        { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME, XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION },
-        { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME, XR_KHR_composition_layer_depth_SPEC_VERSION },
+const std::vector<XrExtensionProperties> supported_extensions{
+    // Microsoft Windows extensions
+    { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME, XR_EXT_win32_appcontainer_compatible_SPEC_VERSION },
+    { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME, XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION },
+    { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME, XR_KHR_composition_layer_depth_SPEC_VERSION },
 
         // Graphics Extensions
-        { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_KHR_D3D11_enable_SPEC_VERSION },
-        { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D12_ENABLE_EXTENSION_NAME, XR_KHR_D3D12_enable_SPEC_VERSION },
+    { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_KHR_D3D11_enable_SPEC_VERSION },
+    { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D12_ENABLE_EXTENSION_NAME, XR_KHR_D3D12_enable_SPEC_VERSION },
         //{ XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME, XR_KHR_vulkan_enable2_SPEC_VERSION }
-    };
-}
+};

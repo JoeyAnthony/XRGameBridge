@@ -25,8 +25,6 @@
 //
 //} static g_openxr_stuff;
 
-using namespace XRGameBridge;
-
 XrResult xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoidFunction* function) {
     try {
         *function = openxr_functions.at(name);
@@ -192,7 +190,7 @@ XrResult xrDestroyInstance(XrInstance instance) {
     // Delete systems
     // TODO Make the instance destroy all owned objects here as well
 
-    delete XRGameBridge::g_xr_instance;
+    delete g_xr_instance;
 
     LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
 }
@@ -475,7 +473,7 @@ XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrIntera
 
 XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile) {
     std::string string_path = g_xrpath_storage[topLevelUserPath];
-    if(std::find(XRGameBridge::g_supported_paths.begin(), XRGameBridge::g_supported_paths.end(), string_path) == XRGameBridge::g_supported_paths.end())
+    if(std::find(g_supported_paths.begin(), g_supported_paths.end(), string_path) == g_supported_paths.end())
     {
         return XR_ERROR_PATH_UNSUPPORTED;
     }
@@ -503,11 +501,11 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     return XR_ERROR_RUNTIME_FAILURE;
 }
 
-void XRGameBridge::InitializeSystems(XrInstance instance) {
+void InitializeSystems(XrInstance instance) {
     CreateXrGameBridgeSystems(instance);
 };
 
-XRGameBridge::GB_Instance::GB_Instance() {
+GB_Instance::GB_Instance() {
     // Set dpi awareness for the application
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
     InitializeSR();
@@ -535,7 +533,7 @@ XRGameBridge::GB_Instance::GB_Instance() {
 
 }
 
-XRGameBridge::GB_Instance::~GB_Instance() {
+GB_Instance::~GB_Instance() {
     delete gamebridge_instance;
     delete platform_manager;
 
@@ -555,7 +553,7 @@ XRGameBridge::GB_Instance::~GB_Instance() {
     //delete window_hook;
 }
 
-void XRGameBridge::GB_Instance::InitializeSR() {
+void GB_Instance::InitializeSR() {
     gamebridge_instance = new GameBridge(EventManager());
 
     SRPlatformManagerInitialize params{};
@@ -566,7 +564,7 @@ void XRGameBridge::GB_Instance::InitializeSR() {
     }
 }
 
-XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
+XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::undefined) {
         active_graphics_backend = api;
         return XR_SUCCESS;
@@ -577,22 +575,22 @@ XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     }
 }
 
-GameBridge* XRGameBridge::GB_Instance::GetGameBridgeInstance() {
+GameBridge* GB_Instance::GetGameBridgeInstance() {
     return gamebridge_instance;
 }
 
-PlatformManager* XRGameBridge::GB_Instance::GetPlatformManager() {
+PlatformManager* GB_Instance::GetPlatformManager() {
     return platform_manager;
 }
 
-std::string XRGameBridge::GB_Instance::GetRuntimeName() {
+std::string GB_Instance::GetRuntimeName() {
     return runtime_name;
 }
 
-uint64_t XRGameBridge::GB_Instance::GetRuntimeVersion() {
+uint64_t GB_Instance::GetRuntimeVersion() {
     return runtime_version;
 }
 
-GraphicsBackend XRGameBridge::GB_Instance::GetActiveGraphicsAPI() {
+GraphicsBackend GB_Instance::GetActiveGraphicsAPI() {
     return active_graphics_backend;
 }

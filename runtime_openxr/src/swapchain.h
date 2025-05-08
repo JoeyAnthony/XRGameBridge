@@ -4,6 +4,7 @@
 #include <array>
 
 #include "openxr_includes.h"
+#include "xrrendering.h"
 
 XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityInput, uint32_t* formatCountOutput, int64_t* formats);
 XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* createInfo, XrSwapchain* swapchain);
@@ -14,149 +15,117 @@ XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAc
 XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo* waitInfo);
 XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo);
 
-namespace XRGameBridge {
-    class Renderer;
-    class D3D12Renderer;
+class D3D12Renderer;
 
-    enum ImageState {
-        IMAGE_STATE_WAITING,
-        IMAGE_STATE_RELEASED,
+enum ImageState {
+    IMAGE_STATE_WAITING,
+    IMAGE_STATE_RELEASED,
 
-        IMAGE_STATE_ACQUIRED,
-        IMAGE_STATE_RENDER_TARGET,
-        IMAGE_STATE_WEAVING,
-        IMAGE_STATE_DONE_WEAVING
-    };
+    IMAGE_STATE_ACQUIRED,
+    IMAGE_STATE_RENDER_TARGET,
+    IMAGE_STATE_WEAVING,
+    IMAGE_STATE_DONE_WEAVING
+};
 
-    // Back buffer count
-    //TODO make this const inside the class and mutable through the constructor
-    constexpr unsigned short g_back_buffer_count = 2;
+//TODO make this const inside the class and mutable through the constructor
+class D3D12ProxySwapchain : public ProxySwapchain {
+    XrSwapchain xr_handle;
+    D3D12Renderer* d3d12_renderer;
 
-    class GB_ProxySwapchain {
-    public:
-        virtual ~GB_ProxySwapchain() = default;
+    std::wstring proxy_name;
+    bool is_depth_resource = false;
 
-    private:
-        virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") = 0;
-        virtual void DestroyResources() = 0;
+    std::array<ComPtr<ID3D12Resource>, back_buffer_count> back_buffers;
+    ComPtr<ID3D12DescriptorHeap> rtv_heap;
+    ComPtr<ID3D12DescriptorHeap> srv_heap;
 
-        // Returns the oldest image index
-        virtual XrResult AcquireNextImage(uint32_t& index) = 0;
+    uint32_t rtv_descriptor_size = 0;
+    uint32_t cbc_srv_uav_descriptor_size = 0;
+    uint32_t resolution_x = 0;
+    uint32_t resolution_y = 0;
 
-        // Waits for an image that has been weaved
-        virtual XrResult WaitForImage(const XrDuration& timeout) = 0;
+    D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
+    uint32_t current_frame_index = 0;
+    uint32_t awaited_frame_index = 0;
+    uint32_t released_frame_index = 0;
+    std::array<ImageState, back_buffer_count> current_image_state;
+    uint64_t previous_fence_value = 0;
 
-        // Make the image available for weaving
-        virtual XrResult ReleaseImage() = 0;
+    // Fence values per image to check for
+    std::array<uint32_t, back_buffer_count> back_buffer_fence_values;
 
-        virtual uint32_t GetWidth() = 0;
-        virtual uint32_t GetHeight() = 0;
-        virtual uint32_t GetBufferCount() = 0;
+public:
+    void Initialize(XrSwapchain handle, D3D12Renderer* renderer);
 
-        virtual void SetReleasedImageFenceValue(uint32_t frameNum, uint64_t fenceValue) = 0;
+    // Overriden initializer
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
+    // Resource initializer
+    bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
 
-        virtual Renderer* GetRenderer() = 0;
-    };
+    std::array<ComPtr<ID3D12Resource>, back_buffer_count> GetBuffers();
 
-    class GB_D3D12ProxySwapchain: public GB_ProxySwapchain {
-        XrSwapchain xr_handle;
-        D3D12Renderer* d3d12_renderer;
+    // Interface functions
+    void DestroyResources() override;
+    // Returns the oldest image index
+    XrResult AcquireNextImage(uint32_t& index) override;
+    // Waits for an image that has been weaved
+    XrResult WaitForImage(const XrDuration& timeout) override;
+    // Make the image available for weaving
+    XrResult ReleaseImage() override;
+    uint32_t GetWidth() override;
+    uint32_t GetHeight() override;
+    size_t GetBufferCount() override;
+    void SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value);
 
-        std::wstring proxy_name;
-        bool is_depth_resource = false;
+    ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
+    ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
+    [[nodiscard]] uint32_t GetRtvDescriptorSize() const;
+    [[nodiscard]] uint32_t GetCbcSrvUavDescriptorSize() const;
+    [[nodiscard]] uint32_t GetAwaitedImageIndex() const;
 
-        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
-        ComPtr<ID3D12DescriptorHeap> rtv_heap;
-        ComPtr<ID3D12DescriptorHeap> srv_heap;
+    Renderer* GetRenderer() override;
 
-        uint32_t rtv_descriptor_size = 0;
-        uint32_t cbc_srv_uav_descriptor_size = 0;
-        uint32_t resolution_x = 0;
-        uint32_t resolution_y = 0;
+    D3D12ProxySwapchain();
 
-        D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
-        uint32_t current_frame_index = 0;
-        uint32_t awaited_frame_index = 0;
-        uint32_t released_frame_index = 0;
-        std::array<ImageState, g_back_buffer_count> current_image_state;
-        uint64_t previous_fence_value = 0;
+    static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
+};
 
-        // Fence values per image to check for
-        std::array<uint32_t, g_back_buffer_count> back_buffer_fence_values;
+class GB_GraphicsDevice {
+public:
+    static void CreateDXGIFactory(IDXGIFactory4** factory);
+    static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+};
 
-    public:
-        void Initialize(XrSwapchain handle, D3D12Renderer* renderer);
+class GB_D3D12WindowSwapchain {
+    D3D12Renderer* d3d12_renderer;
 
-        // Overriden initializer
-        bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
-        // Resource initializer
-        bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
+    ComPtr<IDXGISwapChain3> swap_chain;
+    ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+    ComPtr<ID3D12DescriptorHeap> m_srvHeap;
+    std::array<ComPtr<ID3D12Resource>, back_buffer_count> back_buffers;
 
-        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetBuffers();
+    D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
+    uint32_t rtv_descriptor_size = 0;
+    uint32_t frame_index = 0;
 
-        // Interface functions
-        void DestroyResources() override;
-        // Returns the oldest image index
-        XrResult AcquireNextImage(uint32_t& index) override;
-        // Waits for an image that has been weaved
-        XrResult WaitForImage(const XrDuration& timeout) override;
-        // Make the image available for weaving
-        XrResult ReleaseImage() override;
-        uint32_t GetWidth() override;
-        uint32_t GetHeight() override;
-        uint32_t GetBufferCount() override;
-        void SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) override;
+public:
+    void Initialize(D3D12Renderer* renderer);
 
-        ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
-        ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
-        uint32_t GetRtvDescriptorSize();
-        uint32_t GetCbcSrvUavDescriptorSize();
-        uint32_t GetAwaitedImageIndex();
+    // Creates device
+    bool CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd);
 
-        Renderer* GetRenderer() override;
+    std::array<ComPtr<ID3D12Resource>, back_buffer_count> GetImages();
+    ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
+    ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
+    uint32_t GetRtvDescriptorSize();
+    uint32_t GetCbcSrvUavDescriptorSize();
+    uint32_t AcquireNextImage();
+    void PresentFrame();
 
-        GB_D3D12ProxySwapchain();
+    GB_D3D12WindowSwapchain();
+};
 
-        static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
-    };
+void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states);
 
-    class GB_GraphicsDevice {
-    public:
-        static void CreateDXGIFactory(IDXGIFactory4** factory);
-        static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
-    };
-
-    class GB_D3D12WindowSwapchain {
-        D3D12Renderer* d3d12_renderer;
-
-        ComPtr<IDXGISwapChain3> swap_chain;
-        ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
-        ComPtr<ID3D12DescriptorHeap> m_srvHeap;
-        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> back_buffers;
-
-        D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
-        uint32_t rtv_descriptor_size = 0;
-        uint32_t frame_index = 0;
-
-    public:
-        void Initialize(D3D12Renderer* renderer);
-
-        // Creates device
-        bool CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd);
-
-        std::array<ComPtr<ID3D12Resource>, g_back_buffer_count> GetImages();
-        ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
-        ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
-        uint32_t GetRtvDescriptorSize();
-        uint32_t GetCbcSrvUavDescriptorSize();
-        uint32_t AcquireNextImage();
-        void PresentFrame();
-
-        GB_D3D12WindowSwapchain();
-    };
-
-    void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states);
-
-    // Global of swapchains
-    inline std::unordered_map<XrSwapchain, GB_D3D12ProxySwapchain> g_proxy_swapchains;
-}
+// Global of swapchains
+inline std::unordered_map<XrSwapchain, ProxySwapchain*> g_proxy_swapchains;

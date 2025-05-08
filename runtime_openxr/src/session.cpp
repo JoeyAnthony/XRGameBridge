@@ -11,14 +11,13 @@
 #include "system.h"
 #include "settings.h"
 #include "compositor.h"
+#include "d3d11renderer.h"
 #include "swapchain.h"
-
-using namespace XRGameBridge;
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
     GB_System& system = g_systems[createInfo->systemId];
     LOG(INFO) << "Creating session: " << session_creation_count;
 
@@ -35,7 +34,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Create entry if it doesn't exist
     // Note: This means it overwrite all except for the id member it if it does exist
     XrSession handle = reinterpret_cast<XrSession>(session_creation_count);
-    XRGameBridge::GB_Session& new_session = XRGameBridge::g_sessions[handle];
+    GB_Session& new_session = g_sessions[handle];
 
     // Initialize session with state idle
     new_session.id = handle;
@@ -64,12 +63,13 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
     // Create Renderer
-    if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
-        return XR_ERROR_RUNTIME_FAILURE;
-    }
-    else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
+    if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
         new_session.renderer = new D3D12Renderer();
         new_session.renderer->Initialize(gb_instance, createInfo->systemId,createInfo->next);
+    }
+    else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
+        new_session.renderer = new D3D11Renderer();
+        new_session.renderer->Initialize(gb_instance, createInfo->systemId, createInfo->next);
     }
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";
@@ -78,16 +78,16 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 
     // Get hot-key event stream reader
     new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstance()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
 
     *session = handle;
     session_creation_count++;
@@ -106,12 +106,12 @@ XrResult xrDestroySession(XrSession session) {
     // TODO Should probably destroy all objects related to a session.
     // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.
     // Also action sets/g_actions attached to the session should be destroyed
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
 
     gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
 
     try {
-        XRGameBridge::g_sessions.erase(session);
+        g_sessions.erase(session);
     }
     catch (std::exception& e) {
         LOG(ERROR) << "" << e.what();
@@ -127,9 +127,9 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // TODO check if view configuration type is supported
     // TODO, move SESSION_READY logic to here, check here whether all components are initialized for the session to be put on READY.
 
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
+    GB_Session& gb_session = g_sessions[session];
+    GB_System& gb_system = g_systems[gb_session.system];
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
 
     gb_session.idle_thread.join();
 
@@ -145,9 +145,9 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
     // Send all state changes
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
 
     // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
     gb_session.should_render = true;
@@ -156,7 +156,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 }
 
 XrResult xrEndSession(XrSession session) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
 
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED & XR_SESSION_STATE_STOPPING == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
@@ -169,7 +169,7 @@ XrResult xrEndSession(XrSession session) {
     }
 
     // Reset state
-    gb_session.wait_frame_state = XRGameBridge::NewFrameAllowed;
+    gb_session.wait_frame_state = NewFrameAllowed;
     gb_session.waited_frame = 0;
     gb_session.started_frame = 0;
     gb_session.end_frame_called = 0;
@@ -180,8 +180,8 @@ XrResult xrEndSession(XrSession session) {
 
     // Change session state to idle
     if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
-        XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
-        XRGameBridge::UpdateSession(gb_session);
+        ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
+        UpdateSession(gb_session);
 
         // Start Session Idle thread
         gb_session.StartSessionIdle();
@@ -191,13 +191,13 @@ XrResult xrEndSession(XrSession session) {
 }
 
 XrResult xrRequestExitSession(XrSession session) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
     }
 
     // Change session state to stopping
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
     ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
 
@@ -207,14 +207,14 @@ XrResult xrRequestExitSession(XrSession session) {
 // TODO Use frame display time as frame ids
 XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, XrFrameState* frameState) {
     // TODO simple implementation so the application can continue. Should when I understand this part better
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
     bool should_wait = true;
 
     // Blocking wait, blocks until BeginFrame was called
     while (should_wait) {
         if (gb_session.mutex_wait_frame_state.try_lock()) {
-            if (gb_session.wait_frame_state == XRGameBridge::NewFrameAllowed) {
-                gb_session.wait_frame_state = XRGameBridge::NewFrameBusy;
+            if (gb_session.wait_frame_state == NewFrameAllowed) {
+                gb_session.wait_frame_state = NewFrameBusy;
                 break;
             }
             gb_session.mutex_wait_frame_state.unlock();
@@ -238,7 +238,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
     // Time since the epoch the application is running now, add the refresh rate to predict the time the next image will be displayed.
     auto display_time = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate);
 
-    XRGameBridge::UpdateSession(gb_session);
+    UpdateSession(gb_session);
 
     frameState->predictedDisplayPeriod = display_period.count();
     frameState->predictedDisplayTime = display_time.count();
@@ -254,7 +254,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 }
 
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
 
     std::lock_guard guard(gb_session.mutex_wait_frame_state);
 
@@ -266,7 +266,7 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
         // Skip frame
         // TODO If no layers are provided then the display must be cleared.
         gb_session.started_frame = 0;
-        gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+        gb_session.wait_frame_state = FrameState::NewFrameAllowed;
         return XR_FRAME_DISCARDED;
     }
 
@@ -275,11 +275,11 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
         LOG(WARNING) << "Previous frame is later than current";
     }
 
-    if (gb_session.wait_frame_state != XRGameBridge::NewFrameBusy) {
+    if (gb_session.wait_frame_state != NewFrameBusy) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
 
-    gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+    gb_session.wait_frame_state = FrameState::NewFrameAllowed;
     gb_session.started_frame = gb_session.waited_frame;
 
     gb_session.end_frame_called = false;
@@ -295,7 +295,7 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
 
     if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
@@ -331,11 +331,11 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-void XRGameBridge::GB_Session::StartSessionIdle() {
+void GB_Session::StartSessionIdle() {
     idle_thread = std::thread(&GB_Session::IdleFunc, this);
 }
 
-void XRGameBridge::GB_Session::IdleFunc() {
+void GB_Session::IdleFunc() {
     while (session_state == XR_SESSION_STATE_IDLE) {
         if (g_proxy_swapchains.size() > 0) {
             ChangeSessionState(*this, XR_SESSION_STATE_READY);
@@ -347,7 +347,7 @@ void XRGameBridge::GB_Session::IdleFunc() {
     }
 }
 
-void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {
+void ChangeSessionState(GB_Session& session, XrSessionState state) {
     if (session.session_state == state) {
         return;
     }
@@ -356,9 +356,9 @@ void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state)
     session.session_state_queue.push_back(state);
 }
 
-void XRGameBridge::UpdateSession(GB_Session& session) {
+void UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
     EventManager& event_manager = gb_instance->GetGameBridgeInstance()->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
@@ -497,7 +497,7 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     }
 }
 
-void XRGameBridge::SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
+void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
 {
     if (index > session.views.size() - 1) {
         LOG(WARNING) << "Session view array index out of bounds";
@@ -507,7 +507,7 @@ void XRGameBridge::SetXrViewPose(GB_Session& session, uint32_t index, const XrPo
     session.views[index].pose = pose;
 }
 
-void XRGameBridge::SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
+void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
 {
     if (index > session.views.size() - 1) {
         LOG(WARNING) << "Session view array index out of bounds";
