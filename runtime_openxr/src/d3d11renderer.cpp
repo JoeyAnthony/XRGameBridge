@@ -39,7 +39,7 @@ void D3D11Renderer::Update() {
 GraphicsBackend D3D11Renderer::GetGraphicsBackend() {
 }
 
-GB_Compositor* const D3D11Renderer::GetCompositor() {
+Compositor* const D3D11Renderer::GetCompositor() {
 }
 
 ID3D11Device* D3D11Renderer::GetDevice() {

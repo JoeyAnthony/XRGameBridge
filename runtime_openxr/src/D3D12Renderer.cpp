@@ -309,7 +309,7 @@ GraphicsBackend D3D12Renderer::GetGraphicsBackend() {
     return GraphicsBackend::D3D12;
 }
 
-GB_Compositor* const D3D12Renderer::GetCompositor() {
+Compositor* const D3D12Renderer::GetCompositor() {
     return &compositor;
 }
 

@@ -1,9 +1,75 @@
 #include "d3d11compositor.h"
 
 #include "instance.h"
+#include "filesystem"
+#include "settings.h"
+
+namespace fs = std::filesystem;
 
 bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
+    // Load shaders
+    std::vector<char>v_shader_buffer;
+    std::vector<char>p_shader_buffer;
 
+    fs::path shader_dir = fs::path(runtime_path).parent_path();
+    if (fs::exists(shader_dir / LAYERING_VERTEX_NAME)) {
+        fs::path vertex = shader_dir / LAYERING_VERTEX_NAME;
+        fs::path pixel = shader_dir / LAYERING_PIXEL_NAME;
+        v_shader_buffer = LoadBinaryFile(vertex.string());
+        p_shader_buffer = LoadBinaryFile(pixel.string());
+
+        if (v_shader_buffer.empty() || p_shader_buffer.empty()) {
+            LOG(ERROR) << "Couldn't find shaders";
+            return false;
+        }
+    }
+    else {
+        v_shader_buffer = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
+        p_shader_buffer = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
+        LOG(INFO) << "Loading shaders with debug paths";
+    }
+
+    ThrowIfFailed(d3d11_device->CreateVertexShader(v_shader_buffer.data(), v_shader_buffer.size(), nullptr, &vertex_shader));
+    ThrowIfFailed(d3d11_device->CreatePixelShader(p_shader_buffer.data(), p_shader_buffer.size(), nullptr, &pixel_shader));
+
+    // Create a sampler state
+    D3D11_SAMPLER_DESC sampler_desc;
+    sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampler_desc.MipLODBias = 0.0f;
+    sampler_desc.MaxAnisotropy = 1;
+    sampler_desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+    sampler_desc.BorderColor[0] = sampler_desc.BorderColor[1] = sampler_desc.BorderColor[2] = sampler_desc.BorderColor[3] = 0;
+    sampler_desc.MinLOD = 0;
+    sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
+    ThrowIfFailed(d3d11_device->CreateSamplerState(&sampler_desc, &sampler_state));
+
+    // Create constant buffer
+    D3D11_BUFFER_DESC buffer_desc;
+    buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+    buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    buffer_desc.MiscFlags = 0;
+    buffer_desc.ByteWidth = sizeof(LayeringConstants);
+
+    ThrowIfFailed(d3d11_device->CreateBuffer(&buffer_desc, nullptr, &shader_constant_buffer));
+
+    // Create opaque blend state
+    D3D11_BLEND_DESC blend_state;
+    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
+
+    // Create layer blending blend state
+    blend_state.RenderTarget->BlendEnable = true;
+    blend_state.RenderTarget->SrcBlend = D3D11_BLEND_SRC_ALPHA;
+    blend_state.RenderTarget->DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    blend_state.RenderTarget->BlendOp = D3D11_BLEND_OP_ADD;
+    blend_state.RenderTarget->SrcBlendAlpha = D3D11_BLEND_ONE;
+    blend_state.RenderTarget->DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+    blend_state.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blend_state.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
 }
 
 void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
@@ -53,17 +119,7 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* cmd_list, uint
         cmd_list->RSSetViewports(1, &view_port);
         cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-        struct {
-            uint32_t is_opaque;
-            uint32_t multiply_alpha;
-            float convert_to_linear;
-            float uvmin_x;
-            float uvmin_y;
-            float uvmax_x;
-            float uvmax_y;
-            float pad;
-
-        } layering_constants;
+        LayeringConstants layering_constants;
         // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
         layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
         // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
@@ -82,13 +138,16 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* cmd_list, uint
         cmd_list->SetGraphicsRootSignature(root_signature.Get());
 
         if (layering_constants.is_opaque) {
-            cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+            cmd_list->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
         }
         else {
-            cmd_list->SetPipelineState(pipeline_state_blend.Get());
+            cmd_list->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
         }
 
-        cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
+        D3D11_MAPPED_SUBRESOURCE mapped_constants;
+
+        cmd_list->VSSetConstantBuffers();
+        cmd_list->PSSetConstantBuffers();
 
         // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
         auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());

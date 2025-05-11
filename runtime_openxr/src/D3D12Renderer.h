@@ -17,7 +17,7 @@ class D3D12Renderer : public Renderer {
     bool should_weave = true;
 
     // Graphics
-    GB_D3D12Compositor compositor;
+    D3D12Compositor compositor;
     DirectX12Weaver* d3d12weaver;
     D3D12ProxySwapchain intermediate_resource;
     // Windowing
@@ -62,7 +62,7 @@ public:
     void EnableWeaving(bool enable = true) override;
     void Update() override;
     GraphicsBackend GetGraphicsBackend() override;
-    GB_Compositor* const GetCompositor() override;
+    Compositor* const GetCompositor() override;
 
     /*
     * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.

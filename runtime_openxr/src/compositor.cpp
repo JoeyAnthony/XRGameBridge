@@ -9,7 +9,7 @@
 #include "settings.h"
 #include "session.h"
 
-bool GB_D3D12Compositor::Initialize(D3D12Renderer* renderer) {
+bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     d3d12_device = renderer->GetDevice();
     command_queue = renderer->GetCommandQueue();
     HRESULT res = 0;
@@ -95,11 +95,11 @@ bool GB_D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     }
 
     // Describe and create a sampler descriptor heap.
-    D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
-    samplerHeapDesc.NumDescriptors = 1;
-    samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-    samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    res = d3d12_device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&sampler_heap));
+    D3D12_DESCRIPTOR_HEAP_DESC sampler_heap_desc = {};
+    sampler_heap_desc.NumDescriptors = 1;
+    sampler_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+    sampler_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    res = d3d12_device->CreateDescriptorHeap(&sampler_heap_desc, IID_PPV_ARGS(&sampler_heap));
     if (FAILED(res)) {
         LOG(ERROR) << "D3D12 Error, failed to create descriptor heap";
         ThrowIfFailed(res);
@@ -107,23 +107,23 @@ bool GB_D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     }
 
     // Describe and create a sampler.
-    D3D12_SAMPLER_DESC samplerDesc = {};
-    samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-    samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-    samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-    samplerDesc.MinLOD = 0;
-    samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-    samplerDesc.MipLODBias = 0.0f;
-    samplerDesc.MaxAnisotropy = 1;
-    samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    samplerDesc.BorderColor;
-    d3d12_device->CreateSampler(&samplerDesc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
+    D3D12_SAMPLER_DESC sampler_desc = {};
+    sampler_desc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler_desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+    sampler_desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+    sampler_desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+    sampler_desc.MinLOD = 0;
+    sampler_desc.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler_desc.MipLODBias = 0.0f;
+    sampler_desc.MaxAnisotropy = 1;
+    sampler_desc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    sampler_desc.BorderColor[0] = sampler_desc.BorderColor[1] = sampler_desc.BorderColor[2] = sampler_desc.BorderColor[3] = 0;
+    d3d12_device->CreateSampler(&sampler_desc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
 
     return true;
 }
 
-bool GB_D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state) {
+bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state) {
     // Create the pipeline state, which includes loading shaders.
     {
         std::vector<char>vertex_shader;
@@ -136,7 +136,7 @@ bool GB_D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device,
             vertex_shader = LoadBinaryFile(vertex.string());
             pixel_shader = LoadBinaryFile(pixel.string());
 
-            if (vertex_shader.empty()) {
+            if (vertex_shader.empty() || pixel_shader.empty()) {
                 LOG(ERROR) << "Couldn't find shaders";
                 return false;
             }
@@ -185,7 +185,7 @@ bool GB_D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device,
     return true;
 }
 
-void GB_D3D12Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
+void D3D12Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
     if (frameEndInfo->layerCount == 0) {
         // TODO clear the screen when no layers are present
     }
@@ -204,7 +204,7 @@ void GB_D3D12Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12
     }
 }
 
-void GB_D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
+void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
     auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
     // Render every view to the resource
@@ -288,7 +288,7 @@ void GB_D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_l
     }
 }
 
-void GB_D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
+void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
     // TODO do something with rectangles
     auto& rect = layer->subImage.imageRect;
 
@@ -377,9 +377,9 @@ void GB_D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, u
     }
 }
 
-ComPtr<ID3D12PipelineState>& GB_D3D12Compositor::GetDefaultPipelineState() {
+ComPtr<ID3D12PipelineState>& D3D12Compositor::GetDefaultPipelineState() {
     return pipeline_state_opaque;
 }
 
-GB_D3D12Compositor::GB_D3D12Compositor() {
+D3D12Compositor::D3D12Compositor() {
 }

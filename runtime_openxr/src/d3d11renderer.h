@@ -18,7 +18,7 @@ public:
     void EnableWeaving(bool enable) override;
     void Update() override;
     GraphicsBackend GetGraphicsBackend() override;
-    GB_Compositor* const GetCompositor() override;
+    Compositor* const GetCompositor() override;
 
     ID3D11Device* GetDevice();
 };

@@ -7,13 +7,7 @@
 class D3D12Renderer;
 class GB_Session;
 
-constexpr std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
-constexpr std::string LAYERING_PIXEL_DEBUG = "../../runtime_openxr/shaders/layering_pixel.cso";
-
-constexpr std::string LAYERING_VERTEX_NAME = "shaders/layering_vertex.cso";
-constexpr std::string LAYERING_PIXEL_NAME = "shaders/layering_pixel.cso";
-
-class GB_D3D12Compositor : public GB_Compositor {
+class D3D12Compositor : public Compositor {
     ComPtr<ID3D12RootSignature> root_signature;
 
     ComPtr<ID3D12PipelineState> pipeline_state_opaque;
@@ -38,28 +32,6 @@ public:
 
     ComPtr<ID3D12PipelineState>& GetDefaultPipelineState();
 
-    GB_D3D12Compositor();
-
-    std::vector<char> GB_D3D12Compositor::LoadBinaryFile(std::string path) {
-        std::filesystem::path file_path(path);
-        std::string abs_path = std::filesystem::absolute(file_path).string();
-
-        std::ifstream file(abs_path, std::ios::binary | std::ios::ate);
-        if (!file.is_open()) {
-            return std::vector<char>(0);
-        }
-
-        // Get size and reset cursor
-        uint32_t size = file.tellg();
-        file.seekg(0);
-
-        // Load into buffer
-        std::vector<char> buffer(size);
-        if (!file.read(buffer.data(), size)) {
-            return std::vector<char>(0);
-        }
-
-        return buffer;
-    }
+    D3D12Compositor();
 };
 
