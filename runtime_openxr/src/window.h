@@ -2,7 +2,7 @@
 #include "openxr_includes.h"
 #include "system.h"
 
-class GB_Window {
+class GameBridgeWindow {
     // The main window class name.
     std::string window_class = "Game Bridge Window";
 
@@ -18,7 +18,7 @@ class GB_Window {
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 public:
-    ~GB_Window();
+    ~GameBridgeWindow();
     // Returns the window of the application or false if none exist
     bool CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen = true, bool showWindow = true);
     bool DestroyApplicationWindow();

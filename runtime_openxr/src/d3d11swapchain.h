@@ -24,12 +24,13 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     uint32_t released_frame_index = 0;
     std::vector<ImageState> current_image_state;
 
+    explicit D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer);
+
 public:
     static XrResult CreateD3D11ProxySwapchain(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, const D3D11ProxySwapchain* proxy_swapchain);
-    static XrResult CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain);
+    //static XrResult CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain);
 
     D3D11ProxySwapchain() = delete;
-    explicit D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer);
 
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
     // Resource initializer
@@ -43,6 +44,13 @@ public:
     uint32_t GetHeight() override;
     uint64_t GetBufferCount() override;
     Renderer* GetRenderer() override;
+
+    std::vector<ComPtr<ID3D11Texture2D>> GetBuffers();
+    std::vector<ComPtr<ID3D11ShaderResourceView>> GetShaderResourceViews();
+    std::vector<ComPtr<ID3D11RenderTargetView>> GetRenderTargetViews();
+    bool IsDepthResource();
+
+    [[nodiscard]] uint32_t GetAwaitedImageIndex();
 };
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags);

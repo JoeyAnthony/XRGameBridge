@@ -25,11 +25,11 @@ XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(const XrSwapchainCreateI
     return result;
 }
 
-XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain) {
-    D3D11ProxySwapchain* proxy = nullptr;
-    CreateD3D11ProxySwapchain(proxy);
-    proxy_swapchain = proxy;
-}
+//XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain) {
+//    D3D11ProxySwapchain* proxy = nullptr;
+//    CreateD3D11ProxySwapchain(proxy);
+//    proxy_swapchain = proxy;
+//}
 
 D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) {
     xr_handle = handle;
@@ -268,6 +268,31 @@ uint64_t D3D11ProxySwapchain::GetBufferCount() {
 
 Renderer* D3D11ProxySwapchain::GetRenderer() {
     return d3d11_renderer;
+}
+
+std::vector<ComPtr<ID3D11Texture2D>> D3D11ProxySwapchain::GetBuffers()
+{
+	return back_buffers;
+}
+
+std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11ProxySwapchain::GetShaderResourceViews()
+{
+	return shader_resource_views;
+}
+
+std::vector<ComPtr<ID3D11RenderTargetView>> D3D11ProxySwapchain::GetRenderTargetViews()
+{
+	return render_target_views;
+}
+
+bool D3D11ProxySwapchain::IsDepthResource()
+{
+	return is_depth_resource;
+}
+
+uint32_t D3D11ProxySwapchain::GetAwaitedImageIndex()
+{
+    return awaited_frame_index;
 }
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags) {

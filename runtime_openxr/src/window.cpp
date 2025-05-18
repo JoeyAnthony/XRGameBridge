@@ -12,7 +12,7 @@ void MessageLoop() {
     }
 }
 
-LRESULT CALLBACK GB_Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK GameBridgeWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     PAINTSTRUCT ps;
     HDC hdc;
     std::string greeting("Hello, Windows desktop!");
@@ -42,7 +42,7 @@ LRESULT CALLBACK GB_Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
     return 0;
 }
 
-bool GB_Window::InitWindowClass(HINSTANCE hInstance) {
+bool GameBridgeWindow::InitWindowClass(HINSTANCE hInstance) {
     WNDCLASSEX window_ex;
 
     window_ex.cbSize = sizeof(WNDCLASSEX);
@@ -67,11 +67,11 @@ bool GB_Window::InitWindowClass(HINSTANCE hInstance) {
     }
 }
 
-GB_Window::~GB_Window() {
+GameBridgeWindow::~GameBridgeWindow() {
     DestroyApplicationWindow();
 }
 
-bool GB_Window::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
+bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
     // TODO better window creation checking code
     static bool window_created = false;
     if (h_wnd != nullptr) {
@@ -152,7 +152,7 @@ bool GB_Window::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, 
     return true;
 }
 
-bool GB_Window::DestroyApplicationWindow() {
+bool GameBridgeWindow::DestroyApplicationWindow() {
     // Must be destroyed from the creation thread
     if (h_wnd == nullptr) {
         LOG(INFO) << "No window to destroy: " << GetLastError();
@@ -168,11 +168,11 @@ bool GB_Window::DestroyApplicationWindow() {
     return res;
 }
 
-HWND GB_Window::GetWindowHandle() {
+HWND GameBridgeWindow::GetWindowHandle() {
     return h_wnd;
 }
 
-void GB_Window::UpdateWindow() {
+void GameBridgeWindow::UpdateWindow() {
     // Main message loop:
     MSG msg;
     if (PeekMessageA(&msg, h_wnd, 0, 0, PM_REMOVE)) {
@@ -181,7 +181,7 @@ void GB_Window::UpdateWindow() {
     }
 }
 
-HWND GB_Window::TryGetExternalDisplay() {
+HWND GameBridgeWindow::TryGetExternalDisplay() {
     // Make sure we get the root window, assuming all games uses its root window for showing the game and processing input.
     HWND h_wnd_active = GetActiveWindow();
     //HWND h_wnd_ancestor = GetAncestor(h_wnd_active, GA_ROOT);
@@ -203,7 +203,7 @@ HWND GB_Window::TryGetExternalDisplay() {
     return h_wnd_active;
 }
 
-bool GB_Window::PeekMessageExternal(LPMSG& msg) {
+bool GameBridgeWindow::PeekMessageExternal(LPMSG& msg) {
     if (h_wnd_external == nullptr) {
         return false;
     }

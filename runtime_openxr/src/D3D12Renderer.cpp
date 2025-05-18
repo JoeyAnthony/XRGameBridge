@@ -3,16 +3,6 @@
 #include "instance.h"
 #include "settings.h"
 
-void D3D12Renderer::EnableSrWindow(bool enable) {
-}
-
-void D3D12Renderer::EnableWeaving(bool enable) {
-    should_weave = enable;
-}
-
-void D3D12Renderer::Update() {
-}
-
 XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     // Create intermediate resources for weaving render target
     // TODO Remove session parameter
@@ -227,7 +217,19 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
+void D3D12Renderer::EnableSrWindow(bool enable)
+{
+}
+
+void D3D12Renderer::EnableWeaving(bool enable)
+{
+}
+
+void D3D12Renderer::Update()
+{
+}
+
+XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
 
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource.GetRtvDescriptorSize());
@@ -271,7 +273,7 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
+XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
 
     // Transition to render target
     TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);

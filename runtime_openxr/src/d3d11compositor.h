@@ -30,9 +30,9 @@ public:
     bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
 
     //void InitShaders(const ComPtr<ID3D12Device>& device);
-    void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value);
-    void ComposeProjectionLayer(ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value);
-    void ComposeQuadLayer(ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value);
+    void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value);
+    void ComposeProjectionLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value);
+    void ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value);
 
     ComPtr<ID3D12PipelineState>& GetDefaultPipelineState();
 };

@@ -3,6 +3,7 @@
 #include "instance.h"
 #include "filesystem"
 #include "settings.h"
+#include "d3d11swapchain.h"
 
 namespace fs = std::filesystem;
 
@@ -72,7 +73,7 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
 }
 
-void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
     if (frameEndInfo->layerCount == 0) {
         // TODO clear the screen when no layers are present
     }
@@ -80,18 +81,18 @@ void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11Dev
     for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
         if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
             auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-            ComposeProjectionLayer(cmd_list, system_width, system_height, layer, new_fence_value);
+            ComposeProjectionLayer(context, system_width, system_height, layer, new_fence_value);
         }
         else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
             auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
 
             // TODO has to be done either after weaving, or also in both views
-            ComposeQuadLayer(cmd_list, system_width, system_height, layer, new_fence_value);
+            ComposeQuadLayer(context, system_width, system_height, layer, new_fence_value);
         }
     }
 }
 
-void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
     auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
     // Render every view to the resource
@@ -106,59 +107,60 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* cmd_list, uint
         // TODO do something with rectangles
         auto& rect = view.subImage.imageRect;
 
-        auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[view.subImage.swapchain]);
-        auto proxy_resource = proxy_swapchain->GetBuffers()[proxy_swapchain->GetAwaitedImageIndex()];
-        // Set new fence values for the used swapchain image.
-        proxy_swapchain->SetReleasedImageFenceValue(proxy_swapchain->GetAwaitedImageIndex(), new_fence_value);
+        auto proxy_swapchain = reinterpret_cast<D3D11ProxySwapchain*>(g_proxy_swapchains[view.subImage.swapchain]);
+        auto proxy_resource = proxy_swapchain->GetShaderResourceViews()[proxy_swapchain->GetAwaitedImageIndex()];
 
         // Viewport settings
         const float width = static_cast<float>(system_width) / 2;
         const float height = static_cast<float>(system_height);
         D3D11_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
         D3D11_RECT scissor_rect{ 0, 0, system_width, system_height };
-        cmd_list->RSSetViewports(1, &view_port);
-        cmd_list->RSSetScissorRects(1, &scissor_rect);
+        context->RSSetViewports(1, &view_port);
+        context->RSSetScissorRects(1, &scissor_rect);
 
-        LayeringConstants layering_constants;
-        // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
-        layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-        // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
-        layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-        layering_constants.convert_to_linear = 1;
+        // Update shader constants
+        bool is_opaque = false;
+        D3D11_MAPPED_SUBRESOURCE mapped_constants;
+        context->Map(shader_constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_constants);
+        {
+            LayeringConstants* layering_constants = reinterpret_cast<LayeringConstants*>(mapped_constants.pData);
+            // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
+            is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            layering_constants->is_opaque = is_opaque;
+            // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
+            layering_constants->multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+            layering_constants->convert_to_linear = 1;
 
-        // Normalize uv values
-        layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());
-        layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain->GetHeight());
-        layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
-        layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
+            // Normalize uv values
+            layering_constants->uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());
+            layering_constants->uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain->GetHeight());
+            layering_constants->uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
+            layering_constants->uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
 
-        std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
-        cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+        }
+        context->Unmap(shader_constant_buffer.Get(), 0);
 
-        cmd_list->SetGraphicsRootSignature(root_signature.Get());
+        context->VSSetShader(vertex_shader.Get(), nullptr, 0);
+        context->VSSetConstantBuffers(0, 1, &shader_constant_buffer);
 
-        if (layering_constants.is_opaque) {
-            cmd_list->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
+        context->PSSetShader(pixel_shader.Get(), nullptr, 0);
+        context->PSSetConstantBuffers(0, 1, &shader_constant_buffer);
+        context->VSSetShaderResources(view_num, 1, &proxy_resource);
+
+        context->PSSetSamplers(0, 1, &sampler_state);
+
+        if (is_opaque) {
+            context->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
         }
         else {
-            cmd_list->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
+            context->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
         }
 
-        D3D11_MAPPED_SUBRESOURCE mapped_constants;
-
-        cmd_list->VSSetConstantBuffers();
-        cmd_list->PSSetConstantBuffers();
-
-        // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
-
-        cmd_list->DrawInstanced(3, 1, 0, 0);
+        context->DrawInstanced(3, 1, 0, 0);
     }
 }
 
-void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
     // TODO do something with rectangles
     auto& rect = layer->subImage.imageRect;
 
@@ -183,66 +185,56 @@ void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* cmd_list, uint32_t s
         view_num = 1;
     }
 
-    auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[layer->subImage.swapchain]);
-    auto proxy_resource = proxy_swapchain->GetBuffers()[proxy_swapchain->GetAwaitedImageIndex()];
-    // Set new fence values for the used swapchain image.
-    proxy_swapchain->SetReleasedImageFenceValue(proxy_swapchain->GetAwaitedImageIndex(), new_fence_value);
-
-    //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    auto proxy_swapchain = reinterpret_cast<D3D11ProxySwapchain*>(g_proxy_swapchains[layer->subImage.swapchain]);
+    auto proxy_resource = proxy_swapchain->GetShaderResourceViews()[proxy_swapchain->GetAwaitedImageIndex()];
 
     for (; view_num < view_count; view_num++) {
         // Viewport settings
         const float width = static_cast<float>(system_width) / 2;
         const float height = static_cast<float>(system_height);
-        D3D12_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
-        D3D12_RECT scissor_rect{ 0, 0, system_width, system_height };
-        cmd_list->RSSetViewports(1, &view_port);
-        cmd_list->RSSetScissorRects(1, &scissor_rect);
+        D3D11_VIEWPORT view_port{ view_num * width, 0, width, height, 0.0f, 1.0f };
+        D3D11_RECT scissor_rect{ 0, 0, system_width, system_height };
+        context->RSSetViewports(1, &view_port);
+        context->RSSetScissorRects(1, &scissor_rect);
 
-        struct {
-            uint32_t is_opaque;
-            uint32_t multiply_alpha;
-            float convert_to_linear;
-            float uvmin_x;
-            float uvmin_y;
-            float uvmax_x;
-            float uvmax_y;
-            float pad;
+        // Update shader constants
+        bool is_opaque = false;
+        D3D11_MAPPED_SUBRESOURCE mapped_constants;
+        context->Map(shader_constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_constants);
+        {
+            LayeringConstants* layering_constants = reinterpret_cast<LayeringConstants*>(mapped_constants.pData);
+            // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
+            is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+            layering_constants->is_opaque = is_opaque;
+            // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
+            layering_constants->multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+            layering_constants->convert_to_linear = 1;
 
-        } layering_constants;
-        // Make opaque if XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT is not set
-        layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-        // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
-        layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-        layering_constants.convert_to_linear = 1;
+            // Normalize uv values
+            layering_constants->uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());
+            layering_constants->uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain->GetHeight());
+            layering_constants->uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
+            layering_constants->uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
 
-        // Normalize uv values
-        layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());
-        layering_constants.uvmin_y = static_cast<float>(rect.offset.y) / static_cast<float>(proxy_swapchain->GetHeight());
-        layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
-        layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
+        }
+        context->Unmap(shader_constant_buffer.Get(), 0);
 
-        std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
-        cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+        context->VSSetShader(vertex_shader.Get(), nullptr, 0);
+        context->VSSetConstantBuffers(0, 1, &shader_constant_buffer);
 
-        cmd_list->SetGraphicsRootSignature(root_signature.Get());
+        context->PSSetShader(pixel_shader.Get(), nullptr, 0);
+        context->PSSetConstantBuffers(0, 1, &shader_constant_buffer);
+        context->VSSetShaderResources(view_num, 1, &proxy_resource);
 
-        if (layering_constants.is_opaque) {
-            cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+        context->PSSetSamplers(0, 1, &sampler_state);
+
+        if (is_opaque) {
+            context->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
         }
         else {
-            cmd_list->SetPipelineState(pipeline_state_blend.Get());
+            context->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
         }
 
-        cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
-
-        // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
-
-        cmd_list->DrawInstanced(3, 1, 0, 0);
-
-        //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
+        context->DrawInstanced(3, 1, 0, 0);
     }
 }

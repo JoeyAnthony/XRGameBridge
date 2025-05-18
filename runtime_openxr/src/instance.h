@@ -136,4 +136,4 @@ inline std::unordered_map<XrActionSet, GB_ActionSet> g_action_sets;
 inline std::unordered_map<XrAction, GB_Action> g_actions;
 inline std::unordered_map<XrSpace, GB_ReferenceSpace> g_reference_spaces;
 inline std::unordered_map<XrSpace, GB_ActionSpace> g_action_spaces;
-inline std::unordered_map<XrSpace, GB_Window> g_displays;
+inline std::unordered_map<XrSpace, GameBridgeWindow> g_displays;

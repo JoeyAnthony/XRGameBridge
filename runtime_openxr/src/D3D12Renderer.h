@@ -21,8 +21,8 @@ class D3D12Renderer : public Renderer {
     DirectX12Weaver* d3d12weaver;
     D3D12ProxySwapchain intermediate_resource;
     // Windowing
-    GB_Window window;
-    GB_D3D12WindowSwapchain window_swapchain;
+    GameBridgeWindow window;
+    D3D12WindowSwapchain window_swapchain;
 
     // D3D12
     ComPtr<ID3D12Device> d3d12_device;
@@ -48,8 +48,8 @@ class D3D12Renderer : public Renderer {
     bool DestroyFences();
 
     // Pipeline functions
-    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
-    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, GB_D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
+    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
+    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
 
     void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
@@ -76,6 +76,4 @@ public:
     ComPtr<ID3D12CommandQueue>& GetCommandQueue();
     ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
     ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
-
-    ~D3D12Renderer() override;
 };

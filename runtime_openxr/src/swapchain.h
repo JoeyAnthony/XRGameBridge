@@ -79,9 +79,9 @@ public:
 
     ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
     ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
-    [[nodiscard]] uint32_t GetRtvDescriptorSize() const;
-    [[nodiscard]] uint32_t GetCbcSrvUavDescriptorSize() const;
-    [[nodiscard]] uint32_t GetAwaitedImageIndex() const;
+    [[nodiscard]] uint32_t GetRtvDescriptorSize();
+    [[nodiscard]] uint32_t GetCbcSrvUavDescriptorSize();
+    [[nodiscard]] uint32_t GetAwaitedImageIndex();
 
     Renderer* GetRenderer() override;
 
@@ -96,7 +96,7 @@ public:
     static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
 };
 
-class GB_D3D12WindowSwapchain {
+class D3D12WindowSwapchain {
     D3D12Renderer* d3d12_renderer;
 
     ComPtr<IDXGISwapChain3> swap_chain;
@@ -122,7 +122,7 @@ public:
     uint32_t AcquireNextImage();
     void PresentFrame();
 
-    GB_D3D12WindowSwapchain();
+    D3D12WindowSwapchain();
 };
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states);

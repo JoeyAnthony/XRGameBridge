@@ -443,15 +443,15 @@ ComPtr<ID3D12DescriptorHeap>& D3D12ProxySwapchain::GetSrvHeap() {
     return srv_heap;
 }
 
-uint32_t D3D12ProxySwapchain::GetRtvDescriptorSize() const {
+uint32_t D3D12ProxySwapchain::GetRtvDescriptorSize() {
     return rtv_descriptor_size;
 }
 
-uint32_t D3D12ProxySwapchain::GetCbcSrvUavDescriptorSize() const {
+uint32_t D3D12ProxySwapchain::GetCbcSrvUavDescriptorSize() {
     return cbc_srv_uav_descriptor_size;
 }
 
-uint32_t D3D12ProxySwapchain::GetAwaitedImageIndex() const {
+uint32_t D3D12ProxySwapchain::GetAwaitedImageIndex() {
     return awaited_frame_index;
 }
 
@@ -576,7 +576,7 @@ void GB_GraphicsDevice::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter
     *ppAdapter = adapter.Detach();
 }
 
-bool GB_D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
+bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
     ID3D12Device* device = d3d12_renderer->GetDevice().Get();
     ID3D12CommandQueue* queue = d3d12_renderer->GetCommandQueue().Get();
 
@@ -664,37 +664,37 @@ bool GB_D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* creat
     return true;
 }
 
-void GB_D3D12WindowSwapchain::Initialize(D3D12Renderer* renderer) {
+void D3D12WindowSwapchain::Initialize(D3D12Renderer* renderer) {
     d3d12_renderer = renderer;
 }
 
-std::array<ComPtr<ID3D12Resource>, back_buffer_count> GB_D3D12WindowSwapchain::GetImages() {
+std::array<ComPtr<ID3D12Resource>, back_buffer_count> D3D12WindowSwapchain::GetImages() {
     return back_buffers;
 }
 
-ComPtr<ID3D12DescriptorHeap>& GB_D3D12WindowSwapchain::GetRtvHeap() {
+ComPtr<ID3D12DescriptorHeap>& D3D12WindowSwapchain::GetRtvHeap() {
     return m_rtvHeap;
 }
 
-ComPtr<ID3D12DescriptorHeap>& GB_D3D12WindowSwapchain::GetSrvHeap() {
+ComPtr<ID3D12DescriptorHeap>& D3D12WindowSwapchain::GetSrvHeap() {
     return m_srvHeap;
 }
 
-uint32_t GB_D3D12WindowSwapchain::GetRtvDescriptorSize() {
+uint32_t D3D12WindowSwapchain::GetRtvDescriptorSize() {
     return rtv_descriptor_size;
 }
 
-uint32_t GB_D3D12WindowSwapchain::GetCbcSrvUavDescriptorSize() {
+uint32_t D3D12WindowSwapchain::GetCbcSrvUavDescriptorSize() {
     return GetCbcSrvUavDescriptorSize();
 }
 
-uint32_t GB_D3D12WindowSwapchain::AcquireNextImage() {
+uint32_t D3D12WindowSwapchain::AcquireNextImage() {
     // TODO get image index from the swapchain
     return swap_chain->GetCurrentBackBufferIndex();
 }
 
 // Called from xrEndFrame, cause then we know the application is done with rendering this image.
-void GB_D3D12WindowSwapchain::PresentFrame() {
+void D3D12WindowSwapchain::PresentFrame() {
     // TODO Transitioning images state without waiting on the queue to finish, not sure this will break eventually. Maybe dx12 is synchronizing implicitly?
     //TransitionBackBufferImage(COMMAND_RESOURCE_INDEX_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     swap_chain->Present(1, 0);
@@ -703,7 +703,7 @@ void GB_D3D12WindowSwapchain::PresentFrame() {
     // barrier to render target
 }
 
-GB_D3D12WindowSwapchain::GB_D3D12WindowSwapchain() : d3d12_renderer(nullptr) {
+D3D12WindowSwapchain::D3D12WindowSwapchain() : d3d12_renderer(nullptr) {
 }
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLAGS& flags, D3D12_RESOURCE_STATES& states) {
