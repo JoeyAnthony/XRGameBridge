@@ -71,9 +71,11 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     blend_state.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blend_state.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
+
+    return true;
 }
 
-void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height) {
     if (frameEndInfo->layerCount == 0) {
         // TODO clear the screen when no layers are present
     }
@@ -81,18 +83,18 @@ void D3D11Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D11Dev
     for (uint32_t layer_num = 0; layer_num < frameEndInfo->layerCount; layer_num++) {
         if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
             auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layer_num]);
-            ComposeProjectionLayer(context, system_width, system_height, layer, new_fence_value);
+            ComposeProjectionLayer(context, system_width, system_height, layer);
         }
         else if (frameEndInfo->layers[layer_num]->type == XR_TYPE_COMPOSITION_LAYER_QUAD) {
             auto layer = reinterpret_cast<const XrCompositionLayerQuad*>(frameEndInfo->layers[layer_num]);
 
             // TODO has to be done either after weaving, or also in both views
-            ComposeQuadLayer(context, system_width, system_height, layer, new_fence_value);
+            ComposeQuadLayer(context, system_width, system_height, layer);
         }
     }
 }
 
-void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer) {
     auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
     // Render every view to the resource
@@ -160,7 +162,7 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint3
     }
 }
 
-void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
+void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer) {
     // TODO do something with rectangles
     auto& rect = layer->subImage.imageRect;
 

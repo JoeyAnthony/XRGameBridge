@@ -1,13 +1,18 @@
 #pragma once
 #include "xrrendering.h"
+#include "window.h"
 
 class GB_System;
+class D3D11Compositor;
+class D3D11ProxySwapchain;
+class D3D11WindowSwapchain;
 
 class D3D11Renderer : public Renderer {
     uint64_t xr_system;
-    ComPtr<ID3D11Device> d3d111_device;
+    ComPtr<ID3D11Device> d3d11_device;
 
     ID3D11DeviceContext* d3d11_device_context;
+    D3D11Compositor* compositor;
     D3D11WindowSwapchain* window_swapchain;
     D3D11ProxySwapchain* intermediate_resource;
     // Windowing
@@ -21,8 +26,8 @@ class D3D11Renderer : public Renderer {
     bool CreateCommandLists();
 
     // Pipeline functions
-    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
-    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value);
+    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4]);
+    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4]);
 
 public:
     static XrResult CreateD3D11Renderer(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding, D3D11Renderer* renderer);
