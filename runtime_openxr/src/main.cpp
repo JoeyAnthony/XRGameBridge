@@ -43,10 +43,10 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
         LOG(INFO) << "Process: ";
         LOG(INFO) << "Executable: ";
 
-        LOG(INFO) << "Support D3D11 " << (XRGameBridge::g_runtime_settings.support_d3d11 ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support D3D12 " << (XRGameBridge::g_runtime_settings.support_d3d12 ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support GL " << (XRGameBridge::g_runtime_settings.support_gl ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support VK " << (XRGameBridge::g_runtime_settings.support_vk ? "TRUE" : "FALSE");
+        LOG(INFO) << "Support D3D11 " << (g_runtime_settings.support_d3d11 ? "TRUE" : "FALSE");
+        LOG(INFO) << "Support D3D12 " << (g_runtime_settings.support_d3d12 ? "TRUE" : "FALSE");
+        LOG(INFO) << "Support GL " << (g_runtime_settings.support_gl ? "TRUE" : "FALSE");
+        LOG(INFO) << "Support VK " << (g_runtime_settings.support_vk ? "TRUE" : "FALSE");
 
         //if (FClientSettings::ClientSettings.AllowVK)
         //{
@@ -54,7 +54,7 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
         //    Log(FLogOpenXRInterface, Trace, "GLAD VK status: %i", Status);
         //}
 
-        XRGameBridge::g_runtime_settings.hInst = hInst;
+        g_runtime_settings.hInst = hInst;
 
         // Allocate console for when none exists for debugging
         //AllocConsole();

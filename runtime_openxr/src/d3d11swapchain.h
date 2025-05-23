@@ -1,11 +1,11 @@
 #pragma once
 #include "swapchain.h"
 #include "xrrendering.h"
+#include "openxr_includes.h"
 
 class D3D11Renderer;
 
 class D3D11ProxySwapchain: public ProxySwapchain {
-    XrSwapchain xr_handle;
     D3D11Renderer* d3d11_renderer;
 
     std::wstring proxy_name;
@@ -27,8 +27,7 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     explicit D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer);
 
 public:
-    static XrResult CreateD3D11ProxySwapchain(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, const D3D11ProxySwapchain* proxy_swapchain);
-    //static XrResult CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain);
+    static D3D11ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer);
 
     D3D11ProxySwapchain() = delete;
 
@@ -51,6 +50,33 @@ public:
     bool IsDepthResource();
 
     [[nodiscard]] uint32_t GetAwaitedImageIndex();
+};
+
+class D3D11WindowSwapchain {
+public:
+    //static void CreateDXGIFactory(IDXGIFactory4** factory);
+    //static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+
+    D3D11Renderer* d3d11_renderer;
+    ComPtr<IDXGISwapChain3> swap_chain;
+    uint32_t width, height;
+    uint32_t back_buffer_count;
+    std::vector<ComPtr<ID3D11RenderTargetView>> render_target_views;
+
+    D3D11WindowSwapchain() = delete;
+    D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd);
+public:
+
+    uint32_t GetCurrentImageIndex();
+    void PresentFrame();
+    uint32_t GetWidth();
+    uint32_t GetHeight();
+    uint32_t GetBufferCount();
+    Renderer* GetRenderer();
+
+    std::vector<ComPtr<ID3D11Texture2D>> GetBuffers();
+    std::vector<ComPtr<ID3D11ShaderResourceView>> GetShaderResourceViews();
+    std::vector<ComPtr<ID3D11RenderTargetView>> GetRenderTargetViews();
 };
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags);

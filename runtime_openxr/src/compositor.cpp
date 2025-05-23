@@ -381,5 +381,3 @@ ComPtr<ID3D12PipelineState>& D3D12Compositor::GetDefaultPipelineState() {
     return pipeline_state_opaque;
 }
 
-D3D12Compositor::D3D12Compositor() {
-}

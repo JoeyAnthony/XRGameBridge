@@ -1,9 +1,9 @@
 #include "actions.h"
 
+#include <vector>
+
 #include "instance.h"
 #include "openxr_functions.h"
-
-#include <vector>
 
 XrResult xrSyncActions(XrSession session, const XrActionsSyncInfo* syncInfo) {
     const std::vector<XrActiveActionSet> active_action_sets(syncInfo->activeActionSets, syncInfo->activeActionSets + syncInfo->countActiveActionSets);

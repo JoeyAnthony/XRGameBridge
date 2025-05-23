@@ -11,6 +11,7 @@
 #include "instance.h"
 #include "settings.h"
 #include "d3d11swapchain.h"
+#include "D3D12Renderer.h"
 
 XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityInput, uint32_t* formatCountOutput, int64_t* formats) {
     GraphicsBackend backend;
@@ -63,18 +64,17 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     GraphicsBackend backend = renderer->GetGraphicsBackend();
     if (backend == GraphicsBackend::D3D12) {
         auto* d3d12_renderer = reinterpret_cast<D3D12Renderer*>(gb_session.renderer);
-        D3D12ProxySwapchain gb_proxy;
-        gb_proxy.Initialize(handle, d3d12_renderer);
+        auto* proxy = D3D12ProxySwapchain::Create(createInfo, d3d12_renderer);
 
         // Create swap chain
-        if (gb_proxy.CreateResources(createInfo) == false) {
+        if (proxy->CreateResources(createInfo) == false) {
             LOG(ERROR) << "Failed to create proxy swapchain";
             return XR_ERROR_RUNTIME_FAILURE;
         }
     }
     else if (backend == GraphicsBackend::D3D11) {
         auto* d3d11_renderer = reinterpret_cast<D3D11Renderer*>(gb_session.renderer);
-        D3D11ProxySwapchain::CreateD3D11ProxySwapchain(proxy_swapchain);
+        D3D11ProxySwapchain::Create(createInfo, d3d11_renderer);
     }
     else {
         // Not implemented
@@ -82,8 +82,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
-    *swapchain = handle;
-    g_proxy_swapchains[handle] = proxy_swapchain;
+    *swapchain = proxy_swapchain->GetHandle();
+    g_proxy_swapchains[proxy_swapchain->GetHandle()] = proxy_swapchain;
 
     LOG(INFO) << "Successfully created proxy swapchain";
     return XR_SUCCESS;
@@ -215,10 +215,27 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
     return gb_proxy->ReleaseImage();
 }
 
-void D3D12ProxySwapchain::Initialize(XrSwapchain handle, D3D12Renderer* renderer) {
-    xr_handle = handle;
+D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer) {
+    static size_t swapchain_creation_count = 1;
+    // Create handle
+    XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
+    auto d3d12_proxy = new D3D12ProxySwapchain(handle, renderer);
+
+    // Initialize resources
+    // TODO fix later to use create info
+    //XrResult result = XR_ERROR_RUNTIME_FAILURE;
+    //if (d3d12_proxy->CreateResources(createInfo) == false) {
+    //    throw XrException("Failed to create D3D12 proxy swapchain", XR_ERROR_RUNTIME_FAILURE);
+    //}
+
+    swapchain_creation_count++;
+    return d3d12_proxy;
+}
+
+D3D12ProxySwapchain::D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer) : ProxySwapchain(handle) {
     d3d12_renderer = renderer;
     back_buffer_fence_values.fill(0);
+    current_image_state.fill(ImageState::IMAGE_STATE_WAITING);
 }
 
 bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
@@ -520,12 +537,7 @@ Renderer* D3D12ProxySwapchain::GetRenderer() {
     return d3d12_renderer;
 }
 
-D3D12ProxySwapchain::D3D12ProxySwapchain() : xr_handle(nullptr), d3d12_renderer(nullptr) {
-    current_image_state.fill(ImageState::IMAGE_STATE_WAITING);
-    back_buffer_fence_values.fill(0);
-}
-
-void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {
+void D3D12WindowSwapchain::CreateDXGIFactory(IDXGIFactory4** factory) {
     // Create a DXGIFactory object.
     UINT dxgi_factory_flags = 0;
     HRESULT err = CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(factory));
@@ -534,7 +546,7 @@ void GB_GraphicsDevice::CreateDXGIFactory(IDXGIFactory4** factory) {
     }
 }
 
-void GB_GraphicsDevice::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter) {
+void D3D12WindowSwapchain::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter) {
     *ppAdapter = nullptr;
 
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
@@ -582,7 +594,7 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
 
     // TODO On failure all objects here should be destroyed
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
-    GB_GraphicsDevice::CreateDXGIFactory(&factory);
+    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = createInfo->width;
@@ -611,8 +623,6 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
         LOG(ERROR) << "Failed to get ComPtr object";
         return false;
     }
-
-    frame_index = swap_chain->GetCurrentBackBufferIndex();
 
     // Create descriptor heaps.
     {

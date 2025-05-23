@@ -19,7 +19,7 @@ class D3D12Renderer : public Renderer {
     // Graphics
     D3D12Compositor compositor;
     DirectX12Weaver* d3d12weaver;
-    D3D12ProxySwapchain intermediate_resource;
+    D3D12ProxySwapchain* intermediate_resource;
     // Windowing
     GameBridgeWindow window;
     D3D12WindowSwapchain window_swapchain;
@@ -36,7 +36,6 @@ class D3D12Renderer : public Renderer {
     uint64_t fence_value = 0;
     std::vector<uint64_t> frame_fence_values;
     uint8_t frame_in_flight = 0;
-
 
     // Initialization
     XrResult CreateIntermediateTexture(GB_System& gb_system);
@@ -55,7 +54,10 @@ class D3D12Renderer : public Renderer {
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
 
 public:
-    XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) override;
+    D3D12Renderer();
+    ~D3D12Renderer();
+
+    XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding);
 
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;

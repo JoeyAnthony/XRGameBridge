@@ -199,8 +199,8 @@ XrResult xrDestroyInstance(XrInstance instance) {
 XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D11KHR* graphicsRequirements) {
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    GB_GraphicsDevice::CreateDXGIFactory(&factory);
-    GB_GraphicsDevice::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
+    D3D12WindowSwapchain::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
         LOG(ERROR) << "No suitable device found";
@@ -241,8 +241,8 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D12KHR* graphicsRequirements) {
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    GB_GraphicsDevice::CreateDXGIFactory(&factory);
-    GB_GraphicsDevice::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
+    D3D12WindowSwapchain::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
         LOG(ERROR) << "No suitable device found";

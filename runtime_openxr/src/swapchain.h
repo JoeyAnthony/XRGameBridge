@@ -54,8 +54,12 @@ class D3D12ProxySwapchain : public ProxySwapchain {
     // Fence values per image to check for
     std::array<uint32_t, back_buffer_count> back_buffer_fence_values;
 
+    D3D12ProxySwapchain() = delete;
+    D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer);
+
 public:
-    void Initialize(XrSwapchain handle, D3D12Renderer* renderer);
+
+    static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer);
 
     // Overriden initializer
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
@@ -85,20 +89,15 @@ public:
 
     Renderer* GetRenderer() override;
 
-    D3D12ProxySwapchain();
-
     static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 };
 
-class GB_GraphicsDevice {
+class D3D12WindowSwapchain {
 public:
     static void CreateDXGIFactory(IDXGIFactory4** factory);
     static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
-};
 
-class D3D12WindowSwapchain {
     D3D12Renderer* d3d12_renderer;
-
     ComPtr<IDXGISwapChain3> swap_chain;
     ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     ComPtr<ID3D12DescriptorHeap> m_srvHeap;
@@ -106,7 +105,6 @@ class D3D12WindowSwapchain {
 
     D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
     uint32_t rtv_descriptor_size = 0;
-    uint32_t frame_index = 0;
 
 public:
     void Initialize(D3D12Renderer* renderer);

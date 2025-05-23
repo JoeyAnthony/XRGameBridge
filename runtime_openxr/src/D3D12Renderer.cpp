@@ -2,18 +2,41 @@
 
 #include "instance.h"
 #include "settings.h"
+#include "types.h"
 
 XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     // Create intermediate resources for weaving render target
     // TODO Remove session parameter
 
     // Handle 0 is not being used by xrCreateSwapchain
-    intermediate_resource.Initialize(0, this);
+    //auto system_resolution = GetSystemResolution(gb_system);
+    //XrSwapchainCreateInfo info;
+    //info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
+    //info.width = system_resolution.x;
+    //info.height = system_resolution.y;
+    //info.arraySize = 1;
+    //info.faceCount = 1;
+    //info.mipCount = 1;
+    //info.sampleCount = 1;
+    //info.createFlags = 0;
+    //info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
-    auto system_resolution = GetSystemResolution(gb_system);
-    intermediate_resource.CreateResources(system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
+    try {
+        XrSwapchainCreateInfo info;
+        intermediate_resource = D3D12ProxySwapchain::Create(&info, this);
+        //intermediate_resource->CreateResources(&info, L"Intermediate resource");
 
-    return XR_SUCCESS;
+        auto system_resolution = GetSystemResolution(gb_system);
+        intermediate_resource->CreateResources(system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
+
+        return XR_SUCCESS;
+    }
+    catch (XrException& e) {
+        return e.GetResult();
+    }
+    catch (std::exception& e) {
+        return XR_ERROR_RUNTIME_FAILURE;
+    }
 }
 
 XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
@@ -22,7 +45,7 @@ XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
     params.command_queue = d3d12_command_queue;
     params.device = d3d12_device;
     params.game_bridge = instance->GetGameBridgeInstance();
-    params.input_resource = intermediate_resource.GetBuffers()[0];
+    params.input_resource = intermediate_resource->GetBuffers()[0];
     params.render_target = window_swapchain.GetImages()[0];
     params.window = window.GetWindowHandle();
 
@@ -42,7 +65,7 @@ XrResult D3D12Renderer::CreateSystemWindow(GB_System& gb_system) {
     // Create debug window
     auto system_resolution = GetSystemResolution(gb_system);
 
-    window.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
+    window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 
@@ -149,7 +172,7 @@ XrResult D3D12Renderer::Initialize(GB_Instance* instance, XrSystemId systemId, c
     d3d12_device = d3d12_bindings->device;
     d3d12_command_queue = d3d12_bindings->queue;
 
-    if (compositor.Initialize(d3d12_bindings, back_buffer_count) == false) {
+    if (compositor.Initialize(this) == false) {
         LOG(ERROR) << "Failed to create compositor";
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -232,7 +255,7 @@ void D3D12Renderer::Update()
 XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
 
     // Set intermediate resource as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource.GetRtvDescriptorSize());
+    CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource->GetRtvDescriptorSize());
 
     // Compose
     cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
@@ -240,11 +263,11 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
-    compositor.ComposeImage(frameEndInfo, cmd_list, intermediate_resource.GetWidth(), intermediate_resource.GetHeight(), new_fence_value);
+    compositor.ComposeImage(frameEndInfo, cmd_list, intermediate_resource->GetWidth(), intermediate_resource->GetHeight(), new_fence_value);
 
 
     // Transition intermediate resource to unordered access for the weaver
-    TransitionImage(cmd_list, intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // Transition window swapchain to render target
     TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -257,18 +280,17 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
 
 
     // Set viewport for weaving to window swapchain
-    auto native_resolution = XRGameBridge::GetSystemResolution(XRGameBridge::g_systems[xr_system]);
+    auto native_resolution = GetSystemResolution(g_systems[xr_system]);
     D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
     cmd_list->RSSetViewports(1, &view_port);
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-
     // Do weaving
     d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
 
     // Transition to render target
-    TransitionImage(cmd_list, intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     return XR_SUCCESS;
 }
@@ -288,7 +310,7 @@ XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
-    compositor.ComposeImage(frameEndInfo, cmd_list, intermediate_resource.GetWidth(), intermediate_resource.GetHeight(), new_fence_value);
+    compositor.ComposeImage(frameEndInfo, cmd_list, intermediate_resource->GetWidth(), intermediate_resource->GetHeight(), new_fence_value);
 
     return XR_SUCCESS;
 }
@@ -369,8 +391,12 @@ ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t inde
     return command_allocators[index];
 }
 
+D3D12Renderer::D3D12Renderer() {
+
+}
+
 D3D12Renderer::~D3D12Renderer() {
-    intermediate_resource.DestroyResources();
+    intermediate_resource->DestroyResources();
 
     // Destroy window
     window.DestroyApplicationWindow();

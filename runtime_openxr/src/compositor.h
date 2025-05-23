@@ -1,11 +1,8 @@
 #pragma once
-#include <filesystem>
-
 #include "openxr_includes.h"
 #include "xrrendering.h"
 
 class D3D12Renderer;
-class GB_Session;
 
 class D3D12Compositor : public Compositor {
     ComPtr<ID3D12RootSignature> root_signature;
@@ -31,7 +28,4 @@ public:
     //void SignalSwapchainsForFrame(const XrFrameEndInfo* frameEndInfo);
 
     ComPtr<ID3D12PipelineState>& GetDefaultPipelineState();
-
-    D3D12Compositor();
 };
-

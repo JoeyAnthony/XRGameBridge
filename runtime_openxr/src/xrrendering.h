@@ -1,35 +1,21 @@
 #pragma once
-#include "compositor.h"
+#include <string>
+#include <filesystem>
+
 #include "openxr_includes.h"
 #include "types.h"
 
-constexpr std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
-constexpr std::string LAYERING_PIXEL_DEBUG = "../../runtime_openxr/shaders/layering_pixel.cso";
-
-constexpr std::string LAYERING_VERTEX_NAME = "shaders/layering_vertex.cso";
-constexpr std::string LAYERING_PIXEL_NAME = "shaders/layering_pixel.cso";
-
-
 class GB_Instance;
-class Compositor;
 
 constexpr unsigned short back_buffer_count = 2;
 
-class Renderer {
-public:
-
-    virtual ~Renderer() = default;
-    virtual XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) = 0;
-    virtual XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) = 0;
-    virtual void EnableSrWindow(bool enable) = 0;
-    virtual void EnableWeaving(bool enable = true) = 0;
-    virtual void Update() = 0;
-    virtual GraphicsBackend GetGraphicsBackend() = 0;
-    virtual Compositor* const GetCompositor() = 0;
-};
-
 class Compositor {
 public:
+    const std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
+    const std::string LAYERING_PIXEL_DEBUG = "../../runtime_openxr/shaders/layering_pixel.cso";
+    const std::string LAYERING_VERTEX_NAME = "shaders/layering_vertex.cso";
+    const std::string LAYERING_PIXEL_NAME = "shaders/layering_pixel.cso";
+
     virtual ~Compositor() = default;
 
     /*
@@ -37,7 +23,7 @@ public:
     */
     //virtual void Destroy() = 0;
 
-    std::vector<char> Compositor::LoadBinaryFile(std::string path) {
+    static std::vector<char> LoadBinaryFile(std::string path) {
         std::filesystem::path file_path(path);
         std::string abs_path = std::filesystem::absolute(file_path).string();
 
@@ -60,8 +46,22 @@ public:
     }
 };
 
-class ProxySwapchain {
+class Renderer {
 public:
+    virtual ~Renderer() = default;
+    virtual XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) = 0;
+    virtual void EnableSrWindow(bool enable) = 0;
+    virtual void EnableWeaving(bool enable = true) = 0;
+    virtual void Update() = 0;
+    virtual GraphicsBackend GetGraphicsBackend() = 0;
+    virtual Compositor* const GetCompositor() = 0;
+};
+
+class ProxySwapchain {
+protected:
+    XrSwapchain xr_handle = 0;
+public:
+    ProxySwapchain(XrSwapchain handle) : xr_handle(handle) {};
     virtual ~ProxySwapchain() = default;
 
     virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") = 0;
@@ -81,4 +81,8 @@ public:
     virtual size_t GetBufferCount() = 0;
 
     virtual Renderer* GetRenderer() = 0;
+
+    XrSwapchain GetHandle() {
+        return xr_handle;
+    }
 };

@@ -1,28 +1,28 @@
 #include "d3d11swapchain.h"
+#include "openxr_includes.h"
 
 #include <format>
 #include <glm/glm.hpp>
 #include "d3d11renderer.h"
 
-XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, const D3D11ProxySwapchain* proxy_swapchain) {
+D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer) {
+    // Create with swapchain index handle
+    // Add to swapchain lists
+    // Throw/rethrow errors that occur
+
     static size_t swapchain_creation_count = 1;
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
-
-    // Create swap chain
     auto d3d11_proxy = new D3D11ProxySwapchain(handle, renderer);
 
     // Initialize resources
     XrResult result = XR_ERROR_RUNTIME_FAILURE;
     if (d3d11_proxy->CreateResources(createInfo) == false) {
-        LOG(ERROR) << "Failed to create proxy swapchain";
-        result = XR_ERROR_RUNTIME_FAILURE;
+         throw XrException("Failed to create proxy swapchain", XR_ERROR_RUNTIME_FAILURE);
     }
 
-    proxy_swapchain = d3d11_proxy;
-
     swapchain_creation_count++;
-    return result;
+    return d3d11_proxy;
 }
 
 //XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain) {
@@ -31,8 +31,7 @@ XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(const XrSwapchainCreateI
 //    proxy_swapchain = proxy;
 //}
 
-D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) {
-    xr_handle = handle;
+D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle)   {
     d3d11_renderer = renderer;
 }
 
@@ -42,6 +41,8 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 
     GetResourceStateFlags(createInfo->usageFlags, d3d11_usage, bind_flags);
     CreateResources(createInfo, d3d11_usage, bind_flags, resource_name);
+
+    return true;
 }
 
 bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::wstring resource_name) {
@@ -81,7 +82,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     texture_desc.CPUAccessFlags = 0;
     texture_desc.MiscFlags = 0;
 
-    auto* device = d3d11_renderer->GetDevice();
+    auto device = d3d11_renderer->GetDevice();
 
     // Check multi sample quality
     uint32_t sample_quality;
@@ -153,31 +154,30 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         std::wstring texname;
         std::wstring rtvname;
         std::wstring srvname;
+        size_t handle = reinterpret_cast<size_t>(xr_handle);
         if (resource_name.empty()) {
-            texname = std::format(L"Proxy Swapchain {} {} {}", reinterpret_cast<size_t>(xr_handle), "Texture", i);
+            texname = std::format(L"Proxy Swapchain {} Texture {}", handle, i);
             texname = com_name_prefix + texname;
 
-            rtvname = std::format(L"Proxy Swapchain {} {} {}", reinterpret_cast<size_t>(xr_handle), "Render Target View", i);
+            rtvname = std::format(L"Proxy Swapchain {} Render Target View {}", handle, i);
             rtvname = com_name_prefix + texname;
 
-            srvname = std::format(L"Proxy Swapchain {} {} {}", reinterpret_cast<size_t>(xr_handle), "Shader Resource View", i);
+            srvname = std::format(L"Proxy Swapchain {} Shader Resource View {}", handle, i);
             srvname = com_name_prefix + texname;
 
             proxy_name = texname;
         }
         else {
-            std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
-
-            texname = std::format(L"{} {} {} {}", resource_name, reinterpret_cast<size_t>(xr_handle), "Texture", i);
+            texname = std::format(L"{} {} Texture {}", resource_name, handle, i);
             texname = com_name_prefix + texname;
 
-            rtvname = std::format(L"{} {} {} {}", resource_name, reinterpret_cast<size_t>(xr_handle), "Render Target View", i);
+            rtvname = std::format(L"{} {} Render Target View {}", resource_name, handle, i);
             rtvname = com_name_prefix + texname;
 
-            srvname = std::format(L"{} {} {} {}", resource_name, reinterpret_cast<size_t>(xr_handle), "Shader Resource View", i);
+            srvname = std::format(L"{} {} Shader Resource View {}",resource_name, handle, i);
             srvname = com_name_prefix + texname;
 
-            proxy_name = name;
+            proxy_name = texname;
         }
 
         // Give name to the buffer
@@ -321,4 +321,104 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage
     if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
         usage = D3D11_USAGE_DEFAULT;
     }
+}
+
+D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd)
+{
+    d3d11_renderer = renderer;
+    auto device = renderer->GetDevice();
+    width = createInfo->width;
+    height = createInfo->height;
+    render_target_views.resize(back_buffer_count);
+
+    // TODO On failure all objects here should be destroyed
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.Width = createInfo->width;
+    swapChainDesc.Height = createInfo->height;
+    swapChainDesc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
+    swapChainDesc.BufferCount = back_buffer_count;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.Scaling = DXGI_SCALING::DXGI_SCALING_ASPECT_RATIO_STRETCH;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.Stereo = false;
+    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+    fsSwapChainDesc.Windowed = TRUE;
+    fsSwapChainDesc.Scaling = DXGI_MODE_SCALING_STRETCHED;
+
+    // Swap chain needs the queue so that it can force a flush on it.
+    ComPtr<IDXGISwapChain1> swapChain;
+    HRESULT res = factory->CreateSwapChainForHwnd(device.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
+    if (FAILED(res)) {
+        LOG(ERROR) << "Failed to create d3d11 swap chain";
+        throw std::runtime_error("Failed creating d3d11 swapchain");
+    }
+    if (FAILED(swapChain.As(&swap_chain))) {
+        LOG(ERROR) << "Failed to get ComPtr object";
+        throw std::runtime_error("Failed to get ComPtr object d3d11");
+    }
+
+    // Create rtvs
+    for (uint32_t i = 0; i < back_buffer_count; i++) {
+        // Create render target views
+        ID3D11Texture2D* back_buffer;
+        swap_chain->GetBuffer(i, __uuidof(ID3D11Texture2D), (void**)&back_buffer);
+        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
+        rtv_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+        rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+
+        device->CreateRenderTargetView(back_buffer, &rtv_desc, &render_target_views[i]);
+    }
+}
+
+uint32_t D3D11WindowSwapchain::GetCurrentImageIndex()
+{
+    return swap_chain->GetCurrentBackBufferIndex();
+}
+
+void D3D11WindowSwapchain::PresentFrame()
+{
+    swap_chain->Present(1, 0);
+}
+
+uint32_t D3D11WindowSwapchain::GetWidth()
+{
+    return width;
+}
+
+uint32_t D3D11WindowSwapchain::GetHeight()
+{
+    return height;
+}
+
+uint32_t D3D11WindowSwapchain::GetBufferCount()
+{
+    return back_buffer_count;
+}
+
+Renderer* D3D11WindowSwapchain::GetRenderer()
+{
+    return d3d11_renderer;
+}
+
+std::vector<ComPtr<ID3D11Texture2D>> D3D11WindowSwapchain::GetBuffers()
+{
+    return std::vector<ComPtr<ID3D11Texture2D>>();
+}
+
+std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11WindowSwapchain::GetShaderResourceViews()
+{
+    return std::vector<ComPtr<ID3D11ShaderResourceView>>();
+}
+
+std::vector<ComPtr<ID3D11RenderTargetView>> D3D11WindowSwapchain::GetRenderTargetViews()
+{
+    return render_target_views;
 }
