@@ -1,5 +1,6 @@
 #include "d3d11compositor.h"
 
+#include "d3d11renderer.h"
 #include "instance.h"
 #include "filesystem"
 #include "settings.h"
@@ -8,30 +9,35 @@
 namespace fs = std::filesystem;
 
 bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
+    d3d11_device = renderer->GetDevice();
+
     // Load shaders
     std::vector<char>v_shader_buffer;
     std::vector<char>p_shader_buffer;
 
+    // Try shader path in shipping location, otherwise the debug location
     fs::path shader_dir = fs::path(runtime_path).parent_path();
-    if (fs::exists(shader_dir / LAYERING_VERTEX_NAME)) {
-        fs::path vertex = shader_dir / LAYERING_VERTEX_NAME;
-        fs::path pixel = shader_dir / LAYERING_PIXEL_NAME;
+    if (fs::exists(shader_dir / shader_path)) {
+        fs::path vertex = shader_dir / dx12_vs;
+        fs::path pixel = shader_dir / dx12_ps;
         v_shader_buffer = LoadBinaryFile(vertex.string());
         p_shader_buffer = LoadBinaryFile(pixel.string());
-
-        if (v_shader_buffer.empty() || p_shader_buffer.empty()) {
-            LOG(ERROR) << "Couldn't find shaders";
-            return false;
-        }
     }
     else {
-        v_shader_buffer = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
-        p_shader_buffer = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
+        fs::path vertex = fs::path(DEBUG_SHADER_PATH) / dx11_vs;
+        fs::path pixel = fs::path(DEBUG_SHADER_PATH) / dx11_ps;
+        v_shader_buffer = LoadBinaryFile(vertex.string());
+        p_shader_buffer = LoadBinaryFile(pixel.string());
         LOG(INFO) << "Loading shaders with debug paths";
     }
 
-    ThrowIfFailed(d3d11_device->CreateVertexShader(v_shader_buffer.data(), v_shader_buffer.size(), nullptr, &vertex_shader));
-    ThrowIfFailed(d3d11_device->CreatePixelShader(p_shader_buffer.data(), p_shader_buffer.size(), nullptr, &pixel_shader));
+    if (v_shader_buffer.empty() || p_shader_buffer.empty()) {
+        LOG(ERROR) << "Couldn't find shaders";
+        return false;
+    }
+
+    ThrowIfFailed(d3d11_device->CreateVertexShader(v_shader_buffer.data(), v_shader_buffer.size(), nullptr, vertex_shader.GetAddressOf()));
+    ThrowIfFailed(d3d11_device->CreatePixelShader(p_shader_buffer.data(), p_shader_buffer.size(), nullptr, pixel_shader.GetAddressOf()));
 
     // Create a sampler state
     D3D11_SAMPLER_DESC sampler_desc;
@@ -45,7 +51,7 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     sampler_desc.BorderColor[0] = sampler_desc.BorderColor[1] = sampler_desc.BorderColor[2] = sampler_desc.BorderColor[3] = 0;
     sampler_desc.MinLOD = 0;
     sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
-    ThrowIfFailed(d3d11_device->CreateSamplerState(&sampler_desc, &sampler_state));
+    ThrowIfFailed(d3d11_device->CreateSamplerState(&sampler_desc, sampler_state.GetAddressOf()));
 
     // Create constant buffer
     D3D11_BUFFER_DESC buffer_desc;
@@ -55,11 +61,11 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     buffer_desc.MiscFlags = 0;
     buffer_desc.ByteWidth = sizeof(LayeringConstants);
 
-    ThrowIfFailed(d3d11_device->CreateBuffer(&buffer_desc, nullptr, &shader_constant_buffer));
+    ThrowIfFailed(d3d11_device->CreateBuffer(&buffer_desc, nullptr, shader_constant_buffer.GetAddressOf()));
 
     // Create opaque blend state
-    D3D11_BLEND_DESC blend_state;
-    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
+    D3D11_BLEND_DESC blend_state {};
+    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, blend_state_opaque.GetAddressOf()));
 
     // Create layer blending blend state
     blend_state.RenderTarget->BlendEnable = true;
@@ -70,7 +76,14 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     blend_state.RenderTarget->DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
     blend_state.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blend_state.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, &blend_state_opaque));
+    ThrowIfFailed(d3d11_device->CreateBlendState(&blend_state, blend_state_opaque.GetAddressOf()));
+
+    // Create rasterizer state
+    D3D11_RASTERIZER_DESC rasterizerDesc = {};
+    rasterizerDesc.FillMode = D3D11_FILL_SOLID;
+    rasterizerDesc.CullMode = D3D11_CULL_FRONT;
+
+    d3d11_device->CreateRasterizerState(&rasterizerDesc, rasterizer_state.GetAddressOf());
 
     return true;
 }
@@ -106,7 +119,6 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint3
         //SetXrViewPose(session, view_num, view.pose);
         //SetXrViewFov(session, view_num, view.fov);
 
-        // TODO do something with rectangles
         auto& rect = view.subImage.imageRect;
 
         auto proxy_swapchain = reinterpret_cast<D3D11ProxySwapchain*>(g_proxy_swapchains[view.subImage.swapchain]);
@@ -119,9 +131,30 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint3
         D3D11_RECT scissor_rect{ 0, 0, system_width, system_height };
         context->RSSetViewports(1, &view_port);
         context->RSSetScissorRects(1, &scissor_rect);
+        context->RSSetState(rasterizer_state.Get());
 
         // Update shader constants
-        bool is_opaque = false;
+        bool is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+
+        context->IASetInputLayout(nullptr);
+        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        context->VSSetShader(vertex_shader.Get(), nullptr, 0);
+        context->VSSetConstantBuffers(0, 1, shader_constant_buffer.GetAddressOf());
+
+        context->PSSetShader(pixel_shader.Get(), nullptr, 0);
+        context->PSSetConstantBuffers(0, 1, shader_constant_buffer.GetAddressOf());
+        context->PSSetShaderResources(0, 1, proxy_resource.GetAddressOf());
+
+        context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
+
+        if (is_opaque) {
+            context->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
+        }
+        else {
+            context->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
+        }
+
         D3D11_MAPPED_SUBRESOURCE mapped_constants;
         context->Map(shader_constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_constants);
         {
@@ -142,23 +175,7 @@ void D3D11Compositor::ComposeProjectionLayer(ID3D11DeviceContext* context, uint3
         }
         context->Unmap(shader_constant_buffer.Get(), 0);
 
-        context->VSSetShader(vertex_shader.Get(), nullptr, 0);
-        context->VSSetConstantBuffers(0, 1, &shader_constant_buffer);
-
-        context->PSSetShader(pixel_shader.Get(), nullptr, 0);
-        context->PSSetConstantBuffers(0, 1, &shader_constant_buffer);
-        context->VSSetShaderResources(view_num, 1, &proxy_resource);
-
-        context->PSSetSamplers(0, 1, &sampler_state);
-
-        if (is_opaque) {
-            context->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
-        }
-        else {
-            context->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
-        }
-
-        context->DrawInstanced(3, 1, 0, 0);
+        context->Draw(3, 0);
     }
 }
 
@@ -221,14 +238,17 @@ void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t sy
         }
         context->Unmap(shader_constant_buffer.Get(), 0);
 
+        context->IASetInputLayout(nullptr);
+        context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
         context->VSSetShader(vertex_shader.Get(), nullptr, 0);
-        context->VSSetConstantBuffers(0, 1, &shader_constant_buffer);
+        context->VSSetConstantBuffers(0, 1, shader_constant_buffer.GetAddressOf());
 
         context->PSSetShader(pixel_shader.Get(), nullptr, 0);
-        context->PSSetConstantBuffers(0, 1, &shader_constant_buffer);
-        context->VSSetShaderResources(view_num, 1, &proxy_resource);
+        context->PSSetConstantBuffers(0, 1, shader_constant_buffer.GetAddressOf());
+        context->PSSetShaderResources(view_num, 1, &proxy_resource);
 
-        context->PSSetSamplers(0, 1, &sampler_state);
+        context->PSSetSamplers(0, 1, sampler_state.GetAddressOf());
 
         if (is_opaque) {
             context->OMSetBlendState(blend_state_opaque.Get(), {}, 0xffffffff);
@@ -237,6 +257,6 @@ void D3D11Compositor::ComposeQuadLayer(ID3D11DeviceContext* context, uint32_t sy
             context->OMSetBlendState(blend_state_blend.Get(), {}, 0xffffffff);
         }
 
-        context->DrawInstanced(3, 1, 0, 0);
+        context->Draw(3, 0);
     }
 }

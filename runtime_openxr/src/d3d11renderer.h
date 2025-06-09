@@ -11,6 +11,7 @@ class D3D11Renderer : public Renderer {
     uint64_t xr_system;
     ComPtr<ID3D11Device> d3d11_device;
     ComPtr<ID3D11DeviceContext> d3d11_device_context;
+    ComPtr<ID3D11DeviceContext> d3d11_immediate_context;
     bool should_weave = true;
 
     D3D11Compositor* compositor;

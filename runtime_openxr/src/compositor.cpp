@@ -130,21 +130,23 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
         std::vector<char>pixel_shader;
 
         fs::path shader_dir = fs::path(runtime_path).parent_path();
-        if (fs::exists(shader_dir / LAYERING_VERTEX_NAME)) {
-            fs::path vertex = shader_dir / LAYERING_VERTEX_NAME;
-            fs::path pixel = shader_dir / LAYERING_PIXEL_NAME;
+        if (fs::exists(shader_dir / shader_path)) {
+            fs::path vertex = shader_dir / dx12_vs;
+            fs::path pixel = shader_dir / dx12_ps;
             vertex_shader = LoadBinaryFile(vertex.string());
             pixel_shader = LoadBinaryFile(pixel.string());
-
-            if (vertex_shader.empty() || pixel_shader.empty()) {
-                LOG(ERROR) << "Couldn't find shaders";
-                return false;
-            }
         }
         else {
-            vertex_shader = LoadBinaryFile(LAYERING_VERTEX_DEBUG);
-            pixel_shader = LoadBinaryFile(LAYERING_PIXEL_DEBUG);
+            fs::path vertex = fs::path(shader_path) / dx12_vs;
+            fs::path pixel = fs::path(shader_path) / dx12_ps;
+            vertex_shader = LoadBinaryFile(vertex.string());
+            pixel_shader = LoadBinaryFile(pixel.string());
             LOG(INFO) << "Loading shaders with debug paths";
+        }
+
+        if (vertex_shader.empty() || pixel_shader.empty()) {
+            LOG(ERROR) << "Couldn't find shaders";
+            return false;
         }
 
         CD3DX12_RASTERIZER_DESC rasterizerStateDesc(D3D12_DEFAULT);

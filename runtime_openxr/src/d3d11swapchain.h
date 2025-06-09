@@ -18,7 +18,6 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     std::vector<ComPtr<ID3D11ShaderResourceView>> shader_resource_views;
     std::vector<ComPtr<ID3D11DepthStencilView>> depth_stencil_views;
 
-    D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
     uint32_t current_frame_index = 0;
     uint32_t awaited_frame_index = 0;
     uint32_t released_frame_index = 0;
@@ -49,7 +48,7 @@ public:
     std::vector<ComPtr<ID3D11RenderTargetView>> GetRenderTargetViews();
     bool IsDepthResource();
 
-    [[nodiscard]] uint32_t GetAwaitedImageIndex();
+    uint32_t GetAwaitedImageIndex();
 };
 
 class D3D11WindowSwapchain {

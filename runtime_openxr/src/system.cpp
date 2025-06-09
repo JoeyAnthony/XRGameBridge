@@ -289,7 +289,7 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
     // TODO Application may ask for a velocity of the tracked object
     if (location->next != nullptr) {
         XrSpaceVelocity* velocity = static_cast<XrSpaceVelocity*>(location->next);
-        velocity->velocityFlags;
+        velocity->velocityFlags = XR_SPACE_VELOCITY_ANGULAR_VALID_BIT;
     }
 
     // For Reference spaces

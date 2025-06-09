@@ -9,12 +9,20 @@ class GB_Instance;
 
 constexpr unsigned short back_buffer_count = 2;
 
+// Path defined in Cmake
+#ifndef DEBUG_SHADER_PATH
+#define DEBUG_SHADER_PATH ""
+#endif
+
 class Compositor {
 public:
-    const std::string LAYERING_VERTEX_DEBUG = "../../runtime_openxr/shaders/layering_vertex.cso";
-    const std::string LAYERING_PIXEL_DEBUG = "../../runtime_openxr/shaders/layering_pixel.cso";
-    const std::string LAYERING_VERTEX_NAME = "shaders/layering_vertex.cso";
-    const std::string LAYERING_PIXEL_NAME = "shaders/layering_pixel.cso";
+
+
+    const std::string shader_path = "shaders/";
+    const std::string dx11_vs = "dx11.vs";
+    const std::string dx11_ps = "dx11.ps";
+    const std::string dx12_vs = "dx12.vs";
+    const std::string dx12_ps = "dx12.ps";
 
     virtual ~Compositor() = default;
 

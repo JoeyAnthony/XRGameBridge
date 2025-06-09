@@ -64,17 +64,17 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     GraphicsBackend backend = renderer->GetGraphicsBackend();
     if (backend == GraphicsBackend::D3D12) {
         auto* d3d12_renderer = reinterpret_cast<D3D12Renderer*>(gb_session.renderer);
-        auto* proxy = D3D12ProxySwapchain::Create(createInfo, d3d12_renderer);
+        proxy_swapchain = D3D12ProxySwapchain::Create(createInfo, d3d12_renderer);
 
         // Create swap chain
-        if (proxy->CreateResources(createInfo) == false) {
+        if (proxy_swapchain->CreateResources(createInfo) == false) {
             LOG(ERROR) << "Failed to create proxy swapchain";
             return XR_ERROR_RUNTIME_FAILURE;
         }
     }
     else if (backend == GraphicsBackend::D3D11) {
         auto* d3d11_renderer = reinterpret_cast<D3D11Renderer*>(gb_session.renderer);
-        D3D11ProxySwapchain::Create(createInfo, d3d11_renderer);
+        proxy_swapchain = D3D11ProxySwapchain::Create(createInfo, d3d11_renderer);
     }
     else {
         // Not implemented

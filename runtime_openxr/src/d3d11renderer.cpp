@@ -23,6 +23,7 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
     info.width = system_resolution.x;
     info.height = system_resolution.y;
+    info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     info.arraySize = 1;
     info.faceCount = 1;
     info.mipCount = 1;
@@ -31,9 +32,7 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
     
     try {
-        D3D11ProxySwapchain::Create(&info, this);
-        //intermediate_resource->CreateResources(&info, L"Intermediate resource");
-
+        intermediate_resource = D3D11ProxySwapchain::Create(&info, this);
         return XR_SUCCESS;
     }
     catch (XrException& e) {
@@ -50,6 +49,7 @@ XrResult D3D11Renderer::CreateWeaver(GB_Instance* instance, GB_System& gb_system
     auto system_resolution = GetSystemResolution(gb_system);
     native_weaver = new SR::PredictingDX11Weaver(*sr_context, d3d11_device.Get(), d3d11_device_context.Get(), system_resolution.x, system_resolution.y, window.GetWindowHandle());
     sr_context->initialize();
+    native_weaver->setInputFrameBuffer(intermediate_resource->GetShaderResourceViews()[0].Get());
 
     return XR_SUCCESS;
 }
@@ -89,7 +89,8 @@ XrResult D3D11Renderer::CreateWindowSwapchain(GB_System& gb_system) {
 }
 
 bool D3D11Renderer::CreateCommandLists() {
-    d3d11_device->GetImmediateContext(&d3d11_device_context);
+    d3d11_device->CreateDeferredContext(0, d3d11_device_context.GetAddressOf());
+    d3d11_device->GetImmediateContext(d3d11_immediate_context.GetAddressOf());
     return true;
 }
 
@@ -104,13 +105,9 @@ XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, u
     auto native_resolution = GetSystemResolution(g_systems[xr_system]);
 
     // Set intermediate resource as render target
-    
-
-    // Compose
-    auto& intermediate_rtv = intermediate_resource->GetRenderTargetViews()[0];
-    d3d11_device_context->OMSetRenderTargets(1, &intermediate_rtv, nullptr);
+    ComPtr<ID3D11RenderTargetView> intermediate_rtv = intermediate_resource->GetRenderTargetViews()[0];
+    d3d11_device_context->OMSetRenderTargets(1, intermediate_rtv.GetAddressOf(), nullptr);
     d3d11_device_context->ClearRenderTargetView(intermediate_rtv.Get(), clear_color);
-    d3d11_device_context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
     compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), native_resolution.x, native_resolution.y);
@@ -124,8 +121,8 @@ XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, u
 
 
     // Set window swapchain as render target
-    auto window_back_buffer = window_swapchain->GetRenderTargetViews()[window_swapchain_index];
-    d3d11_device_context->OMSetRenderTargets(1, &window_back_buffer, nullptr);
+    ComPtr<ID3D11RenderTargetView> window_back_buffer = window_swapchain->GetRenderTargetViews()[window_swapchain_index];
+    d3d11_device_context->OMSetRenderTargets(1, window_back_buffer.GetAddressOf(), nullptr);
     d3d11_device_context->ClearRenderTargetView(window_back_buffer.Get(), clear_color);
 
 
@@ -153,12 +150,10 @@ XrResult D3D11Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     // Set window swapchain as render target
     //CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
 
-
     // Compose
     auto window_back_buffer = window_swapchain->GetRenderTargetViews()[window_swapchain_index];
-    d3d11_device_context->OMSetRenderTargets(1, &window_back_buffer, nullptr);
+    d3d11_device_context->OMSetRenderTargets(1, window_back_buffer.GetAddressOf(), nullptr);
     d3d11_device_context->ClearRenderTargetView(window_back_buffer.Get(), clear_color);
-    d3d11_device_context->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
     compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), native_resolution.x, native_resolution.y);
@@ -172,7 +167,7 @@ D3D11Renderer* D3D11Renderer::Create(GB_Instance* instance, XrSystemId systemId,
     { // Check validity of the device
         const IUnknown* obj = dynamic_cast<IUnknown*> (d3d11_bindings->device);
         if (!obj) {
-            throw XrException("Failed to create D3D11Renderer", XR_ERROR_GRAPHICS_DEVICE_INVALID);
+            throw XrException(XR_ERROR_GRAPHICS_DEVICE_INVALID, "Failed to create D3D11Renderer");
         }
     }
 
@@ -213,8 +208,9 @@ XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
 
     // Close command list
-    //ExecuteCommandList(context.Get());
-
+    ID3D11CommandList* cmd_list;
+    d3d11_device_context->FinishCommandList(false, &cmd_list);
+    d3d11_immediate_context->ExecuteCommandList(cmd_list, true);
 
     // Present to window
     window_swapchain->PresentFrame();

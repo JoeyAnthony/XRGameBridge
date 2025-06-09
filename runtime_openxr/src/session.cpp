@@ -98,6 +98,8 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Start session idle thread
     new_session.StartSessionIdle();
 
+    ChangeSessionState(new_session, XR_SESSION_STATE_READY);
+
     LOG(INFO) << "Successfully created session: " << session_creation_count;
     return XR_SUCCESS;
 }

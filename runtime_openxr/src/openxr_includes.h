@@ -55,7 +55,7 @@ inline void ThrowIfFailed(HRESULT hr) {
 class XrException : public std::runtime_error {
     const XrResult xr_result;
 public:
-    XrException(std::string message, XrResult result) : xr_result(result), std::runtime_error(message) {
+    XrException(XrResult result, std::string message) : xr_result(result), std::runtime_error(message) {
         LOG(ERROR) << "XrException was thrown: " << message << "\n";
     }
 

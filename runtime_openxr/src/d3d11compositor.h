@@ -12,6 +12,7 @@ class D3D11Compositor: public Compositor {
     ComPtr<ID3D11Buffer> shader_constant_buffer;
     ComPtr<ID3D11BlendState> blend_state_opaque;
     ComPtr<ID3D11BlendState> blend_state_blend;
+    ComPtr<ID3D11RasterizerState> rasterizer_state;
 
     struct LayeringConstants {
         uint32_t is_opaque;

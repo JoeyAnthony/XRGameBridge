@@ -18,7 +18,7 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
     // Initialize resources
     XrResult result = XR_ERROR_RUNTIME_FAILURE;
     if (d3d11_proxy->CreateResources(createInfo) == false) {
-         throw XrException("Failed to create proxy swapchain", XR_ERROR_RUNTIME_FAILURE);
+         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create proxy swapchain");
     }
 
     swapchain_creation_count++;
@@ -33,6 +33,7 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
 
 D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle)   {
     d3d11_renderer = renderer;
+    current_image_state = std::vector(1, IMAGE_STATE_WAITING);
 }
 
 bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
@@ -48,11 +49,13 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::wstring resource_name) {
     resolution_x = createInfo->width;
     resolution_y = createInfo->height;
+    current_image_state.assign(back_buffer_count, IMAGE_STATE_RELEASED);
+    current_image_state.shrink_to_fit();
 
     // Initialize resource vectors
-    current_image_state.resize(back_buffer_count);
     if (bind_flags & D3D11_BIND_DEPTH_STENCIL) {
-        back_buffers.resize(0);
+        // TODO Check if a single depth map is enough
+        back_buffers.resize(back_buffer_count);
         render_target_views.resize(0);
         shader_resource_views.resize(0);
         depth_stencil_views.resize(back_buffer_count);
@@ -67,6 +70,11 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 
         is_depth_resource = false;
     }
+
+    back_buffers.shrink_to_fit();
+    render_target_views.shrink_to_fit();
+    shader_resource_views.shrink_to_fit();
+    depth_stencil_views.shrink_to_fit();
 
     D3D11_TEXTURE2D_DESC texture_desc;
     ZeroMemory(&texture_desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -86,8 +94,10 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 
     // Check multi sample quality
     uint32_t sample_quality;
-    if (SUCCEEDED(device->CheckMultisampleQualityLevels(texture_desc.Format, texture_desc.SampleDesc.Count, &sample_quality))) {
-        texture_desc.SampleDesc.Quality = glm::min<uint32_t>(sample_quality, D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT);
+    HRESULT res = device->CheckMultisampleQualityLevels(texture_desc.Format, texture_desc.SampleDesc.Count, &sample_quality);
+    sample_quality--;
+    if (SUCCEEDED(res)) {
+        texture_desc.SampleDesc.Quality = glm::min<uint32_t>(texture_desc.SampleDesc.Quality, sample_quality);
     }
     else {
         LOG(WARNING) << "D3D11 Couldn't retrieve multi sample quality levels";
@@ -99,8 +109,9 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     for (uint32_t i = 0; i < back_buffers.size(); i++) {
         if (texture_desc.BindFlags & D3D11_BIND_DEPTH_STENCIL) {
             auto hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
-            if (FAILED(hr))
-                return hr;
+            if (FAILED(hr)) {
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain depth texture");
+            }
 
             D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
             ZeroMemory(&descDSV, sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC));
@@ -110,8 +121,9 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             descDSV.Texture2D.MipSlice = 0;
 
             hr = device->CreateDepthStencilView(back_buffers[i].Get(), &descDSV, depth_stencil_views[i].GetAddressOf());
-            if (FAILED(hr))
-                return hr;
+            if (FAILED(hr)) {
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
+            }
 
             com_name_prefix = L"Depth ";
 
@@ -119,9 +131,9 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             //back_buffers[i]->Release();
         }
         else {
-            if (FAILED(device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf()))) {
-                LOG(ERROR) << "D3D11 Failed creating proxy swapchain texture";
-                return false;
+            auto hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
+            if (FAILED(hr)) {
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain texture");
             }
 
             D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
@@ -130,8 +142,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
             if (FAILED(device->CreateRenderTargetView(back_buffers[i].Get(), &rtv_desc, render_target_views[i].GetAddressOf()))) {
-                LOG(ERROR) << "D3D11 Failed creating proxy swapchain render target view";
-                return false;
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain render target view");
             }
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
@@ -141,9 +152,9 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             srv_desc.Texture2D.MipLevels = createInfo->mipCount;
             srv_desc.Texture2D.MostDetailedMip = 0;
 
-            if (FAILED(device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, shader_resource_views[i].GetAddressOf()))) {
-                LOG(ERROR) << "D3D11 Failed creating proxy swapchain shader resource view";
-                return false;
+            hr = device->CreateShaderResourceView(back_buffers[i].Get(), &srv_desc, shader_resource_views[i].GetAddressOf());
+            if (FAILED(hr)) {
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain shader resource view");
             }
 
             // TODO Example releases the resource here?
@@ -296,8 +307,9 @@ uint32_t D3D11ProxySwapchain::GetAwaitedImageIndex()
 }
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags) {
+    bind_flags = 1;
     if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
-        bind_flags |= D3D11_BIND_RENDER_TARGET;
+        bind_flags = D3D11_BIND_RENDER_TARGET;
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
@@ -309,17 +321,20 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
-        usage = D3D11_USAGE_DEFAULT;
+        // Ignored
+        // usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT & usage_flags) {
-        usage = D3D11_USAGE_DEFAULT;
+        // Ignored
+        // usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
         bind_flags |= D3D11_BIND_SHADER_RESOURCE;
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
-        usage = D3D11_USAGE_DEFAULT;
+        // Ignored
+        // usage = D3D11_USAGE_DEFAULT;
     }
 }
 
@@ -329,7 +344,8 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
     auto device = renderer->GetDevice();
     width = createInfo->width;
     height = createInfo->height;
-    render_target_views.resize(back_buffer_count);
+    render_target_views.resize(1);
+    render_target_views.shrink_to_fit();
 
     // TODO On failure all objects here should be destroyed
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
@@ -339,23 +355,22 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
     swapChainDesc.Width = createInfo->width;
     swapChainDesc.Height = createInfo->height;
     swapChainDesc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
-    swapChainDesc.BufferCount = back_buffer_count;
+    swapChainDesc.Stereo = false;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
-    swapChainDesc.Scaling = DXGI_SCALING::DXGI_SCALING_ASPECT_RATIO_STRETCH;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
+    swapChainDesc.BufferCount = back_buffer_count;
+    swapChainDesc.Scaling = DXGI_SCALING_STRETCH; //DXGI_SCALING_ASPECT_RATIO_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.Stereo = false;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
     fsSwapChainDesc.Windowed = TRUE;
     fsSwapChainDesc.Scaling = DXGI_MODE_SCALING_STRETCHED;
 
-    // Swap chain needs the queue so that it can force a flush on it.
     ComPtr<IDXGISwapChain1> swapChain;
-    HRESULT res = factory->CreateSwapChainForHwnd(device.Get(), hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
+    HRESULT res = factory->CreateSwapChainForHwnd(device.Get(), hwnd, &swapChainDesc, 0, nullptr, &swapChain);
     if (FAILED(res)) {
         LOG(ERROR) << "Failed to create d3d11 swap chain";
         throw std::runtime_error("Failed creating d3d11 swapchain");
@@ -365,17 +380,14 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
         throw std::runtime_error("Failed to get ComPtr object d3d11");
     }
 
-    // Create rtvs
-    for (uint32_t i = 0; i < back_buffer_count; i++) {
-        // Create render target views
-        ID3D11Texture2D* back_buffer;
-        swap_chain->GetBuffer(i, __uuidof(ID3D11Texture2D), (void**)&back_buffer);
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
-        rtv_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
-        rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-
-        device->CreateRenderTargetView(back_buffer, &rtv_desc, &render_target_views[i]);
-    }
+    // Create render target view
+    ID3D11Texture2D* back_buffer;
+    // Since we are using DXGI_SWAP_EFFECT_FLIP_DISCARD, we can only access the first index of the buffers. See documentation for IDXGISwapChain::GetBuffer.
+    swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&back_buffer);
+    D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
+    rtv_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+    rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    device->CreateRenderTargetView(back_buffer, &rtv_desc, &render_target_views[0]);
 }
 
 uint32_t D3D11WindowSwapchain::GetCurrentImageIndex()
