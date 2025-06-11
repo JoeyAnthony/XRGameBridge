@@ -31,6 +31,11 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
     if (backend == GraphicsBackend::D3D12 || backend == GraphicsBackend::D3D11) {
         supported_swapchain_formats.push_back(DXGI_FORMAT_R8G8B8A8_UNORM);
         supported_swapchain_formats.push_back(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+
+        supported_swapchain_formats.push_back(DXGI_FORMAT_D16_UNORM);
+        supported_swapchain_formats.push_back(DXGI_FORMAT_D32_FLOAT_S8X24_UINT);
+        supported_swapchain_formats.push_back(DXGI_FORMAT_D32_FLOAT);
+        supported_swapchain_formats.push_back(DXGI_FORMAT_D24_UNORM_S8_UINT);
     }
     else {
         // not implemented

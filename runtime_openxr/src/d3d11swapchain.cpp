@@ -108,6 +108,8 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     // Create resources
     for (uint32_t i = 0; i < back_buffers.size(); i++) {
         if (texture_desc.BindFlags & D3D11_BIND_DEPTH_STENCIL) {
+            texture_desc.Format = GetDepthBufferFormat(static_cast<DXGI_FORMAT>(createInfo->format));
+
             auto hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
             if (FAILED(hr)) {
                 throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain depth texture");
@@ -336,6 +338,34 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage
         // Ignored
         // usage = D3D11_USAGE_DEFAULT;
     }
+}
+
+DXGI_FORMAT GetDepthBufferFormat(DXGI_FORMAT application_format) {
+    DXGI_FORMAT format = application_format;
+    DXGI_FORMAT view_format = DXGI_FORMAT_R16_FLOAT;
+
+    switch (application_format) {
+    case DXGI_FORMAT_D16_UNORM:
+        format = DXGI_FORMAT_R16_TYPELESS;
+        view_format = DXGI_FORMAT_R16_FLOAT;
+        break;
+    case DXGI_FORMAT_D32_FLOAT:
+        format = DXGI_FORMAT_R32_TYPELESS;
+        view_format = DXGI_FORMAT_R32_FLOAT;
+        break;
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+        format = DXGI_FORMAT_R24G8_TYPELESS;
+        view_format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        break;
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        format = DXGI_FORMAT_R32G8X24_TYPELESS;
+        view_format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+        break;
+    default:
+        break;
+    }
+
+    return format;
 }
 
 D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd)

@@ -79,3 +79,4 @@ public:
 };
 
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags);
+DXGI_FORMAT GetDepthBufferFormat(DXGI_FORMAT application_format);
