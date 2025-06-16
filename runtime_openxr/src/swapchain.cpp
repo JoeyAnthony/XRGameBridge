@@ -6,6 +6,7 @@
 
 #include <wrl/client.h>
 
+#include "d3d11renderer.h"
 #include "easylogging++.h"
 #include "openxr_functions.h"
 #include "instance.h"
@@ -15,10 +16,29 @@
 
 XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityInput, uint32_t* formatCountOutput, int64_t* formats) {
     GraphicsBackend backend;
+    std::set supported_formats {
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        DXGI_FORMAT_D16_UNORM,
+        DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+        DXGI_FORMAT_D32_FLOAT,
+        DXGI_FORMAT_D24_UNORM_S8_UINT,
+    };
 
     try {
         GB_Session& gb_session = g_sessions.at(session);
         backend = gb_session.renderer->GetGraphicsBackend();
+
+        if (backend == GraphicsBackend::D3D11) {
+            auto* d3d11_renderer = reinterpret_cast<D3D11Renderer*>(gb_session.renderer);
+            for (auto it = supported_formats.begin(); it != supported_formats.end(); ++it) {
+                unsigned int support;
+                d3d11_renderer->GetDevice()->CheckFormatSupport(*it, &support);
+                if (support & D3D11_FORMAT_SUPPORT_TEXTURE2D == 0) {
+                    it = supported_formats.erase(it);
+                }
+            }
+        }
     }
     catch (std::out_of_range& e) {
         return XR_ERROR_SESSION_LOST;
@@ -29,13 +49,7 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
 
     std::vector<int64_t> supported_swapchain_formats;
     if (backend == GraphicsBackend::D3D12 || backend == GraphicsBackend::D3D11) {
-        supported_swapchain_formats.push_back(DXGI_FORMAT_R8G8B8A8_UNORM);
-        supported_swapchain_formats.push_back(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-
-        supported_swapchain_formats.push_back(DXGI_FORMAT_D16_UNORM);
-        supported_swapchain_formats.push_back(DXGI_FORMAT_D32_FLOAT_S8X24_UINT);
-        supported_swapchain_formats.push_back(DXGI_FORMAT_D32_FLOAT);
-        supported_swapchain_formats.push_back(DXGI_FORMAT_D24_UNORM_S8_UINT);
+        supported_swapchain_formats.insert(supported_swapchain_formats.begin(), supported_formats.begin(), supported_formats.end());
     }
     else {
         // not implemented

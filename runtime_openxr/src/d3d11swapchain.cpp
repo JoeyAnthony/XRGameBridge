@@ -66,7 +66,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         back_buffers.resize(back_buffer_count);
         render_target_views.resize(back_buffer_count);
         shader_resource_views.resize(back_buffer_count);
-        depth_stencil_views.resize(back_buffer_count);
+        depth_stencil_views.resize(0);
 
         is_depth_resource = false;
     }
@@ -76,13 +76,13 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     shader_resource_views.shrink_to_fit();
     depth_stencil_views.shrink_to_fit();
 
-    D3D11_TEXTURE2D_DESC texture_desc;
+    D3D11_TEXTURE2D_DESC texture_desc {};
     ZeroMemory(&texture_desc, sizeof(D3D11_TEXTURE2D_DESC));
     texture_desc.Width = createInfo->width;
     texture_desc.Height = createInfo->height;
     texture_desc.MipLevels = createInfo->mipCount;
     texture_desc.ArraySize = createInfo->arraySize;
-    texture_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+    texture_desc.Format = ResolveTextureFormatForUsage(static_cast<DXGI_FORMAT>(createInfo->format), createInfo->usageFlags);
     texture_desc.SampleDesc.Count = createInfo->sampleCount;
     texture_desc.SampleDesc.Quality = 0;
     texture_desc.Usage = usage;
@@ -108,9 +108,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     // Create resources
     for (uint32_t i = 0; i < back_buffers.size(); i++) {
         if (texture_desc.BindFlags & D3D11_BIND_DEPTH_STENCIL) {
-            texture_desc.Format = GetDepthBufferFormat(static_cast<DXGI_FORMAT>(createInfo->format));
-
-            auto hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
+            HRESULT hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
             if (FAILED(hr)) {
                 throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating proxy swapchain depth texture");
             }
@@ -122,10 +120,10 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
             descDSV.Texture2D.MipSlice = 0;
 
-            hr = device->CreateDepthStencilView(back_buffers[i].Get(), &descDSV, depth_stencil_views[i].GetAddressOf());
-            if (FAILED(hr)) {
-                throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
-            }
+            //hr = device->CreateDepthStencilView(back_buffers[i].Get(), &descDSV, depth_stencil_views[i].GetAddressOf());
+            //if (FAILED(hr)) {
+            //    throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
+            //}
 
             com_name_prefix = L"Depth ";
 
@@ -308,18 +306,27 @@ uint32_t D3D11ProxySwapchain::GetAwaitedImageIndex()
     return awaited_frame_index;
 }
 
+void ApplyBindFlag(D3D11_BIND_FLAG flag ,uint32_t& bind_flags) {
+    if(bind_flags == 0) {
+        bind_flags = flag;
+    }
+    else {
+        bind_flags |= flag;
+    }
+}
+
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags) {
-    bind_flags = 1;
+    bind_flags = 0;
     if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
-        bind_flags = D3D11_BIND_RENDER_TARGET;
+        ApplyBindFlag(D3D11_BIND_RENDER_TARGET, bind_flags);
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT & usage_flags) {
-        bind_flags |= D3D11_BIND_DEPTH_STENCIL;
+        ApplyBindFlag(D3D11_BIND_DEPTH_STENCIL, bind_flags);
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT & usage_flags) {
-        bind_flags |= D3D11_BIND_UNORDERED_ACCESS;
+        ApplyBindFlag(D3D11_BIND_UNORDERED_ACCESS, bind_flags);
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
@@ -331,7 +338,7 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage
         // usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
-        bind_flags |= D3D11_BIND_SHADER_RESOURCE;
+        ApplyBindFlag(D3D11_BIND_SHADER_RESOURCE, bind_flags);
         usage = D3D11_USAGE_DEFAULT;
     }
     if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
@@ -340,32 +347,42 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage
     }
 }
 
-DXGI_FORMAT GetDepthBufferFormat(DXGI_FORMAT application_format) {
-    DXGI_FORMAT format = application_format;
-    DXGI_FORMAT view_format = DXGI_FORMAT_R16_FLOAT;
+DXGI_FORMAT ResolveTextureFormatForUsage(DXGI_FORMAT application_format, XrSwapchainUsageFlags usage_flags) {
+    bool needs_sampling = (usage_flags & XR_SWAPCHAIN_USAGE_SAMPLED_BIT) != 0;
+    bool is_render_target = (usage_flags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT) != 0;
+    bool is_depth_stencil = (usage_flags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
 
-    switch (application_format) {
-    case DXGI_FORMAT_D16_UNORM:
-        format = DXGI_FORMAT_R16_TYPELESS;
-        view_format = DXGI_FORMAT_R16_FLOAT;
-        break;
-    case DXGI_FORMAT_D32_FLOAT:
-        format = DXGI_FORMAT_R32_TYPELESS;
-        view_format = DXGI_FORMAT_R32_FLOAT;
-        break;
-    case DXGI_FORMAT_D24_UNORM_S8_UINT:
-        format = DXGI_FORMAT_R24G8_TYPELESS;
-        view_format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-        break;
-    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-        format = DXGI_FORMAT_R32G8X24_TYPELESS;
-        view_format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-        break;
-    default:
-        break;
+    if ((needs_sampling && is_render_target) || (needs_sampling && is_depth_stencil)) {
+        switch (application_format) {
+            // Color formats
+            case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+            case DXGI_FORMAT_R8G8B8A8_UNORM:
+                return DXGI_FORMAT_R8G8B8A8_TYPELESS;
+
+            case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+            case DXGI_FORMAT_B8G8R8A8_UNORM:
+                return DXGI_FORMAT_B8G8R8A8_TYPELESS;
+
+            case DXGI_FORMAT_R16G16B16A16_FLOAT:
+                return DXGI_FORMAT_R16G16B16A16_TYPELESS;
+
+            // Depth formats
+            case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                return DXGI_FORMAT_R24G8_TYPELESS;
+
+            case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+                return DXGI_FORMAT_R32G8X24_TYPELESS;
+
+            case DXGI_FORMAT_D32_FLOAT:
+                return DXGI_FORMAT_R32_TYPELESS;
+
+            default:
+                // Unknown or not a format that requires reinterpretation
+                throw XrException(XR_ERROR_RUNTIME_FAILURE, "Unsupported or not a format that requires reinterpretation found");
+        }
     }
 
-    return format;
+    return application_format;
 }
 
 D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd)

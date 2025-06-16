@@ -10,9 +10,6 @@
 #include "settings.h"
 #include "instance.h"
 
-SR::SRContext* sr_context;
-SR::PredictingDX11Weaver* native_weaver;
-
 XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     // Create intermediate resources for weaving render target
     // TODO Remove session parameter
@@ -63,7 +60,7 @@ XrResult D3D11Renderer::CreateSystemWindow(GB_System& gb_system) {
     auto system_resolution = GetSystemResolution(gb_system);
     window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
+    //window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, 2560, 1440, true, false, true);
 
     return XR_SUCCESS;
 }
@@ -186,6 +183,14 @@ D3D11Renderer::D3D11Renderer(GB_Instance* instance, XrSystemId systemId, const X
     CreateIntermediateTexture(system);
     CreateWeaver(instance, system);
     CreateWindowSwapchain(system);
+}
+
+D3D11Renderer::~D3D11Renderer() {
+    delete native_weaver;
+    delete compositor;
+    delete window_swapchain;
+    window.DestroyApplicationWindow();
+    delete intermediate_resource;
 }
 
 XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {

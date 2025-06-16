@@ -78,5 +78,6 @@ public:
     std::vector<ComPtr<ID3D11RenderTargetView>> GetRenderTargetViews();
 };
 
+void ApplyBindFlag(D3D11_BIND_FLAG flag, uint32_t& bind_flags);
 void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags);
-DXGI_FORMAT GetDepthBufferFormat(DXGI_FORMAT application_format);
+DXGI_FORMAT ResolveTextureFormatForUsage(DXGI_FORMAT application_format, XrSwapchainUsageFlags usage_flags);

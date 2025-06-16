@@ -14,6 +14,7 @@ class D3D11Renderer : public Renderer {
     ComPtr<ID3D11DeviceContext> d3d11_immediate_context;
     bool should_weave = true;
 
+    SR::PredictingDX11Weaver* native_weaver;
     D3D11Compositor* compositor;
     D3D11WindowSwapchain* window_swapchain;
     D3D11ProxySwapchain* intermediate_resource;
@@ -39,6 +40,7 @@ public:
 
     D3D11Renderer() = delete;
     explicit D3D11Renderer(GB_Instance* instance, XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding);
+    ~D3D11Renderer() override;
 
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
@@ -47,7 +49,6 @@ public:
     GraphicsBackend GetGraphicsBackend() override;
 
     ComPtr<ID3D11Device> GetDevice();
-    ComPtr<ID3D12CommandQueue>& GetCommandQueue();
     ComPtr<ID3D11DeviceContext>& GetDeviceContext();
 
     // Inherited via Renderer

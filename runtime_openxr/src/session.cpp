@@ -106,11 +106,11 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 
 XrResult xrDestroySession(XrSession session) {
     // TODO Should probably destroy all objects related to a session.
-    // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.
     // Also action sets/g_actions attached to the session should be destroyed
     GB_Session& gb_session = g_sessions[session];
-
     gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
+
+    delete gb_session.renderer;
 
     try {
         g_sessions.erase(session);
