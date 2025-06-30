@@ -34,6 +34,7 @@ XrResult xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoid
         return XR_ERROR_FUNCTION_UNSUPPORTED;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE; // Generic error
     }
 
@@ -57,7 +58,8 @@ XrResult xrNegotiateLoaderRuntimeInterface(const XrNegotiateLoaderInfo* loaderIn
 }
 
 XrResult xrEnumerateInstanceExtensionProperties(const char* layerName, uint32_t propertyCapacityInput, uint32_t* propertyCountOutput, XrExtensionProperties* properties) {
-    LOG(INFO) << "Called: xrEnumerateInstanceExtensionProperties";
+    TraceLogFunctionCall(__func__, __LINE__);
+
     const uint32_t array_size = static_cast<uint32_t>(supported_extensions.size());
 
     *propertyCountOutput = array_size;
@@ -78,6 +80,8 @@ XrResult xrEnumerateInstanceExtensionProperties(const char* layerName, uint32_t 
 }
 
 XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     LOG(INFO) << "Creating instance created session: ";
 
     if (createInfo == nullptr) {
@@ -164,6 +168,7 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     // Check the context
     if (g_xr_instance->GetPlatformManager()->GetContext() == nullptr) {
         LOG(ERROR) << "Failed to connect to the SR service";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -172,6 +177,8 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
 }
 
 XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* instanceProperties) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO Make a list of instances to check whether passed instances are valid or not
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 
@@ -182,6 +189,7 @@ XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* inst
 }
 
 XrResult xrDestroyInstance(XrInstance instance) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
     //window_hook->CloseConsole();
 
@@ -192,11 +200,13 @@ XrResult xrDestroyInstance(XrInstance instance) {
 
     delete g_xr_instance;
 
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    return XR_SUCCESS;
 }
 
 // DX11 and DX12 requirements functions have the same logic, they do have different out types
 XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D11KHR* graphicsRequirements) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
     D3D12WindowSwapchain::CreateDXGIFactory(&factory);
@@ -226,6 +236,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         return XR_ERROR_SYSTEM_INVALID;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -239,6 +250,8 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D12KHR* graphicsRequirements) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
     D3D12WindowSwapchain::CreateDXGIFactory(&factory);
@@ -264,12 +277,13 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         //TODO Do I need this in both? Maybe only in system sincen that the device that renders in the end
         g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D12);
         system.active_graphics_backend = GraphicsBackend::D3D12;
-        LOG(INFO) << "";
     }
     catch (std::out_of_range& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_SYSTEM_INVALID;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -293,6 +307,8 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrStringToPath(XrInstance instance, const char* pathString, XrPath* path) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrPath xr_path = string_hasher(pathString);
     *path = xr_path;
 
@@ -308,6 +324,8 @@ XrResult xrStringToPath(XrInstance instance, const char* pathString, XrPath* pat
 }
 
 XrResult xrPathToString(XrInstance instance, XrPath path, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     std::string string_path = g_xrpath_storage[path];
 
     if (string_path.empty()) {
@@ -330,6 +348,8 @@ XrResult xrPathToString(XrInstance instance, XrPath path, uint32_t bufferCapacit
 }
 
 XrResult xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo* createInfo, XrActionSet* actionSet) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     const std::string action_set_name(createInfo->actionSetName);
     const std::string localized_action_set_name(createInfo->localizedActionSetName);
 
@@ -360,6 +380,8 @@ XrResult xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo* cre
 }
 
 XrResult xrDestroyActionSet(XrActionSet actionSet) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_ActionSet& to_delete = g_action_sets.at(actionSet);
 
@@ -372,6 +394,7 @@ XrResult xrDestroyActionSet(XrActionSet actionSet) {
     }
     catch (std::exception& e) {
         LOG(ERROR) << "Exception occurred: " << e.what();
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -389,6 +412,8 @@ XrResult xrDestroyActionSet(XrActionSet actionSet) {
 }
 
 XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createInfo, XrAction* action) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_ActionSet& gb_action_set = g_action_sets.at(actionSet);
     }
@@ -398,6 +423,7 @@ XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createI
     }
     catch (std::exception& e) {
         LOG(ERROR) << "Exception occurred: " << e.what();
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -423,6 +449,8 @@ XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createI
 }
 
 XrResult xrDestroyAction(XrAction action) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_Action& to_delete = g_actions.at(action);
 
@@ -435,6 +463,7 @@ XrResult xrDestroyAction(XrAction action) {
     }
     catch (std::exception& e) {
         LOG(ERROR) << "Exception occurred: " << e.what();
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -442,6 +471,8 @@ XrResult xrDestroyAction(XrAction action) {
 }
 
 XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsAttachInfo* attachInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         const std::vector<XrActionSet> attach_info_sets(attachInfo->actionSets, attachInfo->actionSets + attachInfo->countActionSets);
 
@@ -456,6 +487,7 @@ XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsA
     }
     catch (std::exception& e) {
         LOG(ERROR) << "Exception occurred: " << e.what();
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -463,6 +495,8 @@ XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsA
 }
 
 XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrInteractionProfileSuggestedBinding* suggestedBindings) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO not implemented since we may not need this for now https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#semantic-path-interaction-profiles
     // Vendor specific input mappings
 
@@ -472,6 +506,8 @@ XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrIntera
 }
 
 XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     std::string string_path = g_xrpath_storage[topLevelUserPath];
     if(std::find(g_supported_paths.begin(), g_supported_paths.end(), string_path) == g_supported_paths.end())
     {
@@ -482,6 +518,8 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 }
 
 XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO need event stream reader for poll events
     uint32_t event_type;
     void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
@@ -498,6 +536,7 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     }
 
     // Runtime tries to send an event that is not supported.
+    LOG_RUNTIME_ERROR
     return XR_ERROR_RUNTIME_FAILURE;
 }
 
@@ -571,6 +610,7 @@ XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     }
     else {
         LOG(ERROR) << "Active graphics api can only be set once";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 }

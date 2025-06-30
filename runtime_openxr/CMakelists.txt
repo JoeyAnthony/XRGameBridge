@@ -51,6 +51,8 @@ add_library(RuntimeOpenXR SHARED
 		src/d3d11swapchain.cpp
 		src/types.h
 		src/result.h
+		src/debug.h
+		src/debug.cpp
 
 		${SHADERS}
 
@@ -69,6 +71,9 @@ set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
+
+# Debugggin definitions
+target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
 
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
@@ -107,12 +112,12 @@ add_custom_command(
 )
 
 # Copy all dependencies
-add_custom_command(
-    TARGET RuntimeOpenXR POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:RuntimeOpenXR>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	DEPENDS 3DGameBridge
-	COMMAND_EXPAND_LISTS
-)
+# add_custom_command(
+#     TARGET RuntimeOpenXR POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:RuntimeOpenXR>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
+# 	DEPENDS 3DGameBridge
+# 	COMMAND_EXPAND_LISTS
+# )
 # Copy all dependencies
 # add_custom_command(
     # TARGET RuntimeOpenXR POST_BUILD

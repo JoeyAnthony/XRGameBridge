@@ -35,6 +35,7 @@ XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
         return e.GetResult();
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 }
@@ -174,6 +175,7 @@ XrResult D3D12Renderer::Initialize(GB_Instance* instance, XrSystemId systemId, c
 
     if (compositor.Initialize(this) == false) {
         LOG(ERROR) << "Failed to create compositor";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 

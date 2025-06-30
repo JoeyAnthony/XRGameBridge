@@ -4,9 +4,6 @@
 #include <chrono>
 #include <mutex>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-
 #include "openxr_includes.h"
 #include "window.h"
 #include "swapchain.h"
@@ -64,8 +61,6 @@ struct GB_Session {
     bool end_frame_called = true;
     bool should_render = false;
 
-
-
     // Views
     std::array<XrView, 2> views;
     float leye_x = -0.0015f, reye_x = 0.0015f;
@@ -79,9 +74,8 @@ struct GB_Session {
     // SR
     SR::SRContext* sr_context;
 
-    std::thread idle_thread;
-    void StartSessionIdle();
     void IdleFunc();
+    void InitializeView();
 };
 
 class GB_FrameTimer {

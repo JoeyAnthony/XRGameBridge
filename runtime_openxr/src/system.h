@@ -1,7 +1,10 @@
 #pragma once
 #include <string>
+
+#define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <glm/ext/scalar_constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "openxr_includes.h"
 #include "platform_manager.h"
@@ -118,6 +121,8 @@ public:
      */
     bool GetIsConnected();
 
+    static std::set<XrViewConfigurationType> GetViewConfigurationTypes();
+
     /*
      * Extra notes
      * When the screen is closer ro the user, most users cannot handle more than 50% of the real eye separation.
@@ -127,18 +132,12 @@ public:
 // Spaces are basically transformation matrices.
 // They transform a point/orientation with respect to an XrSpace of the applications choosing
 struct GB_ReferenceSpace {
-    XrSession session;
-    XrSpace handle;
     XrReferenceSpaceType space_type;
-    XrPosef pose_in_reference_space;
 };
 
 struct GB_ActionSpace {
-    XrSession session;
-    XrSpace handle;
     XrAction action;
     XrPath sub_action_path;
-    XrPosef pose_in_action_space;
 };
 
 //GBVector2i GetDummyScreenResolution();

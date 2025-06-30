@@ -25,41 +25,16 @@
 
 template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-inline void ThrowIfFailed(HRESULT hr) {
-#ifdef  _DEBUG
-    if (FAILED(hr)) {
-        // Set a breakpoint on this line to catch DirectX API errors
-        throw std::exception();
-    }
-#else
-
-#endif
-
-}
-
 // OpenXR headers
 #include <openxr/openxr.h>
 #include <openxr/openxr_loader_negotiation.h>
 #include <openxr/openxr_platform.h>
 
-// Extra
-#include "easylogging++.h"
-#include <stdexcept>
+// Debug
+#include "debug.h"
 
 #ifdef WIN32
     // Declare functions here so system.h doesn't have to be included in openxr_includes.h
     XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time);
     XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter);
 #endif
-
-class XrException : public std::runtime_error {
-    const XrResult xr_result;
-public:
-    XrException(XrResult result, std::string message) : xr_result(result), std::runtime_error(message) {
-        LOG(ERROR) << "XrException was thrown: " << message << "\n";
-    }
-
-    XrResult GetResult() {
-        return xr_result;
-    }
-};

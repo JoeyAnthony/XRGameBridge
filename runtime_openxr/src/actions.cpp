@@ -21,6 +21,7 @@ XrResult xrSyncActions(XrSession session, const XrActionsSyncInfo* syncInfo) {
         return XR_ERROR_HANDLE_INVALID;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -29,6 +30,8 @@ XrResult xrSyncActions(XrSession session, const XrActionsSyncInfo* syncInfo) {
 }
 
 XrResult xrGetActionStateBoolean(XrSession session, const XrActionStateGetInfo* getInfo, XrActionStateBoolean* state) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     state->isActive = false;
     state->currentState = false;
     state->changedSinceLastSync = false;
@@ -38,6 +41,7 @@ XrResult xrGetActionStateBoolean(XrSession session, const XrActionStateGetInfo* 
 }
 
 XrResult xrGetActionStateFloat(XrSession session, const XrActionStateGetInfo* getInfo, XrActionStateFloat* state) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
     GB_Session& gb_session = g_sessions[session];
 
@@ -51,6 +55,7 @@ XrResult xrGetActionStateFloat(XrSession session, const XrActionStateGetInfo* ge
 }
 
 XrResult xrGetActionStateVector2f(XrSession session, const XrActionStateGetInfo* getInfo, XrActionStateVector2f* state) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
     state->isActive = false;
     state->currentState = {0.f};
@@ -62,6 +67,8 @@ XrResult xrGetActionStateVector2f(XrSession session, const XrActionStateGetInfo*
 }
 
 XrResult xrGetActionStatePose(XrSession session, const XrActionStateGetInfo* getInfo, XrActionStatePose* state) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     state->isActive = false;
 
     //LOG(INFO) << "Called " << __func__;

@@ -4,15 +4,88 @@
 #include <unordered_map>
 
 #include "openxr_includes.h"
+#include "openxr/openxr_reflection.h"
 
-inline XrResult xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE]) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
-inline XrResult xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[XR_MAX_STRUCTURE_NAME_SIZE]) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
+inline XrResult xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE]) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
+#define EMIT_RESULT_STRING(name, value)                                                                                \
+    case name:                                                                                                         \
+        sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "%s", #name);                                                     \
+        break;
+    switch (value) {
+        XR_LIST_ENUM_XrResult(EMIT_RESULT_STRING);
 
+    default:
+        if (XR_FAILED(value)) {
+            sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_FAILURE_%d", (int)value);
+        }
+        else {
+            sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_SUCCESS_%d", (int)value);
+        }
+    }
 
-inline XrResult xrGetInputSourceLocalizedName(XrSession session, const XrInputSourceLocalizedNameGetInfo* getInfo, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
-inline XrResult xrApplyHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo, const XrHapticBaseHeader* hapticFeedback) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
-inline XrResult xrStopHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo) { LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE; }
+#undef EMIT_RESULT_STRING
+
+    return XR_SUCCESS;
+}
+
+inline XrResult xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[XR_MAX_STRUCTURE_NAME_SIZE]) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
+#define EMIT_STRUCTURE_TYPE_STRING(name, value)                                                                        \
+    case name:                                                                                                         \
+        sprintf_s(buffer, XR_MAX_STRUCTURE_NAME_SIZE, "%s", #name);                                                    \
+        break;
+
+    switch ((int)value) {
+        XR_LIST_ENUM_XrStructureType(EMIT_STRUCTURE_TYPE_STRING);
+
+    default:
+        sprintf_s(buffer, XR_MAX_STRUCTURE_NAME_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", (int)value);
+    }
+
+#undef EMIT_STRUCTURE_TYPE_STRING
+
+    return XR_SUCCESS;
+}
+
+inline XrResult GetSessionStateString(XrSessionState state, char buffer[XR_MAX_RESULT_STRING_SIZE]) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
+#define EMIT_SESSION_STATE_STRING(name, state)                                                                                \
+    case name:                                                                                                         \
+        sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "%s", #name);                                                     \
+        break;
+    switch (state) {
+        XR_LIST_ENUM_XrSessionState(EMIT_SESSION_STATE_STRING);
+
+    default:
+        if (XR_FAILED(state)) {
+            sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_FAILURE_%d", (int)state);
+        }
+        else {
+            sprintf_s(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_SUCCESS_%d", (int)state);
+        }
+    }
+
+#undef EMIT_SESSION_STATE_STRING
+
+    return XR_SUCCESS;
+}
+
+inline XrResult xrGetInputSourceLocalizedName(XrSession session, const XrInputSourceLocalizedNameGetInfo* getInfo, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) {
+    TraceLogFunctionCall(__func__, __LINE__);
+    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+}
+inline XrResult xrApplyHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo, const XrHapticBaseHeader* hapticFeedback) {
+    TraceLogFunctionCall(__func__, __LINE__);
+    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+}
+inline XrResult xrStopHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+}
 
 
 // Forward declarations not defined in openxr header (implemented)

@@ -134,6 +134,8 @@ inline std::unordered_map<XrSystemId, GB_System> g_systems;
 // Since we don't plan on handling VR actions I left this distinction out, but it might be good to have later.
 inline std::unordered_map<XrActionSet, GB_ActionSet> g_action_sets;
 inline std::unordered_map<XrAction, GB_Action> g_actions;
+inline std::unordered_map<XrSpace, GameBridgeWindow> g_displays;
+
 inline std::unordered_map<XrSpace, GB_ReferenceSpace> g_reference_spaces;
 inline std::unordered_map<XrSpace, GB_ActionSpace> g_action_spaces;
-inline std::unordered_map<XrSpace, GameBridgeWindow> g_displays;
+inline std::unordered_map<XrSpace,  glm::mat4> g_space_transforms;

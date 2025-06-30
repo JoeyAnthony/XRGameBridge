@@ -36,6 +36,7 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
         return e.GetResult();
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 }
@@ -79,6 +80,7 @@ XrResult D3D11Renderer::CreateWindowSwapchain(GB_System& gb_system) {
         window_swapchain = new D3D11WindowSwapchain(this, &create_info, back_buffer_count, window.GetWindowHandle());
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 

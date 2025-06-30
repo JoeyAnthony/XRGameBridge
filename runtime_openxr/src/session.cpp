@@ -2,19 +2,24 @@
 
 #include <stdexcept>
 #include <shellscalingapi.h>
+
+#define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <glm/ext/scalar_constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "easylogging++.h"
 #include "openxr_functions.h"
 #include "instance.h"
 #include "system.h"
 #include "settings.h"
-#include "compositor.h"
 #include "d3d11renderer.h"
 #include "swapchain.h"
 
+
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
@@ -50,11 +55,11 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // view space
     new_session.views[0].type = XR_TYPE_VIEW;
     new_session.views[0].next = nullptr;
-    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.17f, 0, 0} }; // Orientation, Position
+    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1} }; // Orientation, Position
 
     new_session.views[1].type = XR_TYPE_VIEW;
     new_session.views[1].next = nullptr;
-    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.17f, 0, 0} }; // Orientation, Position
+    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1 } }; // Orientation, Position
 
     // Set FOV per eye
     glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
@@ -73,6 +78,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
     else {
         LOG(ERROR) << "Trying to create session with unsupported graphics api";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -89,14 +95,17 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
 
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_UP, VK_LCONTROL, VK_NUMPAD8);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_DOWN, VK_LCONTROL, VK_NUMPAD2);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_LEFT, VK_LCONTROL, VK_NUMPAD4);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RIGHT, VK_LCONTROL, VK_NUMPAD6);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RESET, VK_LCONTROL, VK_NUMPAD5);
+
     *session = handle;
     session_creation_count++;
 
     // Create sr context, blocks till there is a connection
     new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
-
-    // Start session idle thread
-    new_session.StartSessionIdle();
 
     ChangeSessionState(new_session, XR_SESSION_STATE_READY);
 
@@ -105,6 +114,8 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 }
 
 XrResult xrDestroySession(XrSession session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO Should probably destroy all objects related to a session.
     // Also action sets/g_actions attached to the session should be destroyed
     GB_Session& gb_session = g_sessions[session];
@@ -126,6 +137,8 @@ XrResult xrDestroySession(XrSession session) {
 }
 
 XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO check if view configuration type is supported
     // TODO, move SESSION_READY logic to here, check here whether all components are initialized for the session to be put on READY.
 
@@ -133,7 +146,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     GB_System& gb_system = g_systems[gb_session.system];
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
 
-    gb_session.idle_thread.join();
+    //gb_session.idle_thread.join();
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
         LOG(ERROR) << "Session not ready";
@@ -158,6 +171,8 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 }
 
 XrResult xrEndSession(XrSession session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_Session& gb_session = g_sessions[session];
 
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED & XR_SESSION_STATE_STOPPING == false) {
@@ -184,15 +199,14 @@ XrResult xrEndSession(XrSession session) {
     if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
         ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
         UpdateSession(gb_session);
-
-        // Start Session Idle thread
-        gb_session.StartSessionIdle();
     }
 
     return XR_SUCCESS;
 }
 
 XrResult xrRequestExitSession(XrSession session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_Session& gb_session = g_sessions[session];
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
@@ -208,6 +222,8 @@ XrResult xrRequestExitSession(XrSession session) {
 
 // TODO Use frame display time as frame ids
 XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, XrFrameState* frameState) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO simple implementation so the application can continue. Should when I understand this part better
     GB_Session& gb_session = g_sessions[session];
     bool should_wait = true;
@@ -256,6 +272,8 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 }
 
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_Session& gb_session = g_sessions[session];
 
     std::lock_guard guard(gb_session.mutex_wait_frame_state);
@@ -295,6 +313,8 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 }
 
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
     GB_Session& gb_session = g_sessions[session];
@@ -333,10 +353,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-void GB_Session::StartSessionIdle() {
-    idle_thread = std::thread(&GB_Session::IdleFunc, this);
-}
-
 void GB_Session::IdleFunc() {
     while (session_state == XR_SESSION_STATE_IDLE) {
         if (g_proxy_swapchains.size() > 0) {
@@ -349,6 +365,10 @@ void GB_Session::IdleFunc() {
     }
 }
 
+void GB_Session::InitializeView() {
+
+}
+
 void ChangeSessionState(GB_Session& session, XrSessionState state) {
     if (session.session_state == state) {
         return;
@@ -356,6 +376,11 @@ void ChangeSessionState(GB_Session& session, XrSessionState state) {
 
     std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
     session.session_state_queue.push_back(state);
+
+    char buffer[XR_MAX_RESULT_STRING_SIZE];
+    if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
+        LOG(INFO) << "Session state queued: " << std::string(buffer);
+    }
 }
 
 void UpdateSession(GB_Session& session) {
@@ -380,6 +405,11 @@ void UpdateSession(GB_Session& session) {
 
             // Set new session state
             session.session_state = state;
+
+            char buffer[XR_MAX_RESULT_STRING_SIZE];
+            if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
+                LOG(INFO) << "Session state submitted: " << std::string(buffer);
+            }
         }
 
         // Clear session state queue
@@ -483,6 +513,40 @@ void UpdateSession(GB_Session& session) {
             session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
             value_changed = true;
         }
+
+        ///////
+        float rotation_speed = 1;
+        static glm::quat orientation = glm::identity<glm::quat>();
+        if (event_type == GB_EVENT_TEST_UP) {
+            float factor_pose = 1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_DOWN) {
+            float factor_pose = -1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_LEFT) {
+            float factor_pose = 1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_RIGHT) {
+            float factor_pose = -1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_RESET) {
+            orientation = glm::identity<glm::quat>();
+        }
+        view_l.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+        view_r.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+        ///////
 
         glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
         glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};

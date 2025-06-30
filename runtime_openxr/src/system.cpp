@@ -9,6 +9,8 @@
 #include "session.h"
 
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // Check if the requested form factor is supported
     bool found = false;
     bool available = false;
@@ -37,6 +39,7 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
 }
 
 XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
     GB_System& gb_system = g_systems[systemId];
     *properties = GetSystemProperties(gb_system);
@@ -45,6 +48,8 @@ XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSyste
 }
 
 XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     LOG(INFO) << "Requested view configuration type: " << viewConfigurationType;
     // SR only supports XR_ENVIRONMENT_BLEND_MODE_OPAQUE 
     const std::array supported_blend_modes = { XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
@@ -66,8 +71,11 @@ XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId system
 }
 
 XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId, uint32_t viewConfigurationTypeCapacityInput, uint32_t* viewConfigurationTypeCountOutput, XrViewConfigurationType* viewConfigurationTypes) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO check if mono as primary is ok
-    const std::array supported_view_configurations = { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
+    auto set = GB_System::GetViewConfigurationTypes();
+    const std::vector <XrViewConfigurationType> supported_view_configurations = std::vector(set.begin(), set.end());
     *viewConfigurationTypeCountOutput = supported_view_configurations.size();
 
     // Request for the extension array or the extension array itself
@@ -87,6 +95,8 @@ XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId,
 }
 
 XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, XrViewConfigurationProperties* configurationProperties) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrResult res = XR_ERROR_RUNTIME_FAILURE;
 
     switch (viewConfigurationType) {
@@ -100,7 +110,7 @@ XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId system
         configurationProperties->fovMutable = true;
         res = XR_SUCCESS;
         break;
-    default:;
+    default:
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
     }
 
@@ -108,6 +118,8 @@ XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId system
 }
 
 XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrViewConfigurationView* views) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrResult res = XR_ERROR_RUNTIME_FAILURE;
 
     GB_System gb_system = g_systems[systemId];
@@ -136,6 +148,7 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
     }
     else {
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+        LOG_RUNTIME_ERROR
     }
 
     // Set output count
@@ -157,13 +170,23 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_Session& gb_session = g_sessions[session];
 
+    if(viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
+        return XR_ERROR_VALIDATION_FAILURE;
+    }
+
+    if (GB_System::GetViewConfigurationTypes().contains(viewLocateInfo->viewConfigurationType) == false) {
+        return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+    }
+
     // TODO mono configuration is not supported
-    if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+    if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
         *viewCountOutput = gb_session.views.size();
     }
-    else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+    else if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
         *viewCountOutput = gb_session.views.size();
     }
 
@@ -176,27 +199,24 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
-    viewLocateInfo->displayTime;
+    glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
+    std::vector<XrView> sr_views;
+    for (uint32_t i = 0; i < gb_session.views.size(); i++) {
+        XrPosef pose = gb_session.views[i].pose;
+        glm::mat4 view_transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
 
-    GB_ReferenceSpace& gb_ref_space = g_reference_spaces[viewLocateInfo->space];
-    if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_VIEW) // Camera space
-    {
-        // TODO Save position/orientation in the session or in the spaces array?
-        gb_ref_space.pose_in_reference_space.position;
+        // Transform
+        glm::mat4 transform = glm::inverse(base_transform) * view_transform;
+        glm::vec3 position = glm::vec3(transform[3]);
+        glm::quat orientation = glm::quat_cast(transform);
 
-        std::vector<XrView> sr_views;
-        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
-
-        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
-    }
-    if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
-        //LOG(INFO) << "World space not implemented: " << __func__;
         XrView view;
-        view.pose = gb_ref_space.pose_in_reference_space;
-        std::vector<XrView> sr_views;
-        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
-        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
+        view.pose = { { orientation.x, orientation.y, orientation.z, orientation.w }, { position.x, position.y, position.z } };
+        view.fov = gb_session.views[i].fov;
+        sr_views.push_back(view);
     }
+
+    memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
 
     viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
 
@@ -204,6 +224,8 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 }
 
 XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInput, uint32_t* spaceCountOutput, XrReferenceSpaceType* spaces) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_Session& gb_session = g_sessions[session];
 
     std::array reference_space_types{
@@ -226,31 +248,43 @@ XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInp
     return XR_SUCCESS;
 }
 
-#include "openxr_functions.h"
 XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateInfo* createInfo, XrSpace* space) {
     static uint64_t reference_space_count = 1;
     XrSpace handle = reinterpret_cast<XrSpace>(reference_space_count);
-    GB_ReferenceSpace new_space;
-    new_space.session = session;
-    new_space.handle = handle;
-    new_space.pose_in_reference_space = createInfo->poseInReferenceSpace;
-    new_space.space_type = createInfo->referenceSpaceType;
+    GB_ReferenceSpace new_space {
+        createInfo->referenceSpaceType
+    };
 
     if (createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_VIEW &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_LOCAL &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_STAGE) {
+
+        LOG(ERROR) << "ERROR Reference space unsupported: " << createInfo->referenceSpaceType;
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
 
+    // Take space from the app
+    XrPosef pose = createInfo->poseInReferenceSpace;
+
     if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
+        // Update position in session
     }
     else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
-        // Local space must be 0, we shouldn't need to recalibrate this
+        // Set a hardcoded floor
+        pose.position.y -= 1.72f;
+    }
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE) {
+        // Set a hardcoded floor
+        pose.position.y -= 1.72f;
     }
 
+    // Create transform
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
     const auto inserted = g_reference_spaces.insert({ handle, new_space });
+    g_space_transforms.insert({ handle, transform });
+
     if (!inserted.second) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -261,29 +295,54 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
 }
 
 XrResult xrGetReferenceSpaceBoundsRect(XrSession session, XrReferenceSpaceType referenceSpaceType, XrExtent2Df* bounds) {
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        bounds->width = 0;
+        bounds->height = 0;
+        return XR_SPACE_BOUNDS_UNAVAILABLE;
+    }
+    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL){
+        // Bounds can be defined by the eye tracker bounding box.
+        // Current values are hardcoded defaults because the box is different for every screen.
+        // TODO get eyetracker box 
+        bounds->width = 1.10f;
+        bounds->height = 1.10f;
+    }
+    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE) {
+        bounds->width = 1.10f;
+        bounds->height = 1.10f;
+    }
+    else {
+        LOG(ERROR) << "ERROR Reference space unsupported: " << referenceSpaceType;
+        return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
+    }
+    
+    return XR_SUCCESS;
 }
 
 XrResult xrCreateActionSpace(XrSession session, const XrActionSpaceCreateInfo* createInfo, XrSpace* space) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GB_ActionSpace new_space{};
-    new_space.session = session;
     new_space.action = createInfo->action;
     new_space.sub_action_path = createInfo->subactionPath;
-    new_space.pose_in_action_space = createInfo->poseInActionSpace;
+    XrPosef pose = createInfo->poseInActionSpace;
+
+    // Create transform
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), {pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y , pose.orientation.z });
 
     // Add action handle to sub action handle for a space handle hash
     XrSpace handle = reinterpret_cast<XrSpace>(reinterpret_cast<uint64_t>(new_space.action) + createInfo->subactionPath);
     *space = handle;
     g_action_spaces.insert({ handle, new_space });
+    g_space_transforms.insert({ handle, transform });
     return XR_SUCCESS;
 }
 
 XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLocation* location) {
-    // TODO Return to this with a better understanding of spaces. Are there only single View and Local spaces, or do more of them exist?
-    // TODO Should we have both action and reference spaces in a single array for quicker lookup?
+    TraceLogFunctionCall(__func__, __LINE__);
 
-
-    // TODO check location flags
     location->locationFlags;
 
     // TODO Application may ask for a velocity of the tracked object
@@ -292,49 +351,31 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
         velocity->velocityFlags = XR_SPACE_VELOCITY_ANGULAR_VALID_BIT;
     }
 
-    // For Reference spaces
-    GB_ReferenceSpace& gb_space = g_reference_spaces[space];
-    GB_ReferenceSpace& gb_base_space = g_reference_spaces[baseSpace];
-    if (gb_space.session != nullptr) {
-        // TODO, Transform to base space? just returning it for now, in the test the local space is 0 anyways
-        // Telling the application the view position is valid but never being tracked
-        location->pose = gb_space.pose_in_reference_space;
-        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+    // Get spaces
+    glm::mat4 gb_space = g_space_transforms[space];
+    glm::mat4 gb_base_space = g_space_transforms[baseSpace];
 
-        return XR_SUCCESS;
-    }
+    // Transform
+    glm::mat4 transform = glm::inverse(gb_base_space) * gb_space;
+    glm::vec3 position = glm::vec3(transform[3]);
+    glm::quat orientation = glm::quat_cast(transform);
 
-    // For Action spaces
+    location->pose = { {orientation.x, orientation.y , orientation.z, orientation.w }, {position.x, position.y, position.z} };
+    location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
-    // Retreiving action spaces is not supported
-    GB_ActionSpace& gb_a_space = g_action_spaces[space];
-    GB_ActionSpace& gb_a_base_space = g_action_spaces[baseSpace];
-    if (gb_a_space.session == nullptr) {
-        LOG(INFO) << "Space does not exist";
-    }
-
-    std::string& path = g_xrpath_storage[gb_a_space.sub_action_path];
-
-    // TODO Actions are never located now, might be what we want anyways
-    // Application is told the actions are never being tracked this way
-    location->pose = XrPosef{ 0.f };
-    location->locationFlags = 0;
     return XR_SUCCESS;
 }
 
 XrResult xrDestroySpace(XrSpace space) {
-    // Todo If the space is not a reference space, unorderedmap::[] creates an entry for it. This may not be desired but won't do any harm.
-    // Check for reference space
-     GB_ReferenceSpace& gb_reference_space = g_reference_spaces[space];
-    if(gb_reference_space.session != nullptr)
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    if(g_reference_spaces.contains(space))
     {
         g_reference_spaces.erase(space);
         return XR_SUCCESS;
     }
 
-    // Check for action space
-    GB_ActionSpace& gb_action_space = g_action_spaces[space];
-    if (gb_action_space.session != nullptr) {
+    if (g_action_spaces.contains(space)) {
         g_action_spaces.erase(space);
         return XR_SUCCESS;
     }
@@ -343,11 +384,15 @@ XrResult xrDestroySpace(XrSpace space) {
 }
 
 XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     *time = performanceCounter->QuadPart;
     return XR_SUCCESS;
 }
 
 XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     performanceCounter->QuadPart = time;
     return XR_SUCCESS;
 }
@@ -386,6 +431,10 @@ XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime t
 
 bool GB_System::GetIsConnected() {
     return device_is_connected;
+}
+
+std::set<XrViewConfigurationType> GB_System::GetViewConfigurationTypes() {
+    return { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
 }
 
 XrSystemId CreateXrGameBridgeSystems(XrInstance instance)

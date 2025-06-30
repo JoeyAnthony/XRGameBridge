@@ -15,6 +15,8 @@
 #include "D3D12Renderer.h"
 
 XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityInput, uint32_t* formatCountOutput, int64_t* formats) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     GraphicsBackend backend;
     std::set supported_formats {
         DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -41,9 +43,11 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
         }
     }
     catch (std::out_of_range& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_SESSION_LOST;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -54,6 +58,7 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
     else {
         // not implemented
         LOG(ERROR) << "Graphics backend not supported";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -75,6 +80,8 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
 }
 
 XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* createInfo, XrSwapchain* swapchain) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     //TODO Get compositor from the session and create descriptor on it for the new swapchain
     GB_Session& gb_session = g_sessions[session];
 
@@ -88,6 +95,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
         // Create swap chain
         if (proxy_swapchain->CreateResources(createInfo) == false) {
             LOG(ERROR) << "Failed to create proxy swapchain";
+            LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
     }
@@ -98,6 +106,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     else {
         // Not implemented
         LOG(ERROR) << "Graphics backend not supported";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -109,6 +118,8 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 }
 
 XrResult xrDestroySwapchain(XrSwapchain swapchain) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     auto& gb_proxy = g_proxy_swapchains[swapchain];
 
     gb_proxy->DestroyResources();
@@ -119,6 +130,8 @@ XrResult xrDestroySwapchain(XrSwapchain swapchain) {
 }
 
 XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacityInput, uint32_t* imageCountOutput, XrSwapchainImageBaseHeader* images) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     //TODO Create actual swap chains over here
 
     auto& gb_render_target = g_proxy_swapchains[swapchain];
@@ -140,6 +153,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         D3D12ProxySwapchain* proxy = dynamic_cast<D3D12ProxySwapchain*>(gb_render_target);
         if (!proxy) {
             LOG(ERROR) << "Wrong proxy swapchain class type";
+            LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
 
@@ -166,6 +180,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         D3D11ProxySwapchain* proxy = dynamic_cast<D3D11ProxySwapchain*>(gb_render_target);
         if(!proxy) {
             LOG(ERROR) << "Wrong proxy swapchain class type";
+            LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
 
@@ -191,19 +206,23 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
     else {
         // Not implemented
         LOG(ERROR) << "Graphics backend not supported";
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
-
-    return XR_ERROR_RUNTIME_FAILURE;
 }
 
 XrResult xrEnumerateBoundSourcesForAction(XrSession session, const XrBoundSourcesForActionEnumerateInfo* enumerateInfo, uint32_t sourceCapacityInput, uint32_t* sourceCountOutput, XrPath* sources) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO don't think we need this function anytime soon
     LOG(INFO) << "Unimplemented " << __func__;
+    LOG_RUNTIME_ERROR
     return XR_ERROR_RUNTIME_FAILURE;
 }
 
 XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAcquireInfo* acquireInfo, uint32_t* index) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     //TODO May only be called again AFTER xrReleaseSwapchainImage has been called. See specification.
     // return XR_ERROR_CALL_ORDER_INVALID
 
@@ -215,6 +234,8 @@ XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAc
 }
 
 XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo* waitInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     //TODO see specification for other waiting requirements
 
     uint64_t wait_duration = INFINITE;
@@ -228,6 +249,8 @@ XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitI
 }
 
 XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // Basically tells the runtime that the application is done with an image
 
     auto& gb_proxy = g_proxy_swapchains[swapchain];
