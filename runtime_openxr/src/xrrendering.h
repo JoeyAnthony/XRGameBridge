@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <filesystem>
+#include <fstream>
 
 #include "openxr_includes.h"
 #include "types.h"
@@ -63,6 +64,7 @@ public:
     virtual void Update() = 0;
     virtual GraphicsBackend GetGraphicsBackend() = 0;
     virtual Compositor* const GetCompositor() = 0;
+    virtual void InitializePipeline(GB_Instance* instance) = 0;
 };
 
 class ProxySwapchain {
@@ -72,7 +74,7 @@ public:
     ProxySwapchain(XrSwapchain handle) : xr_handle(handle) {};
     virtual ~ProxySwapchain() = default;
 
-    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") = 0;
+    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") = 0;
     virtual void DestroyResources() = 0;
 
     // Returns the oldest image index

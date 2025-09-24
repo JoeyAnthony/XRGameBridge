@@ -76,15 +76,15 @@ inline XrResult GetSessionStateString(XrSessionState state, char buffer[XR_MAX_R
 
 inline XrResult xrGetInputSourceLocalizedName(XrSession session, const XrInputSourceLocalizedNameGetInfo* getInfo, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) {
     TraceLogFunctionCall(__func__, __LINE__);
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    spdlog::info(__func__); return XR_ERROR_RUNTIME_FAILURE;
 }
 inline XrResult xrApplyHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo, const XrHapticBaseHeader* hapticFeedback) {
     TraceLogFunctionCall(__func__, __LINE__);
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    spdlog::info(__func__); return XR_ERROR_RUNTIME_FAILURE;
 }
 inline XrResult xrStopHapticFeedback(XrSession session, const XrHapticActionInfo* hapticActionInfo) {
     TraceLogFunctionCall(__func__, __LINE__);
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    spdlog::info(__func__); return XR_ERROR_RUNTIME_FAILURE;
 }
 
 

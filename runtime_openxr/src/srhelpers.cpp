@@ -1,6 +1,5 @@
 #include "srhelpers.h"
 
-#include "easylogging++.h"
 #include "instance.h"
 
 #include <game_bridge.h>

@@ -36,12 +36,13 @@ class D3D11Renderer : public Renderer {
     XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4]);
 
 public:
-    static D3D11Renderer* Create(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding);
+    static D3D11Renderer* Create(XrSystemId systemId, const void* graphics_binding);
 
     D3D11Renderer() = delete;
-    explicit D3D11Renderer(GB_Instance* instance, XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding);
+    explicit D3D11Renderer(XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding);
     ~D3D11Renderer() override;
 
+    void InitializePipeline(GB_Instance* instance) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable) override;

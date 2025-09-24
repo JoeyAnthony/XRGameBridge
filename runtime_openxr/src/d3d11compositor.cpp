@@ -28,11 +28,11 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
         fs::path pixel = fs::path(DEBUG_SHADER_PATH) / dx11_ps;
         v_shader_buffer = LoadBinaryFile(vertex.string());
         p_shader_buffer = LoadBinaryFile(pixel.string());
-        LOG(INFO) << "Loading shaders with debug paths";
+        spdlog::info("Loading shaders with debug paths");
     }
 
     if (v_shader_buffer.empty() || p_shader_buffer.empty()) {
-        LOG(ERROR) << "Couldn't find shaders";
+        spdlog::error("Couldn't find shaders");
         return false;
     }
 

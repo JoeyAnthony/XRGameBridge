@@ -2,9 +2,10 @@
 #include <regex>
 #include <windows.h>
 #include <string>
-#include <easylogging++.h>
 #include <filesystem>
 #include  <array>
+
+#include "debug.h"
 
 namespace fs = std::filesystem;
 
@@ -44,7 +45,7 @@ static void FindPathEnv() {
     for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
         std::smatch match = *i;
         std::string match_str = match.str();
-        LOG(INFO) << match_str << '\n';
+        spdlog::info(match_str);
         if (match_str.find("Simulated Reality") != std::string::npos) {
             if (match_str.find("x86") != std::string::npos) {
                 sr_install_path_win32 = match_str;

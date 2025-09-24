@@ -29,6 +29,9 @@ LRESULT CALLBACK GameBridgeWindow::WndProc(HWND hWnd, UINT message, WPARAM wPara
 
         EndPaint(hWnd, &ps);
         break;
+    case(WM_CLOSE):
+        spdlog::info("Window is closing");
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -60,7 +63,7 @@ bool GameBridgeWindow::InitWindowClass(HINSTANCE hInstance) {
 
     if (!RegisterClassEx(&window_ex)) {
         uint32_t err = GetLastError();
-        LOG(ERROR) << "Call to RegisterClassEx failed " << err;
+        spdlog::error("Call to RegisterClassEx failed {}",err);
         MessageBox(NULL, "Call to RegisterClassEx failed!", "XR Game Bridge", NULL);
 
         return false;
@@ -155,13 +158,13 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, GB_System& s
 bool GameBridgeWindow::DestroyApplicationWindow() {
     // Must be destroyed from the creation thread
     if (h_wnd == nullptr) {
-        LOG(INFO) << "No window to destroy: " << GetLastError();
+        spdlog::info("No window to destroy: {}", GetLastError());
         return true;
     }
 
     bool res = DestroyWindow(h_wnd);
     if (!res) {
-        LOG(ERROR) << "Failed to destroy window: " << GetLastError();
+       spdlog::error("Failed to destroy window: {}",GetLastError());
     }
 
     h_wnd = nullptr;

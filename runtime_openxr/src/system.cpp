@@ -3,7 +3,7 @@
 #include <array>
 #include <complex>
 
-#include "easylogging++.h"
+#include "debug.h"
 #include "openxr_includes.h"
 #include "instance.h"
 #include "session.h"
@@ -50,7 +50,7 @@ XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSyste
 XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    LOG(INFO) << "Requested view configuration type: " << viewConfigurationType;
+    spdlog::info("Requested view configuration type: {}", static_cast<uint32_t>(viewConfigurationType));
     // SR only supports XR_ENVIRONMENT_BLEND_MODE_OPAQUE 
     const std::array supported_blend_modes = { XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
     *environmentBlendModeCountOutput = supported_blend_modes.size();
@@ -144,7 +144,7 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         res = XR_SUCCESS;
     }
     else if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        LOG(ERROR) << "Mono view configuration requested. Not suppoerted";
+    spdlog::error("Mono view configuration requested. Not suppoerted");
     }
     else {
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
@@ -259,7 +259,7 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_LOCAL &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_STAGE) {
 
-        LOG(ERROR) << "ERROR Reference space unsupported: " << createInfo->referenceSpaceType;
+        spdlog::error("ERROR Reference space unsupported: {}", static_cast<uint32_t>(createInfo->referenceSpaceType));
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
 
@@ -275,7 +275,7 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
     }
     else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE) {
         // Set a hardcoded floor
-        pose.position.y -= 1.72f;
+        //pose.position.y -= 1.72f;
     }
 
     // Create transform
@@ -314,7 +314,7 @@ XrResult xrGetReferenceSpaceBoundsRect(XrSession session, XrReferenceSpaceType r
         bounds->height = 1.10f;
     }
     else {
-        LOG(ERROR) << "ERROR Reference space unsupported: " << referenceSpaceType;
+        spdlog::error("ERROR Reference space unsupported: {}", static_cast<uint32_t>(referenceSpaceType));
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
     
@@ -472,7 +472,7 @@ XrSystemId CreateXrGameBridgeSystems(XrInstance instance)
 
     g_systems.insert({ system.id, system });
 
-    LOG(INFO) << "Created system: " << system.id;
+    spdlog::info("Created system: {}", system.id);
     return system.id;
 }
 

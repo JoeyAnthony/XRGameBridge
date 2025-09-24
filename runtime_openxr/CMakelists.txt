@@ -55,8 +55,6 @@ add_library(RuntimeOpenXR SHARED
 		src/debug.cpp
 
 		${SHADERS}
-
-		${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src/easylogging++.cc
 )
 
 # Don't let Visual Studio build the shaders with wrong settings
@@ -73,15 +71,16 @@ target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
 
 # Debugggin definitions
-target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
+# target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
 
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
-target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src)
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/spdlog spdlog)
+
 # Link dependencies
-target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS} spdlog::spdlog)
 
 set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
 

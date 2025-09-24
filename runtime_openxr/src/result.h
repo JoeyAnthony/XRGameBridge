@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <string>
 
-#include "easylogging++.h"
+#include "debug.h"
 
 namespace XRGameBridge {
     enum class GB_Result {

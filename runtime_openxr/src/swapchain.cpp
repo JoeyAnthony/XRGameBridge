@@ -6,8 +6,8 @@
 
 #include <wrl/client.h>
 
+#include "debug.h"
 #include "d3d11renderer.h"
-#include "easylogging++.h"
 #include "openxr_functions.h"
 #include "instance.h"
 #include "settings.h"
@@ -57,7 +57,7 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
     }
     else {
         // not implemented
-        LOG(ERROR) << "Graphics backend not supported";
+        spdlog::error("Graphics backend not supported");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -94,7 +94,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
 
         // Create swap chain
         if (proxy_swapchain->CreateResources(createInfo) == false) {
-            LOG(ERROR) << "Failed to create proxy swapchain";
+            spdlog::error("Failed to create proxy swapchain");
             LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
@@ -105,7 +105,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     }
     else {
         // Not implemented
-        LOG(ERROR) << "Graphics backend not supported";
+        spdlog::error("Graphics backend not supported");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -113,7 +113,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = proxy_swapchain->GetHandle();
     g_proxy_swapchains[proxy_swapchain->GetHandle()] = proxy_swapchain;
 
-    LOG(INFO) << "Successfully created proxy swapchain";
+    spdlog::info("Successfully created proxy swapchain");
     return XR_SUCCESS;
 }
 
@@ -152,13 +152,13 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         // Check requested images with the swapchain type
         D3D12ProxySwapchain* proxy = dynamic_cast<D3D12ProxySwapchain*>(gb_render_target);
         if (!proxy) {
-            LOG(ERROR) << "Wrong proxy swapchain class type";
+            spdlog::error("Wrong proxy swapchain class type");
             LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
 
         if (images[0].type != XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR) {
-            LOG(ERROR) << "structure type incompatible";
+            spdlog::error("structure type incompatible");
             return XR_ERROR_VALIDATION_FAILURE;
         }
 
@@ -179,14 +179,14 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
         // Check casting
         D3D11ProxySwapchain* proxy = dynamic_cast<D3D11ProxySwapchain*>(gb_render_target);
         if(!proxy) {
-            LOG(ERROR) << "Wrong proxy swapchain class type";
+            spdlog::error("Wrong proxy swapchain class type");
             LOG_RUNTIME_ERROR
             return XR_ERROR_RUNTIME_FAILURE;
         }
 
         // Check swapchain type
         if (images[0].type != XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR) {
-            LOG(ERROR) << "structure type incompatible";
+            spdlog::error("structure type incompatible");
             return XR_ERROR_VALIDATION_FAILURE;
         }
 
@@ -205,7 +205,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacit
     }
     else {
         // Not implemented
-        LOG(ERROR) << "Graphics backend not supported";
+        spdlog::error("Graphics backend not supported");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -215,7 +215,7 @@ XrResult xrEnumerateBoundSourcesForAction(XrSession session, const XrBoundSource
     TraceLogFunctionCall(__func__, __LINE__);
 
     // TODO don't think we need this function anytime soon
-    LOG(INFO) << "Unimplemented " << __func__;
+    spdlog::info("Unimplemented {}", __func__);
     LOG_RUNTIME_ERROR
     return XR_ERROR_RUNTIME_FAILURE;
 }
@@ -280,7 +280,7 @@ D3D12ProxySwapchain::D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* rend
     current_image_state.fill(ImageState::IMAGE_STATE_WAITING);
 }
 
-bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
+bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name) {
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
     D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
     GetResourceStateFlags(createInfo->usageFlags, flags, states);
@@ -291,7 +291,7 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     return CreateResources(createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
 }
 
-bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name) {
+bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::string resource_name) {
     ID3D12Device* device = d3d12_renderer->GetDevice().Get();
 
     HRESULT res = 0;
@@ -302,7 +302,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
         // Set resource_usage to save the state the application expects the buffer to be in
         resource_usage = states;
 
-        std::wstring com_name_prefix = L"";
+        std::string com_name_prefix = "";
 
         // TODO For depth resources only a single one is needed. For simplicity and to save time, I'll leave it to the back_buffer count for now.
         // Create depth stencil
@@ -339,7 +339,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             if (FAILED(res)) {
                 HRESULT reason = device->GetDeviceRemovedReason();
                 //D3D12_ERROR_ADAPTER_NOT_FOUND
-                LOG(ERROR) << "D3D12 Error, failed creating proxy swapchain depth resource: " << proxy_name;
+                spdlog::error("D3D12 Error, failed creating proxy swapchain depth resource: {}", proxy_name);
                 ThrowIfFailed(res);
                 return false;
             }
@@ -352,7 +352,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             // Dsv descriptors are not necessary for now
             //device->CreateDepthStencilView(m_depthStencil.Get(), &depth_stencil_desc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 
-            com_name_prefix = L"Depth ";
+            com_name_prefix = "Depth ";
         }
         // Create render target
         else {
@@ -386,7 +386,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             if (FAILED(res)) {
                 HRESULT reason = device->GetDeviceRemovedReason();
                 //D3D12_ERROR_ADAPTER_NOT_FOUND
-                LOG(ERROR) << "D3D12 Error, failed creating proxy swapchain resource: " << proxy_name;
+                spdlog::error("D3D12 Error, failed creating proxy swapchain resource: {}", proxy_name);
                 ThrowIfFailed(res);
                 return false;
             }
@@ -394,17 +394,20 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
 
         // Choose name for debugging
         if (resource_name.empty()) {
-            std::wstring name = std::format(L"Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(xr_handle), i);
+            std::string name = std::format("Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(xr_handle), i);
             name = com_name_prefix + name;
             proxy_name = name;
         }
         else {
-            std::wstring name = std::format(L"{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
+            std::string name = std::format("{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
             proxy_name = name;
         }
 
         // Give name to the buffer
-        back_buffers[i]->SetName(proxy_name.c_str());
+        std::wstring wide_name;
+        wide_name.resize(proxy_name.size()+1);
+        int convertResult = MultiByteToWideChar(CP_UTF8, 0, proxy_name.c_str(), -1, wide_name.data(), wide_name.size());
+        back_buffers[i]->SetName(wide_name.c_str());
     }
 
     // Don't create descriptors for depth resources
@@ -421,7 +424,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
             rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             if (FAILED(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtv_heap)))) {
-                LOG(ERROR) << "Failed to create d3d12 rtv descriptor heap";
+                spdlog::error("Failed to create d3d12 rtv descriptor heap");
                 return false;
             }
 
@@ -432,7 +435,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             if (FAILED(device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srv_heap)))) {
-                LOG(ERROR) << "Failed to create d3d12 srv descriptor heap";
+                spdlog::error("Failed to create d3d12 srv descriptor heap");
                 return false;
             }
         }
@@ -552,7 +555,7 @@ XrResult D3D12ProxySwapchain::ReleaseImage() {
 
     released_frame_index = awaited_frame_index;
 
-    //LOG(INFO) << "px - "
+    //spdlog::info("px - "
     //    << " swapchain: " << handle
     //    << " aqcuired index " << current_frame_index
     //    << " awaited index " << awaited_frame_index
@@ -584,7 +587,7 @@ void D3D12WindowSwapchain::CreateDXGIFactory(IDXGIFactory4** factory) {
     UINT dxgi_factory_flags = 0;
     HRESULT err = CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(factory));
     if (FAILED(err)) {
-        LOG(ERROR) << "Could not create DXGIFactory with error: " << err;
+        spdlog::error("Could not create DXGIFactory with error: {}", err);
     }
 }
 
@@ -658,11 +661,11 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
     ComPtr<IDXGISwapChain1> swapChain;
     HRESULT res = factory->CreateSwapChainForHwnd(queue, hwnd, &swapChainDesc, &fsSwapChainDesc, nullptr, &swapChain);
     if (FAILED(res)) {
-        LOG(ERROR) << "Failed to create d3d12 swap chain";
+        spdlog::error("Failed to create d3d12 swap chain");
         return false;
     }
     if (FAILED(swapChain.As(&swap_chain))) {
-        LOG(ERROR) << "Failed to get ComPtr object";
+        spdlog::error("Failed to get ComPtr object");
         return false;
     }
 
@@ -674,7 +677,7 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
         rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         if (FAILED(device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)))) {
-            LOG(ERROR) << "Failed to create d3d12 rtv descriptor heap";
+            spdlog::error("Failed to create d3d12 rtv descriptor heap");
             return false;
         }
 
@@ -685,7 +688,7 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
         srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_srvHeap)))) {
-            LOG(ERROR) << "Failed to create d3d12 srv descriptor heap";
+            spdlog::error("Failed to create d3d12 srv descriptor heap");
             return false;
         }
 
@@ -699,7 +702,7 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
         // Create a RTV for each frame.
         for (int32_t i = 0; i < back_buffer_count; i++) {
             if (FAILED(swap_chain->GetBuffer(i, IID_PPV_ARGS(&back_buffers[i])))) {
-                LOG(ERROR) << "Failed to create rtv";
+                spdlog::error("Failed to create rtv");
                 return false;
             }
             std::wstringstream ss; ss << "Swapchain Buffer " << i;
@@ -772,20 +775,20 @@ void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D12_RESOURCE_FLA
     }
     if (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT & usage_flags) {
         // Ignored for D3D12
-        LOG(INFO) << "Test";
+        spdlog::info("Test");
     }
     if (XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT & usage_flags) {
         // Ignored for D3D12
-        LOG(INFO) << "Test";
+        spdlog::info("Test");
     }
     if (XR_SWAPCHAIN_USAGE_SAMPLED_BIT & usage_flags) {
         // Omitted for D3D12
         //states = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        LOG(INFO) << "Test";
+        spdlog::info("Test");
     }
     if (XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT & usage_flags) {
         // Ignored for D3D12
         //usage |= D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COMMON;
-        LOG(INFO) << "Test";
+        spdlog::info("Test");
     }
 }

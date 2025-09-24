@@ -10,3 +10,6 @@
 [submodule "third-party/OpenXR-SDK"]
 	path = third-party/OpenXR-SDK
 	url = https://github.com/KhronosGroup/OpenXR-SDK.git
+[submodule "third-party/spdlog"]
+	path = third-party/spdlog
+	url = git@github.com:gabime/spdlog.git

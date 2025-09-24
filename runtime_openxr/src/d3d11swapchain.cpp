@@ -37,17 +37,25 @@ D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* rend
     current_image_state = std::vector(1, IMAGE_STATE_WAITING);
 }
 
-bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name) {
+bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name) {
     D3D11_USAGE d3d11_usage;
     uint32_t bind_flags;
 
-    GetResourceStateFlags(createInfo->usageFlags, d3d11_usage, bind_flags);
+    uint64_t usage_flags = 0;
+    if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        usage_flags = createInfo->usageFlags;
+    }
+    else {
+        usage_flags = createInfo->usageFlags | XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+    
+    GetResourceStateFlags(usage_flags, d3d11_usage, bind_flags);
     CreateResources(createInfo, d3d11_usage, bind_flags, resource_name);
 
     return true;
 }
 
-bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::wstring resource_name) {
+bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::string resource_name) {
     resolution_x = createInfo->width;
     resolution_y = createInfo->height;
     current_image_state.assign(back_buffer_count, IMAGE_STATE_RELEASED);
@@ -101,10 +109,10 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         texture_desc.SampleDesc.Quality = glm::min<uint32_t>(texture_desc.SampleDesc.Quality, sample_quality);
     }
     else {
-        LOG(WARNING) << "D3D11 Couldn't retrieve multi sample quality levels";
+        spdlog::warn("D3D11 Couldn't retrieve multi sample quality levels");
     }
 
-    std::wstring com_name_prefix = L"";
+    std::string com_name_prefix = "";
 
     // Create resources
     for (uint32_t i = 0; i < back_buffers.size(); i++) {
@@ -126,7 +134,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             //    throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
             //}
 
-            com_name_prefix = L"Depth ";
+            com_name_prefix = "Depth ";
 
             // TODO Example releases the resource here?
             //back_buffers[i]->Release();
@@ -163,30 +171,30 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         }
 
         // Choose name for debugging
-        std::wstring texname;
-        std::wstring rtvname;
-        std::wstring srvname;
+        std::string texname;
+        std::string rtvname;
+        std::string srvname;
         size_t handle = reinterpret_cast<size_t>(xr_handle);
         if (resource_name.empty()) {
-            texname = std::format(L"Proxy Swapchain {} Texture {}", handle, i);
+            texname = std::format("Proxy Swapchain {} Texture {}", handle, i);
             texname = com_name_prefix + texname;
 
-            rtvname = std::format(L"Proxy Swapchain {} Render Target View {}", handle, i);
+            rtvname = std::format("Proxy Swapchain {} Render Target View {}", handle, i);
             rtvname = com_name_prefix + texname;
 
-            srvname = std::format(L"Proxy Swapchain {} Shader Resource View {}", handle, i);
+            srvname = std::format("Proxy Swapchain {} Shader Resource View {}", handle, i);
             srvname = com_name_prefix + texname;
 
             proxy_name = texname;
         }
         else {
-            texname = std::format(L"{} {} Texture {}", resource_name, handle, i);
+            texname = std::format("{} {} Texture {}", resource_name, handle, i);
             texname = com_name_prefix + texname;
 
-            rtvname = std::format(L"{} {} Render Target View {}", resource_name, handle, i);
+            rtvname = std::format("{} {} Render Target View {}", resource_name, handle, i);
             rtvname = com_name_prefix + texname;
 
-            srvname = std::format(L"{} {} Shader Resource View {}",resource_name, handle, i);
+            srvname = std::format("{} {} Shader Resource View {}",resource_name, handle, i);
             srvname = com_name_prefix + texname;
 
             proxy_name = texname;
@@ -194,13 +202,13 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 
         // Give name to the buffer
         if (FAILED(back_buffers[i]->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(wchar_t) * texname.size(), texname.c_str()))) {
-            LOG(WARNING) << "D3D11 Failed naming swapchain resource";
+            spdlog::warn("D3D11 Failed naming swapchain resource");
         }
         if (FAILED(back_buffers[i]->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(wchar_t) * rtvname.size(), rtvname.c_str()))) {
-            LOG(WARNING) << "D3D11 Failed naming swapchain resource";
+            spdlog::warn("D3D11 Failed naming swapchain resource");
         }
         if (FAILED(back_buffers[i]->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(wchar_t) * srvname.size(), srvname.c_str()))) {
-            LOG(WARNING) << "D3D11 Failed naming swapchain resource";
+            spdlog::warn("D3D11 Failed naming swapchain resource");
         }
     }
 
@@ -420,11 +428,11 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
     ComPtr<IDXGISwapChain1> swapChain;
     HRESULT res = factory->CreateSwapChainForHwnd(device.Get(), hwnd, &swapChainDesc, 0, nullptr, &swapChain);
     if (FAILED(res)) {
-        LOG(ERROR) << "Failed to create d3d11 swap chain";
+        spdlog::error("Failed to create d3d11 swap chain");
         throw std::runtime_error("Failed creating d3d11 swapchain");
     }
     if (FAILED(swapChain.As(&swap_chain))) {
-        LOG(ERROR) << "Failed to get ComPtr object";
+        spdlog::error("Failed to get ComPtr object");
         throw std::runtime_error("Failed to get ComPtr object d3d11");
     }
 
@@ -445,7 +453,10 @@ uint32_t D3D11WindowSwapchain::GetCurrentImageIndex()
 
 void D3D11WindowSwapchain::PresentFrame()
 {
-    swap_chain->Present(1, 0);
+    HRESULT res = swap_chain->Present(1, 0);
+    if(FAILED(res)) {
+        spdlog::error("Failed to present frame, error: %l", res);
+    }
 }
 
 uint32_t D3D11WindowSwapchain::GetWidth()

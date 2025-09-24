@@ -22,11 +22,11 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
 
         if (FAILED(d3d12_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
             feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-            LOG(ERROR) << "D3D12 Failed checking support for root signature 1.1, falling back to 1.0";
+            spdlog::error("D3D12 Failed checking support for root signature 1.1, falling back to 1.0");
             return false;
 
             //if (FAILED(d3d12_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data)))) {
-            //    LOG(ERROR) << "D3D12 Failed checking support for root signature 1.0";
+            //    spdlog::error("D3D12 Failed checking support for root signature 1.0";
             //}
         }
 
@@ -52,13 +52,13 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
         ComPtr<ID3DBlob> error;
         res = D3DX12SerializeVersionedRootSignature(&root_signature_desc, feature_data.HighestVersion, &signature, &error);
         if (FAILED(res)) {
-            LOG(ERROR) << "D3D12 Error, failed serializing root signature";
+            spdlog::error("D3D12 Error, failed serializing root signature");
             ThrowIfFailed(res);
             return false;
         }
         res = d3d12_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&root_signature));
         if (FAILED(res)) {
-            LOG(ERROR) << "D3D12 Error, failed creating root signature";
+            spdlog::error("D3D12 Error, failed creating root signature");
             ThrowIfFailed(res);
             return false;
         }
@@ -101,7 +101,7 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     sampler_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     res = d3d12_device->CreateDescriptorHeap(&sampler_heap_desc, IID_PPV_ARGS(&sampler_heap));
     if (FAILED(res)) {
-        LOG(ERROR) << "D3D12 Error, failed to create descriptor heap";
+        spdlog::error("D3D12 Error, failed to create descriptor heap");
         ThrowIfFailed(res);
         return false;
     }
@@ -141,11 +141,11 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
             fs::path pixel = fs::path(shader_path) / dx12_ps;
             vertex_shader = LoadBinaryFile(vertex.string());
             pixel_shader = LoadBinaryFile(pixel.string());
-            LOG(INFO) << "Loading shaders with debug paths";
+            spdlog::info("Loading shaders with debug paths");
         }
 
         if (vertex_shader.empty() || pixel_shader.empty()) {
-            LOG(ERROR) << "Couldn't find shaders";
+            spdlog::error("Couldn't find shaders");
             return false;
         }
 
@@ -176,7 +176,7 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
 
         HRESULT res = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline_state));
         if (FAILED(res)) {
-            LOG(ERROR) << "D3D12 Error, failed to create graphics pipeline state";
+            spdlog::error("D3D12 Error, failed to create graphics pipeline state");
             ThrowIfFailed(res);
             return false;
         }

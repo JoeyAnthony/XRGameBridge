@@ -8,7 +8,7 @@ class D3D11Renderer;
 class D3D11ProxySwapchain: public ProxySwapchain {
     D3D11Renderer* d3d11_renderer;
 
-    std::wstring proxy_name;
+    std::string proxy_name;
     uint32_t resolution_x = 0;
     uint32_t resolution_y = 0;
     bool is_depth_resource = false;
@@ -30,9 +30,9 @@ public:
 
     D3D11ProxySwapchain() = delete;
 
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") override;
     // Resource initializer
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::wstring resource_name);
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::string resource_name);
 
     void DestroyResources() override;
     XrResult AcquireNextImage(uint32_t& index) override;

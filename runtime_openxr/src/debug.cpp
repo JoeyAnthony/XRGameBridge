@@ -21,6 +21,6 @@ void ThrowIfFailed(HRESULT hr) {
 void TraceLogFunctionCall(std::string function_name, size_t line_number, XrSession session, XrInstance* instance) {
 #ifdef DEBUG_FUNCTION_CALL
     //GB_Session& gb_session = g_sessions[session];
-    LOG(INFO) << std::format("Trace log call: {}, {}", function_name, line_number);
+    spdlog::info("Trace log call: {}, {}", function_name, line_number);
 #endif
 }

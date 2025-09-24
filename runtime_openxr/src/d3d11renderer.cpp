@@ -54,7 +54,7 @@ XrResult D3D11Renderer::CreateWeaver(GB_Instance* instance, GB_System& gb_system
 
 XrResult D3D11Renderer::CreateSystemWindow(GB_System& gb_system) {
     if (window.TryGetExternalDisplay() != nullptr) {
-        LOG(INFO) << "Got window";
+       spdlog::info("Got window");
     }
 
     // Create debug window
@@ -62,6 +62,8 @@ XrResult D3D11Renderer::CreateSystemWindow(GB_System& gb_system) {
     window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
     //window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, 2560, 1440, true, false, true);
+
+    window.UpdateWindow();
 
     return XR_SUCCESS;
 }
@@ -160,7 +162,7 @@ XrResult D3D11Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     return XR_SUCCESS;
 }
 
-D3D11Renderer* D3D11Renderer::Create(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) {
+D3D11Renderer* D3D11Renderer::Create(XrSystemId systemId, const void* graphics_binding) {
     const XrGraphicsBindingD3D11KHR* d3d11_bindings = static_cast<const XrGraphicsBindingD3D11KHR*> (graphics_binding);
 
     { // Check validity of the device
@@ -170,21 +172,12 @@ D3D11Renderer* D3D11Renderer::Create(GB_Instance* instance, XrSystemId systemId,
         }
     }
 
-    return new D3D11Renderer(instance, systemId, d3d11_bindings);
+    return new D3D11Renderer(systemId, d3d11_bindings);
 }
 
-D3D11Renderer::D3D11Renderer(GB_Instance* instance, XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding) {
+D3D11Renderer::D3D11Renderer(XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding) {
     xr_system = systemId;
     d3d11_device = graphics_binding->device;
-
-    auto& system = g_systems[systemId];
-
-    CreateCompositor();
-    CreateCommandLists();
-    CreateSystemWindow(system);
-    CreateIntermediateTexture(system);
-    CreateWeaver(instance, system);
-    CreateWindowSwapchain(system);
 }
 
 D3D11Renderer::~D3D11Renderer() {
@@ -195,7 +188,22 @@ D3D11Renderer::~D3D11Renderer() {
     delete intermediate_resource;
 }
 
+void D3D11Renderer::InitializePipeline(GB_Instance* instance) {
+    auto& system = g_systems[xr_system];
+
+    CreateCompositor();
+    CreateCommandLists();
+    CreateIntermediateTexture(system);
+
+    CreateSystemWindow(system);
+    CreateWeaver(instance, system);
+    CreateWindowSwapchain(system);
+}
+
 XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
+
+    window.UpdateWindow();
+
     // Update the frame in flight.
     frame_in_flight = frame_in_flight++ % back_buffer_count;
 
@@ -218,6 +226,8 @@ XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     ID3D11CommandList* cmd_list;
     d3d11_device_context->FinishCommandList(false, &cmd_list);
     d3d11_immediate_context->ExecuteCommandList(cmd_list, true);
+    // The created command list needs to be released when done
+    cmd_list->Release();
 
     // Present to window
     window_swapchain->PresentFrame();

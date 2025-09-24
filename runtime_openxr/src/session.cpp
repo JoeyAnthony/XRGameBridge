@@ -8,14 +8,13 @@
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "easylogging++.h"
+#include "debug.h"
 #include "openxr_functions.h"
 #include "instance.h"
 #include "system.h"
 #include "settings.h"
 #include "d3d11renderer.h"
 #include "swapchain.h"
-
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
     TraceLogFunctionCall(__func__, __LINE__);
@@ -24,15 +23,15 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     static uint64_t session_creation_count = 1;
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
     GB_System& system = g_systems[createInfo->systemId];
-    LOG(INFO) << "Creating session: " << session_creation_count;
+    spdlog::info("Creating session: {}", session_creation_count);
 
     if (!system.features_enumerated) {
-        LOG(ERROR) << "Graphics requirements call missing";
+        spdlog::error("Graphics requirements call missing");
         return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
     }
 
     if (system.instance != instance) {
-        LOG(ERROR) << "Couldn't find system. System invalid";
+        spdlog::error("Couldn't find system. System invalid");
         return XR_ERROR_SYSTEM_INVALID;
     }
 
@@ -74,10 +73,10 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
         new_session.renderer = d3d12_renderer;
     }
     else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
-        new_session.renderer = D3D11Renderer::Create(gb_instance, createInfo->systemId, createInfo->next);
+        new_session.renderer = D3D11Renderer::Create(createInfo->systemId, createInfo->next);
     }
     else {
-        LOG(ERROR) << "Trying to create session with unsupported graphics api";
+        spdlog::error("Trying to create session with unsupported graphics api");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -108,8 +107,9 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
 
     ChangeSessionState(new_session, XR_SESSION_STATE_READY);
+    UpdateSession(new_session);
 
-    LOG(INFO) << "Successfully created session: " << session_creation_count;
+    spdlog::info("Successfully created session: {}", session_creation_count);
     return XR_SUCCESS;
 }
 
@@ -127,10 +127,10 @@ XrResult xrDestroySession(XrSession session) {
         g_sessions.erase(session);
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "" << e.what();
+        spdlog::error("{}", e.what());
     }
     catch (...) {
-        LOG(ERROR) << "Error occurred while destroying the session";
+        spdlog::error("Error occurred while destroying the session");
     }
 
     return XR_SUCCESS;
@@ -144,20 +144,22 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 
     GB_Session& gb_session = g_sessions[session];
     GB_System& gb_system = g_systems[gb_session.system];
-    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
 
     //gb_session.idle_thread.join();
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
-        LOG(ERROR) << "Session not ready";
+        spdlog::error("Session not ready");
         return XR_ERROR_SESSION_NOT_READY;
     }
     if (gb_session.session_state != XR_SESSION_STATE_READY) {
-        LOG(ERROR) << "Session is already running";
+        spdlog::error("Session is already running");
         return XR_ERROR_SESSION_RUNNING;
     }
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
+
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
+    gb_session.renderer->InitializePipeline(gb_instance);
 
     // Send all state changes
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
@@ -181,7 +183,7 @@ XrResult xrEndSession(XrSession session) {
 
     std::unique_lock unique_guard(gb_session.mutex_wait_frame_state, std::try_to_lock);
     if (unique_guard.owns_lock() == false) {
-        LOG(WARNING) << "Trying to stop the session but the frame mutex is in use";
+        spdlog::warn("Trying to stop the session but the frame mutex is in use");
         return XR_ERROR_SESSION_NOT_STOPPING;
     }
 
@@ -266,7 +268,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     gb_session.mutex_wait_frame_state.unlock();
 
-    //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
+    //spdlog::info("PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
     return XR_SUCCESS;
 }
@@ -292,7 +294,7 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 
     if (gb_session.ended_frame > gb_session.started_frame) {
         // Should be impossible
-        LOG(WARNING) << "Previous frame is later than current";
+        spdlog::warn("Previous frame is later than current");
     }
 
     if (gb_session.wait_frame_state != NewFrameBusy) {
@@ -307,7 +309,7 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
     // Log time left
     //uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
     //uint64_t time_left = gb_session.started_frame - time_now;
-    //LOG(INFO) << "Frame started. Time left: " << time_left;
+    //spdlog::info("Frame started. Time left: " << time_left;
 
     return XR_SUCCESS;
 }
@@ -326,14 +328,14 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // Frame too late, signal fences and return success
     //if (time_now > gb_session.started_frame) {
     //    // Application too late
-    //    LOG(INFO) << "Application too late, skipping compose";
+    //    spdlog::info("Application too late, skipping compose";
     //    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
     //    return XR_SUCCESS;
     //}
     //if(gb_session.started_frame == 0)
     //{
     //    // Call order invalid
-    //    LOG(INFO) << "No frame started";
+    //    spdlog::info("No frame started";
     //    return XR_SUCCESS;
     //}
     //if(gb_session.started_frame == gb_session.ended_frame)
@@ -379,7 +381,7 @@ void ChangeSessionState(GB_Session& session, XrSessionState state) {
 
     char buffer[XR_MAX_RESULT_STRING_SIZE];
     if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
-        LOG(INFO) << "Session state queued: " << std::string(buffer);
+        spdlog::info("Session state queued: {}", std::string(buffer));
     }
 }
 
@@ -408,7 +410,7 @@ void UpdateSession(GB_Session& session) {
 
             char buffer[XR_MAX_RESULT_STRING_SIZE];
             if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
-                LOG(INFO) << "Session state submitted: " << std::string(buffer);
+                spdlog::info("Session state submitted: {}", std::string(buffer));
             }
         }
 
@@ -428,12 +430,12 @@ void UpdateSession(GB_Session& session) {
     //    switch (msg->message) {
     //    case WM_KEYDOWN:
     //        if (GetAsyncKeyState(VK_F1) & 0x80) {
-    //            LOG(INFO) << "Pressed";
+    //            spdlog::info("Pressed";
     //        }
     //        break;
     //    case WM_KEYUP:
     //        if (GetAsyncKeyState(VK_F1) & 0x00) {
-    //            LOG(INFO) << "Released";
+    //            spdlog::info("Released";
     //        }
     //        break;
     //    }
@@ -566,7 +568,7 @@ void UpdateSession(GB_Session& session) {
 void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
 {
     if (index > session.views.size() - 1) {
-        LOG(WARNING) << "Session view array index out of bounds";
+        spdlog::error("Session view array index out of bounds");
         return;
     }
 
@@ -576,7 +578,7 @@ void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
 void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
 {
     if (index > session.views.size() - 1) {
-        LOG(WARNING) << "Session view array index out of bounds";
+        spdlog::error("Session view array index out of bounds");
         return;
     }
 

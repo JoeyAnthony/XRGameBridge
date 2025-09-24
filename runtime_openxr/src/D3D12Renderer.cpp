@@ -27,7 +27,7 @@ XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
         //intermediate_resource->CreateResources(&info, L"Intermediate resource");
 
         auto system_resolution = GetSystemResolution(gb_system);
-        intermediate_resource->CreateResources(system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
+        intermediate_resource->CreateResources(system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, "Intermediate resource");
 
         return XR_SUCCESS;
     }
@@ -60,7 +60,7 @@ XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
 
 XrResult D3D12Renderer::CreateSystemWindow(GB_System& gb_system) {
     if (window.TryGetExternalDisplay() != nullptr) {
-        LOG(INFO) << "Got window";
+        spdlog::info("Got window");
     }
 
     // Create debug window
@@ -99,7 +99,7 @@ bool D3D12Renderer::CreateCommandLists() {
         // Create present command allocator and command list resources
         res = d3d12_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command_allocators[i]));
         if (FAILED(res)) {
-            LOG(ERROR) << "D3D12 Error, failed to create command allocator";
+            spdlog::error("D3D12 Error, failed to create command allocator");
             ThrowIfFailed(res);
             return false;
         }
@@ -107,7 +107,7 @@ bool D3D12Renderer::CreateCommandLists() {
         // TODO use initial pipeline state here later. First check if it works without.
         res = d3d12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command_allocators[i].Get(), compositor.GetDefaultPipelineState().Get(), IID_PPV_ARGS(&command_lists[i]));
         if (FAILED(res)) {
-            LOG(ERROR) << "D3D12 Error, Failed creating DX12 renderer command list";
+            spdlog::error("D3D12 Error, Failed creating DX12 renderer command list");
             ThrowIfFailed(res);
             return false;
         }
@@ -137,7 +137,7 @@ bool D3D12Renderer::DestroyFences() {
 
     // Signal and increment the fence value.
     if (FAILED(d3d12_command_queue->Signal(fence.Get(), fence_value))) {
-        LOG(ERROR) << "Failed signaling fence on destroy";
+        spdlog::error("Failed signaling fence on destroy");
         return false;
     }
     fence_value++;
@@ -145,7 +145,7 @@ bool D3D12Renderer::DestroyFences() {
     // Wait until the previous frame is finished.
     if (lastCompletedFence < last_fence_value) {
         if (FAILED(fence->SetEventOnCompletion(last_fence_value, fence_event))) {
-            LOG(ERROR) << "Failed setting completion event on destroy";
+            spdlog::error("Failed setting completion event on destroy");
             return false;
         }
         WaitForSingleObject(fence_event, INFINITE);
@@ -174,7 +174,7 @@ XrResult D3D12Renderer::Initialize(GB_Instance* instance, XrSystemId systemId, c
     d3d12_command_queue = d3d12_bindings->queue;
 
     if (compositor.Initialize(this) == false) {
-        LOG(ERROR) << "Failed to create compositor";
+        spdlog::error("Failed to create compositor");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
@@ -391,6 +391,9 @@ ComPtr<ID3D12GraphicsCommandList>& D3D12Renderer::GetCommandList(uint32_t index)
 
 ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t index) {
     return command_allocators[index];
+}
+
+void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
 }
 
 D3D12Renderer::D3D12Renderer() {

@@ -32,7 +32,7 @@ class D3D12ProxySwapchain : public ProxySwapchain {
     XrSwapchain xr_handle;
     D3D12Renderer* d3d12_renderer;
 
-    std::wstring proxy_name;
+    std::string proxy_name;
     bool is_depth_resource = false;
 
     std::array<ComPtr<ID3D12Resource>, back_buffer_count> back_buffers;
@@ -62,9 +62,9 @@ public:
     static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer);
 
     // Overriden initializer
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::wstring resource_name = L"") override;
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") override;
     // Resource initializer
-    bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::wstring resource_name = L"");
+    bool CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::string resource_name = "");
 
     std::array<ComPtr<ID3D12Resource>, back_buffer_count> GetBuffers();
 

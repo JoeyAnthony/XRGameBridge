@@ -78,4 +78,5 @@ public:
     ComPtr<ID3D12CommandQueue>& GetCommandQueue();
     ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
     ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
+    void InitializePipeline(GB_Instance* instance) override;
 };
