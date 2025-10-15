@@ -18,8 +18,8 @@ class D3D12Renderer : public Renderer {
 
     // Graphics
     D3D12Compositor compositor;
-    DirectX12Weaver* d3d12weaver;
-    D3D12ProxySwapchain* intermediate_resource;
+    DirectX12Weaver* d3d12weaver = nullptr;
+    D3D12ProxySwapchain* intermediate_resource = nullptr;
     // Windowing
     GameBridgeWindow window;
     D3D12WindowSwapchain window_swapchain;
@@ -54,11 +54,14 @@ class D3D12Renderer : public Renderer {
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
 
 public:
-    D3D12Renderer();
-    ~D3D12Renderer();
+    static D3D12Renderer* Create(XrSystemId systemId, const void* graphics_binding);
 
-    XrResult Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding);
+    D3D12Renderer() = delete;
+    explicit D3D12Renderer(XrSystemId systemId, const XrGraphicsBindingD3D12KHR* graphics_binding);
+    ~D3D12Renderer() override;
 
+    // Inherited via Renderer
+    void InitializePipeline(GB_Instance* instance) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable = true) override;
@@ -78,5 +81,4 @@ public:
     ComPtr<ID3D12CommandQueue>& GetCommandQueue();
     ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
     ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
-    void InitializePipeline(GB_Instance* instance) override;
 };

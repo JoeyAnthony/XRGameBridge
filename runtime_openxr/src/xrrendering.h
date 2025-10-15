@@ -17,8 +17,6 @@ constexpr unsigned short back_buffer_count = 2;
 
 class Compositor {
 public:
-
-
     const std::string shader_path = "shaders/";
     const std::string dx11_vs = "dx11.vs";
     const std::string dx11_ps = "dx11.ps";
@@ -57,6 +55,8 @@ public:
 
 class Renderer {
 public:
+    static constexpr float clear_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
     virtual ~Renderer() = default;
     virtual XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) = 0;
     virtual void EnableSrWindow(bool enable) = 0;

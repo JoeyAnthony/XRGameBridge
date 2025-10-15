@@ -26,10 +26,10 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     info.mipCount = 1;
     info.sampleCount = 1;
     info.createFlags = 0;
-    info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
+    info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
     
     try {
-        intermediate_resource = D3D11ProxySwapchain::Create(&info, this);
+        intermediate_resource = D3D11ProxySwapchain::Create(&info, this, "Intermediate resource");
         return XR_SUCCESS;
     }
     catch (XrException& e) {
@@ -211,10 +211,10 @@ XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
 
     // Render weaving
     if (should_weave) {
-        RenderFrameWeaving(frameEndInfo, window_swapchain_index, D3D12ProxySwapchain::clear_color);
+        RenderFrameWeaving(frameEndInfo, window_swapchain_index, Renderer::clear_color);
     }
     else {
-        RenderFrameSideBySide(frameEndInfo, window_swapchain_index, D3D12ProxySwapchain::clear_color);
+        RenderFrameSideBySide(frameEndInfo, window_swapchain_index, Renderer::clear_color);
     }
 
     // Transition swapchain to present

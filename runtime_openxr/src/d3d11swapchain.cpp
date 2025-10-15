@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include "d3d11renderer.h"
 
-D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer) {
+D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name) {
     // Create with swapchain index handle
     // Add to swapchain lists
     // Throw/rethrow errors that occur
@@ -17,20 +17,13 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
     auto d3d11_proxy = new D3D11ProxySwapchain(handle, renderer);
 
     // Initialize resources
-    XrResult result = XR_ERROR_RUNTIME_FAILURE;
-    if (d3d11_proxy->CreateResources(createInfo) == false) {
+    if (d3d11_proxy->CreateResources(createInfo, resource_name) == false) {
          throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create proxy swapchain");
     }
 
     swapchain_creation_count++;
     return d3d11_proxy;
 }
-
-//XrResult D3D11ProxySwapchain::CreateD3D11ProxySwapchain(ProxySwapchain* proxy_swapchain) {
-//    D3D11ProxySwapchain* proxy = nullptr;
-//    CreateD3D11ProxySwapchain(proxy);
-//    proxy_swapchain = proxy;
-//}
 
 D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle)   {
     d3d11_renderer = renderer;

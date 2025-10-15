@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.23)
 set (CMAKE_CXX_STANDARD 20)
 
 project (RuntimeOpenXR VERSION 0.1)
-message("3D Game Bridge Version: ${3DGameBridge_VERSION}")
 
 set(CMAKE_DEBUG_POSTFIX d)
 
@@ -70,35 +69,35 @@ target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
 
-# Debugggin definitions
+# Debuging definitions
 # target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
 
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
 
+# Add logging library
 add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/spdlog spdlog)
 
-# Link dependencies
-target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS} spdlog::spdlog)
+# Add 3D Game Bridge
+add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/3DGameBridge 3DGameBridge)
+message("3D Game Bridge Version: ${3DGameBridge_VERSION}")
 
-set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
-
-find_package(srDirectX)
-
+# Add glm
 include(FetchContent)
-
+set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
+find_package(srDirectX)
 FetchContent_Declare(
 	glm
 	GIT_REPOSITORY	https://github.com/g-truc/glm.git
 	GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
 )
-
 FetchContent_MakeAvailable(glm)
-#find_package(glm REQUIRED)
 
-
+# Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
+		${TARGET_DXHEADERS}
+		spdlog::spdlog
 		3DGameBridge
         glm::glm
 )

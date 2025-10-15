@@ -129,6 +129,7 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
         std::vector<char>vertex_shader;
         std::vector<char>pixel_shader;
 
+        // Try shader path in shipping location, otherwise the debug location
         fs::path shader_dir = fs::path(runtime_path).parent_path();
         if (fs::exists(shader_dir / shader_path)) {
             fs::path vertex = shader_dir / dx12_vs;
@@ -137,8 +138,8 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
             pixel_shader = LoadBinaryFile(pixel.string());
         }
         else {
-            fs::path vertex = fs::path(shader_path) / dx12_vs;
-            fs::path pixel = fs::path(shader_path) / dx12_ps;
+            fs::path vertex = fs::path(DEBUG_SHADER_PATH) / dx12_vs;
+            fs::path pixel = fs::path(DEBUG_SHADER_PATH) / dx12_ps;
             vertex_shader = LoadBinaryFile(vertex.string());
             pixel_shader = LoadBinaryFile(pixel.string());
             spdlog::info("Loading shaders with debug paths");
@@ -234,9 +235,9 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         cmd_list->RSSetViewports(1, &view_port);
         cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-        // TODO Maybe transition all buffers at once, maybe with split barriers, so we transition barriers at the same time?
         // Transition proxy swapchain resource to pixel shader resource
-        //TransitionImage(cmd_list, proxy_resource.Get(),proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        cmd_list->ResourceBarrier(1, &barrier);
 
         struct {
             uint32_t is_opaque;
@@ -286,7 +287,8 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         cmd_list->DrawInstanced(3, 1, 0, 0);
 
         // Transition proxy swapchain resource back to render target
-        //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        cmd_list->ResourceBarrier(1, &barrier);
     }
 }
 

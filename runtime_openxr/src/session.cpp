@@ -68,9 +68,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 
     // Create Renderer
     if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
-        auto* d3d12_renderer = new D3D12Renderer();
-        d3d12_renderer->Initialize(gb_instance, createInfo->systemId, createInfo->next);
-        new_session.renderer = d3d12_renderer;
+        new_session.renderer = D3D12Renderer::Create(createInfo->systemId, createInfo->next);;
     }
     else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
         new_session.renderer = D3D11Renderer::Create(createInfo->systemId, createInfo->next);

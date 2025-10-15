@@ -18,8 +18,8 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     // Try shader path in shipping location, otherwise the debug location
     fs::path shader_dir = fs::path(runtime_path).parent_path();
     if (fs::exists(shader_dir / shader_path)) {
-        fs::path vertex = shader_dir / dx12_vs;
-        fs::path pixel = shader_dir / dx12_ps;
+        fs::path vertex = shader_dir / dx11_vs;
+        fs::path pixel = shader_dir / dx11_ps;
         v_shader_buffer = LoadBinaryFile(vertex.string());
         p_shader_buffer = LoadBinaryFile(pixel.string());
     }

@@ -91,13 +91,6 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     if (backend == GraphicsBackend::D3D12) {
         auto* d3d12_renderer = reinterpret_cast<D3D12Renderer*>(gb_session.renderer);
         proxy_swapchain = D3D12ProxySwapchain::Create(createInfo, d3d12_renderer);
-
-        // Create swap chain
-        if (proxy_swapchain->CreateResources(createInfo) == false) {
-            spdlog::error("Failed to create proxy swapchain");
-            LOG_RUNTIME_ERROR
-            return XR_ERROR_RUNTIME_FAILURE;
-        }
     }
     else if (backend == GraphicsBackend::D3D11) {
         auto* d3d11_renderer = reinterpret_cast<D3D11Renderer*>(gb_session.renderer);
@@ -257,18 +250,21 @@ XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageRe
     return gb_proxy->ReleaseImage();
 }
 
-D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer) {
+D3D12ProxySwapchain::~D3D12ProxySwapchain()
+{
+    DestroyResources();
+}
+
+D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name) {
     static size_t swapchain_creation_count = 1;
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
     auto d3d12_proxy = new D3D12ProxySwapchain(handle, renderer);
 
     // Initialize resources
-    // TODO fix later to use create info
-    //XrResult result = XR_ERROR_RUNTIME_FAILURE;
-    //if (d3d12_proxy->CreateResources(createInfo) == false) {
-    //    throw XrException("Failed to create D3D12 proxy swapchain", XR_ERROR_RUNTIME_FAILURE);
-    //}
+    if (d3d12_proxy->CreateResources(createInfo) == false) {
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create D3D12 proxy swapchain");
+    }
 
     swapchain_creation_count++;
     return d3d12_proxy;
@@ -374,7 +370,7 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
                 format
             };
 
-            memcpy(clear_value.Color, clear_color, sizeof(float) * 4);
+            memcpy(clear_value.Color, Renderer::clear_color, sizeof(float) * 4);
 
             res = device->CreateCommittedResource(
                 &heap_properties,

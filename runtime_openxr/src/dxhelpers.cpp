@@ -24,10 +24,10 @@ void CreateProxyResource(ID3D12Device* device, uint64_t width, uint64_t height, 
 void CreateResource(ID3D12Device* device, D3D12_RESOURCE_DESC desc, ID3D12Resource* resource) {
     D3D12_CLEAR_VALUE clear_value{};
     clear_value.Format = desc.Format;
-    clear_value.Color[0] = clear_color[0];
-    clear_value.Color[1] = clear_color[1];
-    clear_value.Color[2] = clear_color[2];
-    clear_value.Color[3] = clear_color[3];
+    clear_value.Color[0] = dx_clear_color[0];
+    clear_value.Color[1] = dx_clear_color[1];
+    clear_value.Color[2] = dx_clear_color[2];
+    clear_value.Color[3] = dx_clear_color[3];
 
     auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
     ThrowIfFailed(device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, &clear_value, IID_PPV_ARGS(&resource))

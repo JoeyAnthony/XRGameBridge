@@ -67,98 +67,6 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
     return TRUE;
 }
 
-#include <winternl.h>
-typedef NTSTATUS(NTAPI* _LdrLoadDll)(
-    PWSTR DllPath, 
-    ULONG pFlags, 
-    PUNICODE_STRING DllName, 
-    HMODULE* BaseAddress
-    );
-_LdrLoadDll LdrLoadDll;
-
-#include <stdio.h>
-#include <signal.h>
-#include <tchar.h>
-
-
-HMODULE LoadwithLdrLoadDLl(std::wstring dll_path)
-{
-    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
-    if (!ntdll) {
-        spdlog::info("Failed to get ntdll");
-        return NULL;
-    }
-
-    LdrLoadDll = (_LdrLoadDll)GetProcAddress(ntdll, "LdrLoadDll");
-    if (!LdrLoadDll) {
-        spdlog::info("Failed loading function");
-        return NULL;
-    }
-
-    spdlog::info("Attempting to load dll");
-    UNICODE_STRING udll_name;
-    RtlInitUnicodeString(&udll_name, dll_path.data());
-
-    HMODULE loaded_module;
-    NTSTATUS result = LdrLoadDll(NULL, 0, &udll_name, &loaded_module);
-    if (!NT_SUCCESS(result)) {
-        spdlog::error("Failed loading dll");
-        return NULL;
-    }
-
-    return loaded_module;
-}
-
-FARPROC LoadSRWithLoaderLoadDll(HMODULE module, std::string dll_name, std::string gb_dll_name) {
-    std::wstring wdll_name = fs::path(dll_name).wstring();
-    static bool weaving_loaded = false;
-    if (!weaving_loaded) {
-        LoadwithLdrLoadDLl(L"DimencoWeaving.dll");
-        HMODULE mopd = GetModuleHandleW(L"DimencoWeaving.dll");
-        weaving_loaded = true;
-    }
-
-    if (std::find(sr_dlls.begin(), sr_dlls.end(), wdll_name) != sr_dlls.end()) {
-        //fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-        //HMODULE gb_module = LoadLibraryExW(gb_path.wstring().data(), NULL, NULL);
-
-        module = LoadwithLdrLoadDLl(wdll_name.data());
-        //loaded_module = LoadLibraryExW(wdll_name.data(), NULL, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
-
-        spdlog::info("Loading success");
-        //spdlog::info("Loading dll: " << gb_path.string();
-
-        if (module == NULL) {
-            //spdlog::info("Failed to load " << gb_path << " error: " << GetLastError();
-            return 0;
-        }
-
-        //spdlog::info("Successfully loaded " << gb_dll_name;
-        return reinterpret_cast<FARPROC>(module);
-    }
-    else if (dll_name.find(gb_dll_name) != std::string::npos) {
-        spdlog::info("Loading dll {}", dll_name);
-
-        fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-        std::wstring wpath = gb_path.wstring();
-        HMODULE gb_module = LoadwithLdrLoadDLl(wpath.data());
-
-        spdlog::info("Loading success");
-        //spdlog::info("Loading dll: " << gb_path.string();
-
-        if (gb_module == NULL) {
-            //spdlog::info("Failed to load " << gb_path << " error: " << GetLastError();
-            return 0;
-        }
-
-        //spdlog::info("Successfully loaded " << gb_dll_name;
-        return reinterpret_cast<FARPROC>(gb_module);
-    }
-    else {
-
-    }
-}
-
 // Targets are delayed in CMake
 #include <delayimp.h>
 #pragma comment(lib, "ntdll.lib")
@@ -216,8 +124,6 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
             std::wstring wpath = dll_path.wstring();
             loaded_module = LoadLibraryExW(wpath.data(), NULL, NULL);
         }
-        //else if(dll_name.find(gb_dll_name) != std::string::npos) {
-        //    spdlog::info("Loading dll " << dll_name;
 
         if (loaded_module == NULL) {
             spdlog::error("Failed to load {} error: {}", dll_path.string(), GetLastError());
@@ -225,7 +131,6 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         }
 
         spdlog::info("Loading success");
-        //spdlog::info("Successfully loaded " << gb_dll_name;
         return reinterpret_cast<FARPROC>(loaded_module);
 
     }
@@ -250,9 +155,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // this alternate DLL and attempt to find the
         // requested entrypoint via GetProcAddress.
 
-        //spdlog::info("dliFailLoadLib " << "DLL Name: " << pdli->szDll;
-
-
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, std::format("LoadLibrary failed: {}", pdli->szDll));
         break;
 
     case dliFailGetProc:

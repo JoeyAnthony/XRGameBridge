@@ -26,7 +26,7 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     explicit D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer);
 
 public:
-    static D3D11ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer);
+    static D3D11ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name = "");
 
     D3D11ProxySwapchain() = delete;
 

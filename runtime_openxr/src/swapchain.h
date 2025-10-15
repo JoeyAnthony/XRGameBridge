@@ -58,8 +58,9 @@ class D3D12ProxySwapchain : public ProxySwapchain {
     D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer);
 
 public:
+    ~D3D12ProxySwapchain() override;
 
-    static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer);
+    static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name = "");
 
     // Overriden initializer
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") override;
@@ -88,8 +89,6 @@ public:
     [[nodiscard]] uint32_t GetAwaitedImageIndex();
 
     Renderer* GetRenderer() override;
-
-    static constexpr float clear_color[4] = { 0.5f, 0.0f, 0.5f, 1.0f };
 };
 
 class D3D12WindowSwapchain {

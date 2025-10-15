@@ -14,10 +14,10 @@ class D3D11Renderer : public Renderer {
     ComPtr<ID3D11DeviceContext> d3d11_immediate_context;
     bool should_weave = true;
 
-    SR::PredictingDX11Weaver* native_weaver;
-    D3D11Compositor* compositor;
-    D3D11WindowSwapchain* window_swapchain;
-    D3D11ProxySwapchain* intermediate_resource;
+    SR::PredictingDX11Weaver* native_weaver = nullptr;
+    D3D11Compositor* compositor = nullptr;
+    D3D11WindowSwapchain* window_swapchain = nullptr;
+    D3D11ProxySwapchain* intermediate_resource = nullptr;
     // Windowing
     GameBridgeWindow window;
 
@@ -42,16 +42,15 @@ public:
     explicit D3D11Renderer(XrSystemId systemId, const XrGraphicsBindingD3D11KHR* graphics_binding);
     ~D3D11Renderer() override;
 
+    // Inherited via Renderer
     void InitializePipeline(GB_Instance* instance) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable) override;
     void Update() override;
     GraphicsBackend GetGraphicsBackend() override;
+    Compositor* const GetCompositor() override;
 
     ComPtr<ID3D11Device> GetDevice();
     ComPtr<ID3D11DeviceContext>& GetDeviceContext();
-
-    // Inherited via Renderer
-    Compositor* const GetCompositor() override;
 };

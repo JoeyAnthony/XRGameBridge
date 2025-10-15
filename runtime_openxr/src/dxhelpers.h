@@ -3,7 +3,7 @@
 
 // Edited from the Microsoft documentation
 
-inline float clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
+inline float dx_clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
 
 void CreateProxyResource(ID3D12Device* device, uint64_t width, uint64_t height, int64_t format, ID3D12Resource* resource);
 

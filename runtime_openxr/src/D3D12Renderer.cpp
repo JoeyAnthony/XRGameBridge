@@ -6,29 +6,21 @@
 
 XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     // Create intermediate resources for weaving render target
-    // TODO Remove session parameter
-
-    // Handle 0 is not being used by xrCreateSwapchain
-    //auto system_resolution = GetSystemResolution(gb_system);
-    //XrSwapchainCreateInfo info;
-    //info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-    //info.width = system_resolution.x;
-    //info.height = system_resolution.y;
-    //info.arraySize = 1;
-    //info.faceCount = 1;
-    //info.mipCount = 1;
-    //info.sampleCount = 1;
-    //info.createFlags = 0;
-    //info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
+    auto system_resolution = GetSystemResolution(gb_system);
+    XrSwapchainCreateInfo info;
+    info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
+    info.width = system_resolution.x;
+    info.height = system_resolution.y;
+    info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    info.arraySize = 1;
+    info.faceCount = 1;
+    info.mipCount = 1;
+    info.sampleCount = 1;
+    info.createFlags = 0;
+    info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
 
     try {
-        XrSwapchainCreateInfo info;
-        intermediate_resource = D3D12ProxySwapchain::Create(&info, this);
-        //intermediate_resource->CreateResources(&info, L"Intermediate resource");
-
-        auto system_resolution = GetSystemResolution(gb_system);
-        intermediate_resource->CreateResources(system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, "Intermediate resource");
-
+        intermediate_resource = D3D12ProxySwapchain::Create(&info, this, "Intermediate resource");
         return XR_SUCCESS;
     }
     catch (XrException& e) {
@@ -158,39 +150,6 @@ bool D3D12Renderer::DestroyFences() {
     return true;
 }
 
-XrResult D3D12Renderer::Initialize(GB_Instance* instance, XrSystemId systemId, const void* graphics_binding) {
-    xr_system = systemId;
-
-    const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (graphics_binding);
-
-    { // Check validity of the device
-        const ID3D12Object* obj = dynamic_cast<ID3D12Object*> (d3d12_bindings->device);
-        if (!obj) {
-            return XR_ERROR_GRAPHICS_DEVICE_INVALID;
-        }
-    }
-
-    d3d12_device = d3d12_bindings->device;
-    d3d12_command_queue = d3d12_bindings->queue;
-
-    if (compositor.Initialize(this) == false) {
-        spdlog::error("Failed to create compositor");
-        LOG_RUNTIME_ERROR
-        return XR_ERROR_RUNTIME_FAILURE;
-    }
-
-    CreateCommandLists();
-    CreateFenceObjects();
-
-    GB_System& gb_system = g_systems[xr_system];
-    CreateIntermediateTexture(gb_system);
-    CreateSystemWindow(gb_system);
-    CreateWindowSwapchain(gb_system);
-    CreateWeaver(instance);
-
-    return XR_SUCCESS;
-}
-
 XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     // Update the frame in flight.
     frame_in_flight = frame_in_flight++ % back_buffer_count;
@@ -216,10 +175,10 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
 
     // Render weaving
     if (should_weave) {
-        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, D3D12ProxySwapchain::clear_color, fence_value);
+        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, Renderer::clear_color, fence_value);
     }
     else {
-        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, D3D12ProxySwapchain::clear_color, fence_value);
+        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, Renderer::clear_color, fence_value);
     }
 
     // Transition swapchain to present
@@ -252,6 +211,7 @@ void D3D12Renderer::EnableWeaving(bool enable)
 
 void D3D12Renderer::Update()
 {
+    window.UpdateWindow();
 }
 
 XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
@@ -394,20 +354,45 @@ ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t inde
 }
 
 void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
+    CreateFenceObjects();
+    CreateCommandLists();
+
+    if (compositor.Initialize(this) == false) {
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create compositor");
+    }
+
+    GB_System& gb_system = g_systems[xr_system];
+    CreateIntermediateTexture(gb_system);
+    CreateSystemWindow(gb_system);
+    CreateWindowSwapchain(gb_system);
+    CreateWeaver(instance);
 }
 
-D3D12Renderer::D3D12Renderer() {
+D3D12Renderer* D3D12Renderer::Create(XrSystemId systemId, const void* graphics_binding)
+{
+    const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (graphics_binding);
 
+    { // Check validity of the device
+        const ID3D12Object* obj = dynamic_cast<ID3D12Object*> (d3d12_bindings->device);
+        if (!obj) {
+            throw XrException(XR_ERROR_GRAPHICS_DEVICE_INVALID, "Failed to create D3D12Renderer, graphics bining may be invalid");
+        }
+    }
+
+    return new D3D12Renderer(systemId, d3d12_bindings);
+}
+
+D3D12Renderer::D3D12Renderer(XrSystemId systemId, const XrGraphicsBindingD3D12KHR* graphics_binding) {
+    xr_system = systemId;
+    d3d12_device = graphics_binding->device;
+    d3d12_command_queue = graphics_binding->queue;
 }
 
 D3D12Renderer::~D3D12Renderer() {
-    intermediate_resource->DestroyResources();
-
+    delete intermediate_resource;
+    delete d3d12weaver;
     // Destroy window
     window.DestroyApplicationWindow();
-
     d3d12_command_queue.Reset();
-
     d3d12_device.Reset();
 }
-
