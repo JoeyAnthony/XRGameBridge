@@ -5,6 +5,7 @@
 #include "filesystem"
 #include "settings.h"
 #include "d3d11swapchain.h"
+#include "swapchain.h"
 
 namespace fs = std::filesystem;
 

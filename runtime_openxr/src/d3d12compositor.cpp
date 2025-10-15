@@ -1,13 +1,14 @@
-#include "compositor.h"
+#include "d3d12compositor.h"
 
 #include <array>
 #include <fstream>
 #include <filesystem>
 
 #include "instance.h"
-#include "swapchain.h"
 #include "settings.h"
 #include "session.h"
+#include "swapchain.h"
+#include "d3d12renderer.h"
 
 bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     d3d12_device = renderer->GetDevice();

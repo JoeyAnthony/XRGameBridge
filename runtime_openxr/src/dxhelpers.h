@@ -2,6 +2,11 @@
 #include "openxr_includes.h"
 
 // Edited from the Microsoft documentation
+class DxHelpers {
+public:
+    static void CreateDXGIFactory(IDXGIFactory4** factory);
+    static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+};
 
 inline float dx_clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
 

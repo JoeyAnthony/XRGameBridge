@@ -5,7 +5,6 @@
 #include "dll.h"
 #include "openxr_includes.h"
 #include "session.h"
-#include "swapchain.h"
 #include "system.h"
 
 #include <game_bridge.h>

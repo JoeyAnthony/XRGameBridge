@@ -1,9 +1,10 @@
 #include "d3d11swapchain.h"
-#include "openxr_includes.h"
-
 #include <format>
 
 #include <glm/glm.hpp>
+
+#include "openxr_includes.h"
+#include "dxhelpers.h"
 #include "d3d11renderer.h"
 
 D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name) {
@@ -398,7 +399,7 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
 
     // TODO On failure all objects here should be destroyed
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
-    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
+    DxHelpers::CreateDXGIFactory(&factory);
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = createInfo->width;

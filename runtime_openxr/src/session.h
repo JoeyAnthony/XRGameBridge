@@ -6,12 +6,9 @@
 
 #include "openxr_includes.h"
 #include "window.h"
-#include "swapchain.h"
-#include "compositor.h"
 
-#include "srhelpers.h"
-#include "weaver_directx_12.h"
-#include "D3D12Renderer.h"
+#include "sr/management/srcontext.h"
+#include "xrrendering.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session);
 XrResult xrDestroySession(XrSession session);

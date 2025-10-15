@@ -7,53 +7,55 @@ project (RuntimeOpenXR VERSION 0.1)
 set(CMAKE_DEBUG_POSTFIX d)
 
 set(SHADERS
-	shaders/layering_vertex.hlsl
-	shaders/layering_pixel.hlsl
+    shaders/layering_vertex.hlsl
+    shaders/layering_pixel.hlsl
 )
 
 # Source files
 add_library(RuntimeOpenXR SHARED
-		src/main.cpp
-		src/dll.h
-		src/instance.h
-		src/instance.cpp
-		src/openxr_functions.h
-		src/openxr_includes.h
-		src/system.h
-		src/system.cpp
-		src/session.h
-		src/session.cpp
-		src/swapchain.h
-		src/swapchain.cpp
-		src/settings.h
-		src/settings.cpp
-		src/events.h
-		src/events.cpp
-		src/actions.h
-		src/actions.cpp
-		src/compositor.h
-		src/compositor.cpp
-		src/window.h
-		src/window.cpp
-		src/dxhelpers.h
-		src/dxhelpers.cpp
-		src/srhelpers.h
-		src/srhelpers.cpp
-		src/xrrendering.h
+        src/main.cpp
+        src/dll.h
+        src/instance.h
+        src/instance.cpp
+        src/openxr_functions.h
+        src/openxr_includes.h
+        src/system.h
+        src/system.cpp
+        src/session.h
+        src/session.cpp
+        src/swapchain.h
+        src/swapchain.cpp
+        src/settings.h
+        src/settings.cpp
+        src/events.h
+        src/events.cpp
+        src/actions.h
+        src/actions.cpp
+        src/window.h
+        src/window.cpp
+        src/dxhelpers.h
+        src/dxhelpers.cpp
+        src/srhelpers.h
+        src/srhelpers.cpp
+        src/xrrendering.h
         src/d3d12renderer.h
         src/d3d12renderer.cpp
-		src/d3d11renderer.h
-		src/d3d11renderer.cpp
-		src/d3d11compositor.h
-		src/d3d11compositor.cpp
-		src/d3d11swapchain.h
-		src/d3d11swapchain.cpp
-		src/types.h
-		src/result.h
-		src/debug.h
-		src/debug.cpp
+        src/d3d12compositor.h
+        src/d3d12compositor.cpp
+        src/d3d12swapchain.h
+        src/d3d12swapchain.cpp
+        src/d3d11renderer.h
+        src/d3d11renderer.cpp
+        src/d3d11compositor.h
+        src/d3d11compositor.cpp
+        src/d3d11swapchain.h
+        src/d3d11swapchain.cpp
+        src/types.h
+        src/result.h
+        src/debug.h
+        src/debug.cpp
 
-		${SHADERS}
+        ${SHADERS}
 )
 
 # Don't let Visual Studio build the shaders with wrong settings
@@ -88,17 +90,17 @@ include(FetchContent)
 set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
 find_package(srDirectX)
 FetchContent_Declare(
-	glm
-	GIT_REPOSITORY	https://github.com/g-truc/glm.git
-	GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
+    glm
+    GIT_REPOSITORY	https://github.com/g-truc/glm.git
+    GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
 )
 FetchContent_MakeAvailable(glm)
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
-		${TARGET_DXHEADERS}
-		spdlog::spdlog
-		3DGameBridge
+        ${TARGET_DXHEADERS}
+        spdlog::spdlog
+        3DGameBridge
         glm::glm
 )
 
@@ -106,7 +108,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 add_custom_command(
     TARGET RuntimeOpenXR POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	DEPENDS 3DGameBridge
+    DEPENDS 3DGameBridge
 )
 
 # Copy all dependencies
@@ -120,13 +122,13 @@ add_custom_command(
 # add_custom_command(
     # TARGET RuntimeOpenXR POST_BUILD
     # COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	# DEPENDS 3DGameBridge
-	# COMMAND_EXPAND_LISTS
+    # DEPENDS 3DGameBridge
+    # COMMAND_EXPAND_LISTS
 # )
 
 # Compile shaders
 add_custom_command(TARGET RuntimeOpenXR POST_BUILD
-	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
 )
 
 # Set debug shader directory

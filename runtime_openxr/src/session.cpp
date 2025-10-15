@@ -14,7 +14,8 @@
 #include "system.h"
 #include "settings.h"
 #include "d3d11renderer.h"
-#include "swapchain.h"
+#include "d3d12renderer.h"
+//#include "swapchain.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
     TraceLogFunctionCall(__func__, __LINE__);
@@ -353,17 +354,17 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-void GB_Session::IdleFunc() {
-    while (session_state == XR_SESSION_STATE_IDLE) {
-        if (g_proxy_swapchains.size() > 0) {
-            ChangeSessionState(*this, XR_SESSION_STATE_READY);
-        }
-
-        UpdateSession(*this);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-}
+//void GB_Session::IdleFunc() {
+//    while (session_state == XR_SESSION_STATE_IDLE) {
+//        if (g_proxy_swapchains.size() > 0) {
+//            ChangeSessionState(*this, XR_SESSION_STATE_READY);
+//        }
+//
+//        UpdateSession(*this);
+//
+//        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+//    }
+//}
 
 void GB_Session::InitializeView() {
 

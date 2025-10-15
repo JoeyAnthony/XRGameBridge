@@ -15,6 +15,16 @@ constexpr unsigned short back_buffer_count = 2;
 #define DEBUG_SHADER_PATH ""
 #endif
 
+enum ImageState {
+    IMAGE_STATE_WAITING,
+    IMAGE_STATE_RELEASED,
+
+    IMAGE_STATE_ACQUIRED,
+    IMAGE_STATE_RENDER_TARGET,
+    IMAGE_STATE_WEAVING,
+    IMAGE_STATE_DONE_WEAVING
+};
+
 class Compositor {
 public:
     const std::string shader_path = "shaders/";

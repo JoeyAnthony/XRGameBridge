@@ -1,15 +1,16 @@
 #pragma once
 
-#include "types.h"
-#include "compositor.h"
-#include "swapchain.h"
-#include "window.h"
-#include "D3D12Renderer.h"
 #include "openxr_includes.h"
-#include "weaver_directx_12.h"
+
+#include <weaver_directx_12.h>
+#include "types.h"
+#include "window.h"
 #include "xrrendering.h"
+#include "d3d12swapchain.h"
+#include "d3d12compositor.h"
 
 class GB_Instance;
+class D3D12ProxySwapchain;
 
 class D3D12Renderer : public Renderer {
     const uint8_t back_buffer_count = 2;

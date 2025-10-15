@@ -11,7 +11,7 @@
 #include "debug.h"
 #include "actions.h"
 #include "openxr_functions.h"
-#include "swapchain.h"
+#include "dxhelpers.h"
 #include "system.h"
 
 //class OpenXRContainers {
@@ -209,8 +209,8 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
-    D3D12WindowSwapchain::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    DxHelpers::CreateDXGIFactory(&factory);
+    DxHelpers::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
         spdlog::error("No suitable device found");
@@ -254,8 +254,8 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    D3D12WindowSwapchain::CreateDXGIFactory(&factory);
-    D3D12WindowSwapchain::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    DxHelpers::CreateDXGIFactory(&factory);
+    DxHelpers::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
         spdlog::error("No suitable device found");

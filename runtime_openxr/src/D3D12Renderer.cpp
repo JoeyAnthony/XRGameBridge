@@ -1,4 +1,4 @@
-#include "D3D12Renderer.h"
+#include "d3d12Renderer.h"
 
 #include "instance.h"
 #include "settings.h"

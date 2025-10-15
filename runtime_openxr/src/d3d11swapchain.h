@@ -1,5 +1,4 @@
 #pragma once
-#include "swapchain.h"
 #include "xrrendering.h"
 #include "openxr_includes.h"
 
