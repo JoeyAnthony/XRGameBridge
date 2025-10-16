@@ -9,6 +9,8 @@ set(CMAKE_DEBUG_POSTFIX d)
 set(SHADERS
     shaders/layering_vertex.hlsl
     shaders/layering_pixel.hlsl
+    shaders/dx11_vs.hlsl
+    shaders/dx11_ps.hlsl
 )
 
 # Source files
