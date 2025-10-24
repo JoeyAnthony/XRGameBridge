@@ -20,7 +20,6 @@ class GB_Instance;
 class D3D12ProxySwapchain;
 
 class D3D12Renderer : public Renderer {
-    const uint8_t back_buffer_count = 2;
     XrSystemId xr_system;
     bool should_weave = true;
 

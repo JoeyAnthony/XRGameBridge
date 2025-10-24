@@ -87,6 +87,25 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     //TODO Get compositor from the session and create descriptor on it for the new swapchain
     GB_Session& gb_session = g_sessions[session];
 
+    /* TODO:
+    * Get more consistent with error handling and logging.
+    * Perhaps the following: Use exceptions where possible
+    * Catch exceptions in these XR callbacks and return the error codes
+    *
+    * For feature checking, like with XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT here for example. It's easier to do that in the XR function directly
+    * instead of doing that per graphics API for minimal duplicate work.
+    *
+    * Create logging functions for using in XR functions since throwing exceptions doesn't work here.
+    *
+    *
+    * TODO:
+    * Since this is the generic create swapchain function for the runtime, the image, resource_name can be generated here based on createInfo.
+    */
+    if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT) {
+        spdlog::error("xrCreateSwapchain Error: XR_ERROR_FEATURE_UNSUPPORTED");
+        return XR_ERROR_FEATURE_UNSUPPORTED;
+    }
+
     ProxySwapchain* proxy_swapchain = nullptr;
     Renderer* renderer = gb_session.renderer;
     GraphicsBackend backend = renderer->GetGraphicsBackend();

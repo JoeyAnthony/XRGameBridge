@@ -25,7 +25,7 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
     auto d3d11_proxy = new D3D11ProxySwapchain(handle, renderer);
 
     // Initialize resources
-    if (d3d11_proxy->CreateResources(createInfo, resource_name) == false) {
+    if (d3d11_proxy->CreateResources(createInfo, standard_swapchain_buffer_count, resource_name) == false) {
          throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create proxy swapchain");
     }
 
@@ -35,28 +35,35 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
 
 D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle)   {
     d3d11_renderer = renderer;
-    current_image_state = std::vector(1, IMAGE_STATE_WAITING);
 }
 
-bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name) {
+bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name) {
+    DXGI_FORMAT format = static_cast<DXGI_FORMAT>(createInfo->format);
     D3D11_USAGE d3d11_usage;
     uint32_t bind_flags;
 
-    uint64_t usage_flags = 0;
-    if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-        usage_flags = createInfo->usageFlags;
+    {
+        // Todo this should be removed in the future.
+        uint64_t usage_flags = 0;
+        if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            usage_flags = createInfo->usageFlags;
+        }
+        else {
+            usage_flags = createInfo->usageFlags | XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+        }
+        GetResourceStateFlags(usage_flags, d3d11_usage, bind_flags);
+    }
+
+    if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
+        if (num_resources != 1) {
+            spdlog::warn("Swapchain is static but num_resources does not equal 1. Forcing resources to equal 1");
+        }
+        back_buffer_count = 1;
     }
     else {
-        usage_flags = createInfo->usageFlags | XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+        back_buffer_count = num_resources;
     }
-    
-    GetResourceStateFlags(usage_flags, d3d11_usage, bind_flags);
-    CreateResources(createInfo, d3d11_usage, bind_flags, resource_name);
 
-    return true;
-}
-
-bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::string resource_name) {
     resolution_x = createInfo->width;
     resolution_y = createInfo->height;
     current_image_state.assign(back_buffer_count, IMAGE_STATE_RELEASED);
@@ -95,7 +102,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     texture_desc.Format = ResolveTextureFormatForUsage(static_cast<DXGI_FORMAT>(createInfo->format), createInfo->usageFlags);
     texture_desc.SampleDesc.Count = createInfo->sampleCount;
     texture_desc.SampleDesc.Quality = 0;
-    texture_desc.Usage = usage;
+    texture_desc.Usage = d3d11_usage;
     texture_desc.BindFlags = bind_flags;
     texture_desc.CPUAccessFlags = 0;
     texture_desc.MiscFlags = 0;

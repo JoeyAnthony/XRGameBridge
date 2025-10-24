@@ -90,11 +90,11 @@ XrResult D3D12Renderer::CreateWindowSwapchain(GB_System& gb_system) {
 }
 
 bool D3D12Renderer::CreateCommandLists() {
-    command_allocators.resize(back_buffer_count);
-    command_lists.resize(back_buffer_count);
+    command_allocators.resize(standard_swapchain_buffer_count);
+    command_lists.resize(standard_swapchain_buffer_count);
 
     HRESULT res = 0;
-    for (uint32_t i = 0; i < back_buffer_count; i++) {
+    for (uint32_t i = 0; i < standard_swapchain_buffer_count; i++) {
         // Create present command allocator and command list resources
         res = d3d12_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command_allocators[i]));
         if (FAILED(res)) {
@@ -118,7 +118,7 @@ bool D3D12Renderer::CreateCommandLists() {
 }
 
 bool D3D12Renderer::CreateFenceObjects() {
-    frame_fence_values.resize(back_buffer_count, 0);
+    frame_fence_values.resize(standard_swapchain_buffer_count, 0);
 
     // Create fence
     d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
@@ -159,7 +159,7 @@ bool D3D12Renderer::DestroyFences() {
 
 XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     // Update the frame in flight.
-    frame_in_flight = frame_in_flight++ % back_buffer_count;
+    frame_in_flight = frame_in_flight++ % standard_swapchain_buffer_count;
 
     // If the next frame in flight is still rendering wait until it is ready.
     if (fence->GetCompletedValue() < frame_fence_values[frame_in_flight]) {

@@ -24,6 +24,7 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     std::vector<ComPtr<ID3D11ShaderResourceView>> shader_resource_views;
     std::vector<ComPtr<ID3D11DepthStencilView>> depth_stencil_views;
 
+    uint32_t back_buffer_count = 0;
     uint32_t current_frame_index = 0;
     uint32_t awaited_frame_index = 0;
     uint32_t released_frame_index = 0;
@@ -36,9 +37,8 @@ public:
 
     D3D11ProxySwapchain() = delete;
 
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") override;
     // Resource initializer
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, D3D11_USAGE usage, uint32_t bind_flags, std::string resource_name);
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name);
 
     void DestroyResources() override;
     XrResult AcquireNextImage(uint32_t& index) override;

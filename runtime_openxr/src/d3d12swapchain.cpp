@@ -28,8 +28,8 @@ D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
     auto d3d12_proxy = new D3D12ProxySwapchain(handle, renderer);
 
-    // Initialize resources
-    if (d3d12_proxy->CreateResources(createInfo) == false) {
+    // Initialize resources. Double buffering is standard.
+    if (d3d12_proxy->CreateResources(createInfo, standard_swapchain_buffer_count) == false) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create D3D12 proxy swapchain");
     }
 
@@ -39,27 +39,38 @@ D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
 
 D3D12ProxySwapchain::D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* renderer) : ProxySwapchain(handle) {
     d3d12_renderer = renderer;
-    back_buffer_fence_values.fill(0);
-    current_image_state.fill(ImageState::IMAGE_STATE_WAITING);
 }
 
-bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name) {
+bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name) {
+    DXGI_FORMAT format = static_cast<DXGI_FORMAT>(createInfo->format);
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
     D3D12_RESOURCE_STATES states = D3D12_RESOURCE_STATE_COMMON;
+    ID3D12Device* device = d3d12_renderer->GetDevice().Get();
+    HRESULT res = 0;
+
     GetResourceStateFlags(createInfo->usageFlags, flags, states);
     if (states == D3D12_RESOURCE_STATE_COMMON) {
         states = D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
-    return CreateResources(createInfo->width, createInfo->height, static_cast<DXGI_FORMAT>(createInfo->format), flags, states, resource_name);
-}
+    if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
+        if (num_resources != 1) {
+            spdlog::warn("Swapchain is static but num_resources does not equal 1. Forcing resources to equal 1");
+        }
+        back_buffer_count = 1;
+    }
+    else {
+        back_buffer_count = num_resources;
+    }
 
-bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES states, std::string resource_name) {
-    ID3D12Device* device = d3d12_renderer->GetDevice().Get();
-
-    HRESULT res = 0;
+    resolution_x = createInfo->width;
+    resolution_y = createInfo->height;
     // Reinitialize the values in the array
-    current_image_state.fill(IMAGE_STATE_RELEASED);
+    back_buffer_fence_values.assign(back_buffer_count, 0);
+    current_image_state.assign(back_buffer_count, IMAGE_STATE_RELEASED);
+    back_buffer_fence_values.shrink_to_fit();
+    current_image_state.shrink_to_fit();
+    back_buffers.resize(back_buffer_count);
 
     for (uint32_t i = 0; i < back_buffer_count; i++) {
         // Set resource_usage to save the state the application expects the buffer to be in
@@ -75,10 +86,10 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC texture_desc = {};
             texture_desc.Format = format; // DXGI_FORMAT_D32_FLOAT;
-            texture_desc.Width = width;
-            texture_desc.Height = height;
-            texture_desc.DepthOrArraySize = 1;
-            texture_desc.MipLevels = 1;
+            texture_desc.Width = createInfo->width;
+            texture_desc.Height = createInfo->height;
+            texture_desc.DepthOrArraySize = createInfo->arraySize;
+            texture_desc.MipLevels = createInfo->mipCount;
             texture_desc.Flags = flags;
             texture_desc.SampleDesc.Count = 1;
             texture_desc.SampleDesc.Quality = 0;
@@ -122,10 +133,10 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC texture_desc = {};
             texture_desc.Format = format;
-            texture_desc.Width = width;
-            texture_desc.Height = height;
-            texture_desc.DepthOrArraySize = 1;
-            texture_desc.MipLevels = 1;
+            texture_desc.Width = createInfo->width;
+            texture_desc.Height = createInfo->height;
+            texture_desc.DepthOrArraySize = createInfo->arraySize;
+            texture_desc.MipLevels = createInfo->mipCount;
             texture_desc.Flags = flags;
             texture_desc.SampleDesc.Count = 1;
             texture_desc.SampleDesc.Quality = 0;
@@ -205,8 +216,6 @@ bool D3D12ProxySwapchain::CreateResources(uint32_t width, uint32_t height, DXGI_
 
         rtv_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         cbc_srv_uav_descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        resolution_x = width;
-        resolution_y = height;
 
         // Create descriptors
         {
@@ -256,7 +265,7 @@ size_t D3D12ProxySwapchain::GetBufferCount() {
     return back_buffers.size();
 }
 
-std::array<ComPtr<ID3D12Resource>, back_buffer_count> D3D12ProxySwapchain::GetBuffers() {
+const std::vector<ComPtr<ID3D12Resource>> D3D12ProxySwapchain::GetBuffers() {
     return back_buffers;
 }
 
@@ -349,6 +358,10 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
     ID3D12Device* device = d3d12_renderer->GetDevice().Get();
     ID3D12CommandQueue* queue = d3d12_renderer->GetCommandQueue().Get();
 
+    // Use double buffering for rendering to the window for now.
+    const uint32_t back_buffer_count = standard_swapchain_buffer_count;
+    back_buffers.resize(back_buffer_count);
+
     // TODO On failure all objects here should be destroyed
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     DxHelpers::CreateDXGIFactory(&factory);
@@ -435,7 +448,7 @@ void D3D12WindowSwapchain::Initialize(D3D12Renderer* renderer) {
     d3d12_renderer = renderer;
 }
 
-std::array<ComPtr<ID3D12Resource>, back_buffer_count> D3D12WindowSwapchain::GetImages() {
+const std::vector<ComPtr<ID3D12Resource>> D3D12WindowSwapchain::GetImages() {
     return back_buffers;
 }
 

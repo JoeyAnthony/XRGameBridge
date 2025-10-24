@@ -85,8 +85,9 @@ XrResult D3D11Renderer::CreateWindowSwapchain(GB_System& gb_system) {
     create_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create swapchain for debug window
+
     try {
-        window_swapchain = new D3D11WindowSwapchain(this, &create_info, back_buffer_count, window.GetWindowHandle());
+        window_swapchain = new D3D11WindowSwapchain(this, &create_info, standard_swapchain_buffer_count, window.GetWindowHandle());
     }
     catch (std::exception& e) {
         LOG_RUNTIME_ERROR
@@ -212,7 +213,7 @@ XrResult D3D11Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     window.UpdateWindow();
 
     // Update the frame in flight.
-    frame_in_flight = frame_in_flight++ % back_buffer_count;
+    frame_in_flight = frame_in_flight++ % standard_swapchain_buffer_count;
 
     int32_t window_swapchain_index = window_swapchain->GetCurrentImageIndex();
 

@@ -14,8 +14,7 @@
 #include "types.h"
 
 class GB_Instance;
-
-constexpr unsigned short back_buffer_count = 2;
+constexpr unsigned short standard_swapchain_buffer_count = 2;
 
 // Path defined in Cmake
 #ifndef DEBUG_SHADER_PATH
@@ -91,7 +90,7 @@ public:
     ProxySwapchain(XrSwapchain handle) : xr_handle(handle) {};
     virtual ~ProxySwapchain() = default;
 
-    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, std::string resource_name = "") = 0;
+    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "") = 0;
     virtual void DestroyResources() = 0;
 
     // Returns the oldest image index
