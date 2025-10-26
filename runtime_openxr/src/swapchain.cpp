@@ -259,7 +259,15 @@ XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitI
 
     auto& gb_proxy = g_proxy_swapchains[swapchain];
 
-    return gb_proxy->WaitForImage(wait_duration);
+    XrResult xr_result;
+    try {
+        xr_result = gb_proxy->WaitForImage(wait_duration);
+    }
+    catch (XrException& e) {
+        xr_result = e.GetResult();
+    }
+
+    return xr_result;
 }
 
 XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo) {

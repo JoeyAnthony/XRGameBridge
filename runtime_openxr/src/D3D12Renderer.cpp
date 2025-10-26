@@ -121,7 +121,10 @@ bool D3D12Renderer::CreateFenceObjects() {
     frame_fence_values.resize(standard_swapchain_buffer_count, 0);
 
     // Create fence
-    d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+    HRESULT res = d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+    if(FAILED(res)) {
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create fence object");
+    }
     // Create an event handle to use for frame synchronization.
     fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (fence_event == nullptr) {

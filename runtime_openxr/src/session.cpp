@@ -112,6 +112,9 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Create sr context, blocks till there is a connection
     new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
 
+    // Initialize rendering pipeline
+    new_session.renderer->InitializePipeline(gb_instance);
+
     ChangeSessionState(new_session, XR_SESSION_STATE_READY);
     UpdateSession(new_session);
 
@@ -163,9 +166,6 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     }
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
-
-    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
-    gb_session.renderer->InitializePipeline(gb_instance);
 
     // Send all state changes
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
