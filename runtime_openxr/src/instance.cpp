@@ -1,17 +1,24 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #include "instance.h"
 
 #include <stdexcept>
 #include <vector>
 #include <set>
 
-#include <easylogging++.h>
 #include <hotkey_windows_impl.h>
 
 #include <game_bridge_structs.h>
 
+#include "debug.h"
 #include "actions.h"
 #include "openxr_functions.h"
-#include "swapchain.h"
+#include "dxhelpers.h"
 #include "system.h"
 
 //class OpenXRContainers {
@@ -25,41 +32,41 @@
 //
 //} static g_openxr_stuff;
 
-using namespace XRGameBridge;
-
 XrResult xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoidFunction* function) {
     try {
         *function = openxr_functions.at(name);
     }
     catch (std::out_of_range& e) {
-        LOG(WARNING) << "FUNCTION UNSUPPORTED: " << name << " Error: " << e.what();
+        spdlog::warn("FUNCTION UNSUPPORTED: {} Error: {}", name, e.what());
         return XR_ERROR_FUNCTION_UNSUPPORTED;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE; // Generic error
     }
 
-    LOG(INFO) << "Address retrieved: " << name;
+    spdlog::info("Address retrieved: {}", name);
     return XR_SUCCESS;
 }
 
 XrResult xrNegotiateLoaderRuntimeInterface(const XrNegotiateLoaderInfo* loaderInfo, XrNegotiateRuntimeRequest* runtimeRequest) {
-    LOG(INFO) << "xrNegotiateLoaderRuntimeInterface";
-    LOG(INFO) << "\tminApiVersion " << loaderInfo->minApiVersion;
-    LOG(INFO) << "\tmaxApiVersion " << loaderInfo->maxApiVersion;
+    spdlog::info("xrNegotiateLoaderRuntimeInterface");
+    spdlog::info("\tminApiVersion {}", loaderInfo->minApiVersion);
+    spdlog::info("\tmaxApiVersion {}", loaderInfo->maxApiVersion);
 
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->runtimeInterfaceVersion = XR_CURRENT_LOADER_RUNTIME_VERSION;
     runtimeRequest->getInstanceProcAddr = &xrGetInstanceProcAddr;
 
-    LOG(INFO) << "\truntimeApiVersion %i", runtimeRequest->runtimeApiVersion;
-    LOG(INFO) << "\truntimeInterfaceVersion %i", runtimeRequest->runtimeInterfaceVersion;
+    spdlog::info("\truntimeApiVersion {}", runtimeRequest->runtimeApiVersion);
+    spdlog::info("\truntimeInterfaceVersion {}", runtimeRequest->runtimeInterfaceVersion);
 
     return XR_SUCCESS;
 }
 
 XrResult xrEnumerateInstanceExtensionProperties(const char* layerName, uint32_t propertyCapacityInput, uint32_t* propertyCountOutput, XrExtensionProperties* properties) {
-    LOG(INFO) << "Called: xrEnumerateInstanceExtensionProperties";
+    TraceLogFunctionCall(__func__, __LINE__);
+
     const uint32_t array_size = static_cast<uint32_t>(supported_extensions.size());
 
     *propertyCountOutput = array_size;
@@ -80,15 +87,17 @@ XrResult xrEnumerateInstanceExtensionProperties(const char* layerName, uint32_t 
 }
 
 XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance) {
-    LOG(INFO) << "Creating instance created session: ";
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    spdlog::info("Creating instance");
 
     if (createInfo == nullptr) {
-        LOG(INFO) << "Invalid XrInstanceCreateInfo";
+        spdlog::info("Invalid XrInstanceCreateInfo");
         return XR_ERROR_INITIALIZATION_FAILED;
     }
 
     if (createInfo->type != XR_TYPE_INSTANCE_CREATE_INFO) {
-        LOG(INFO) << "createInfo struct type not XR_TYPE_INSTANCE_CREATE_INFO";
+        spdlog::info("createInfo struct type not XR_TYPE_INSTANCE_CREATE_INFO");
         return XR_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -101,11 +110,11 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     XrApplicationInfo app_info = createInfo->applicationInfo;
     std::string app_name = app_info.applicationName;
 
-    LOG(INFO) << "Application name: " << app_name;
-    LOG(INFO) << "Api version: " << app_info.apiVersion;
-    LOG(INFO) << "Application version: " << app_info.applicationVersion;
-    LOG(INFO) << "Engine: " << app_info.engineName;
-    LOG(INFO) << "Engine version: " << app_info.engineVersion;
+    spdlog::info("Application name: {}", app_name);
+    spdlog::info("Api version: {}", app_info.apiVersion);
+    spdlog::info("Application version: {}", app_info.applicationVersion);
+    spdlog::info("Engine: {}", app_info.engineName);
+    spdlog::info("Engine version: {}", app_info.engineVersion);
 
     if (app_name.empty()) {
         return XR_ERROR_NAME_INVALID;
@@ -131,9 +140,9 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
         application_extensions.erase(extension.extensionName);
     }
     if (!application_extensions.empty()) {
-        LOG(ERROR) << "Unsupported extensions: ";
+        spdlog::error("Unsupported extensions: ");
         for (auto extension : application_extensions) {
-            LOG(ERROR) << "\t" << extension;
+            spdlog::error("\t", extension);
         }
 
         return XR_ERROR_EXTENSION_NOT_PRESENT;
@@ -165,15 +174,18 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
 
     // Check the context
     if (g_xr_instance->GetPlatformManager()->GetContext() == nullptr) {
-        LOG(ERROR) << "Failed to connect to the SR service";
+        spdlog::error("Failed to connect to the SR service");
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
-    LOG(INFO) << "XR Instance created";
+    spdlog::info("XR Instance created");
     return XR_SUCCESS;
 }
 
 XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* instanceProperties) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO Make a list of instances to check whether passed instances are valid or not
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 
@@ -184,6 +196,7 @@ XrResult xrGetInstanceProperties(XrInstance instance, XrInstanceProperties* inst
 }
 
 XrResult xrDestroyInstance(XrInstance instance) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
     //window_hook->CloseConsole();
 
@@ -192,20 +205,22 @@ XrResult xrDestroyInstance(XrInstance instance) {
     // Delete systems
     // TODO Make the instance destroy all owned objects here as well
 
-    delete XRGameBridge::g_xr_instance;
+    delete g_xr_instance;
 
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    return XR_SUCCESS;
 }
 
 // DX11 and DX12 requirements functions have the same logic, they do have different out types
 XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D11KHR* graphicsRequirements) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    GB_GraphicsDevice::CreateDXGIFactory(&factory);
-    GB_GraphicsDevice::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    DxHelpers::CreateDXGIFactory(&factory);
+    DxHelpers::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
-        LOG(ERROR) << "No suitable device found";
+        spdlog::error("No suitable device found");
         return XR_ERROR_SYSTEM_INVALID;
     }
 
@@ -213,7 +228,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         GB_System& system = g_systems.at(systemId);
 
         if (system.instance != instance) {
-            LOG(ERROR) << "Instance not bound to this system";
+            spdlog::error("Instance not bound to this system");
             return XR_ERROR_HANDLE_INVALID;
         }
 
@@ -228,6 +243,7 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         return XR_ERROR_SYSTEM_INVALID;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -241,13 +257,15 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId systemId, XrGraphicsRequirementsD3D12KHR* graphicsRequirements) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
-    GB_GraphicsDevice::CreateDXGIFactory(&factory);
-    GB_GraphicsDevice::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
+    DxHelpers::CreateDXGIFactory(&factory);
+    DxHelpers::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
     if (factory == nullptr) {
-        LOG(ERROR) << "No suitable device found";
+        spdlog::error("No suitable device found");
         return XR_ERROR_SYSTEM_INVALID;
     }
 
@@ -255,7 +273,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         GB_System& system = g_systems.at(systemId);
 
         if (system.instance != instance) {
-            LOG(ERROR) << "Instance not bound to this system";
+            spdlog::error("Instance not bound to this system");
             return XR_ERROR_HANDLE_INVALID;
         }
 
@@ -266,12 +284,13 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         //TODO Do I need this in both? Maybe only in system sincen that the device that renders in the end
         g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D12);
         system.active_graphics_backend = GraphicsBackend::D3D12;
-        LOG(INFO) << "";
     }
     catch (std::out_of_range& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_SYSTEM_INVALID;
     }
     catch (std::exception& e) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -283,7 +302,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
 //#ifdef _DEBUG
 //    // Enable the D3D12 debug layer.
-//    LOG(WARNING) << "DirectX 12 Debug device is being used";
+//    spdlog::warn("DirectX 12 Debug device is being used";
 //    {
 //        ComPtr<ID3D12Debug> debugController;
 //        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
@@ -295,6 +314,8 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrStringToPath(XrInstance instance, const char* pathString, XrPath* path) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrPath xr_path = string_hasher(pathString);
     *path = xr_path;
 
@@ -310,6 +331,8 @@ XrResult xrStringToPath(XrInstance instance, const char* pathString, XrPath* pat
 }
 
 XrResult xrPathToString(XrInstance instance, XrPath path, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     std::string string_path = g_xrpath_storage[path];
 
     if (string_path.empty()) {
@@ -332,6 +355,8 @@ XrResult xrPathToString(XrInstance instance, XrPath path, uint32_t bufferCapacit
 }
 
 XrResult xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo* createInfo, XrActionSet* actionSet) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     const std::string action_set_name(createInfo->actionSetName);
     const std::string localized_action_set_name(createInfo->localizedActionSetName);
 
@@ -354,7 +379,7 @@ XrResult xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo* cre
     }
     else {
         // Iterator to the pair element
-        LOG(WARNING) << "Action set already exists: " << localized_action_set_name;
+        spdlog::warn("Action set already exists: {}", localized_action_set_name);
         return XR_ERROR_NAME_DUPLICATED;
     }
 
@@ -362,18 +387,21 @@ XrResult xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo* cre
 }
 
 XrResult xrDestroyActionSet(XrActionSet actionSet) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_ActionSet& to_delete = g_action_sets.at(actionSet);
 
-        LOG(INFO) << "Destroy action: " << to_delete.localized_name;
+        spdlog::info("Destroy action: {}", to_delete.localized_name);
         g_action_sets.erase(actionSet);
     }
     catch (std::out_of_range& e) {
-        LOG(ERROR) << "Action set not found";
+        spdlog::error("Action set not found");
         return XR_ERROR_HANDLE_INVALID;
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "Exception occurred: " << e.what();
+        spdlog::error("Exception occurred: {}", e.what());
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -391,15 +419,18 @@ XrResult xrDestroyActionSet(XrActionSet actionSet) {
 }
 
 XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createInfo, XrAction* action) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_ActionSet& gb_action_set = g_action_sets.at(actionSet);
     }
     catch (std::out_of_range& e) {
-        LOG(ERROR) << "Action set does not exist";
+        spdlog::error("Action set does not exist");
         return XR_ERROR_HANDLE_INVALID;
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "Exception occurred: " << e.what();
+        spdlog::error("Exception occurred: {}", e.what());
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -417,7 +448,7 @@ XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createI
         *action = handle;
     }
     else {
-        LOG(WARNING) << "Action already exists: " << new_action.localized_name << "";
+        spdlog::warn("Action already exists: {}", new_action.localized_name);
         return XR_ERROR_NAME_DUPLICATED;
     }
 
@@ -425,18 +456,21 @@ XrResult xrCreateAction(XrActionSet actionSet, const XrActionCreateInfo* createI
 }
 
 XrResult xrDestroyAction(XrAction action) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         GB_Action& to_delete = g_actions.at(action);
 
-        LOG(INFO) << "Unregistered action: " << to_delete.localized_name;
+        spdlog::info("Unregistered action: {}", to_delete.localized_name);
         g_actions.erase(action);
     }
     catch (std::out_of_range& e) {
-        LOG(ERROR) << "Action does not exist";
+        spdlog::error("Action does not exist");
         return XR_ERROR_HANDLE_INVALID;
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "Exception occurred: " << e.what();
+        spdlog::error("Exception occurred: {}", e.what());
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -444,6 +478,8 @@ XrResult xrDestroyAction(XrAction action) {
 }
 
 XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsAttachInfo* attachInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     try {
         const std::vector<XrActionSet> attach_info_sets(attachInfo->actionSets, attachInfo->actionSets + attachInfo->countActionSets);
 
@@ -453,11 +489,12 @@ XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsA
         }
     }
     catch (std::out_of_range& e) {
-        LOG(ERROR) << "Action does not exist";
+        spdlog::error("Action does not exist");
         return XR_ERROR_HANDLE_INVALID;
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "Exception occurred: " << e.what();
+        spdlog::error("Exception occurred: {}", e.what());
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -465,6 +502,8 @@ XrResult xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsA
 }
 
 XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrInteractionProfileSuggestedBinding* suggestedBindings) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO not implemented since we may not need this for now https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#semantic-path-interaction-profiles
     // Vendor specific input mappings
 
@@ -474,8 +513,10 @@ XrResult xrSuggestInteractionProfileBindings(XrInstance instance, const XrIntera
 }
 
 XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPath, XrInteractionProfileState* interactionProfile) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     std::string string_path = g_xrpath_storage[topLevelUserPath];
-    if(std::find(XRGameBridge::g_supported_paths.begin(), XRGameBridge::g_supported_paths.end(), string_path) == XRGameBridge::g_supported_paths.end())
+    if(std::find(g_supported_paths.begin(), g_supported_paths.end(), string_path) == g_supported_paths.end())
     {
         return XR_ERROR_PATH_UNSUPPORTED;
     }
@@ -484,6 +525,8 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 }
 
 XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO need event stream reader for poll events
     uint32_t event_type;
     void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
@@ -500,14 +543,15 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     }
 
     // Runtime tries to send an event that is not supported.
+    LOG_RUNTIME_ERROR
     return XR_ERROR_RUNTIME_FAILURE;
 }
 
-void XRGameBridge::InitializeSystems(XrInstance instance) {
+void InitializeSystems(XrInstance instance) {
     CreateXrGameBridgeSystems(instance);
 };
 
-XRGameBridge::GB_Instance::GB_Instance() {
+GB_Instance::GB_Instance() {
     // Set dpi awareness for the application
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
     InitializeSR();
@@ -535,7 +579,7 @@ XRGameBridge::GB_Instance::GB_Instance() {
 
 }
 
-XRGameBridge::GB_Instance::~GB_Instance() {
+GB_Instance::~GB_Instance() {
     delete gamebridge_instance;
     delete platform_manager;
 
@@ -555,44 +599,45 @@ XRGameBridge::GB_Instance::~GB_Instance() {
     //delete window_hook;
 }
 
-void XRGameBridge::GB_Instance::InitializeSR() {
+void GB_Instance::InitializeSR() {
     gamebridge_instance = new GameBridge(EventManager());
 
     SRPlatformManagerInitialize params{};
     platform_manager = new PlatformManager(params);
 
     while (!platform_manager->InitializeSRContext()) {
-        LOG(INFO) << "Failed creating SR context, retrying..";
+        spdlog::info("Failed creating SR context, retrying..");
     }
 }
 
-XrResult XRGameBridge::GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
+XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::undefined) {
         active_graphics_backend = api;
         return XR_SUCCESS;
     }
     else {
-        LOG(ERROR) << "Active graphics api can only be set once";
+        spdlog::error("Active graphics api can only be set once");
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 }
 
-GameBridge* XRGameBridge::GB_Instance::GetGameBridgeInstane() {
+GameBridge* GB_Instance::GetGameBridgeInstance() {
     return gamebridge_instance;
 }
 
-PlatformManager* XRGameBridge::GB_Instance::GetPlatformManager() {
+PlatformManager* GB_Instance::GetPlatformManager() {
     return platform_manager;
 }
 
-std::string XRGameBridge::GB_Instance::GetRuntimeName() {
+std::string GB_Instance::GetRuntimeName() {
     return runtime_name;
 }
 
-uint64_t XRGameBridge::GB_Instance::GetRuntimeVersion() {
+uint64_t GB_Instance::GetRuntimeVersion() {
     return runtime_version;
 }
 
-GraphicsBackend XRGameBridge::GB_Instance::GetActiveGraphicsAPI() {
+GraphicsBackend GB_Instance::GetActiveGraphicsAPI() {
     return active_graphics_backend;
 }

@@ -1,3 +1,10 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #pragma once
 
 // OpenXR Windows and DirectX
@@ -11,8 +18,12 @@
 #include <dxgi1_6.h>
 #include <directx/d3dx12.h>
 
+// DX11
 #include <d3d11.h>
+#include <D3Dcommon.h>
+#pragma comment( lib, "dxguid.lib")
 
+// COM
 #include <wrl/client.h>
 #include <winerror.h>
 
@@ -21,33 +32,13 @@
 
 template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-inline void ThrowIfFailed(HRESULT hr) {
-#ifdef  _DEBUG
-    if (FAILED(hr)) {
-        // Set a breakpoint on this line to catch DirectX API errors
-        throw std::exception();
-    }
-#else
-
-#endif
-
-}
-
 // OpenXR headers
 #include <openxr/openxr.h>
 #include <openxr/openxr_loader_negotiation.h>
 #include <openxr/openxr_platform.h>
 
-// Extra
-#include "easylogging++.h"
-
-namespace XRGameBridge {
-    // Data types
-    struct GBVector2i {
-        uint64_t x;
-        uint64_t y;
-    };
-}
+// Debug
+#include "debug.h"
 
 #ifdef WIN32
     // Declare functions here so system.h doesn't have to be included in openxr_includes.h

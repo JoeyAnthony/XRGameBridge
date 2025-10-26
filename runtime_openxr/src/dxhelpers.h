@@ -1,9 +1,21 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #pragma once
 #include "openxr_includes.h"
 
 // Edited from the Microsoft documentation
+class DxHelpers {
+public:
+    static void CreateDXGIFactory(IDXGIFactory4** factory);
+    static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+};
 
-inline float clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
+inline float dx_clear_color[4]{ 0.5f, 0.5f, 0.0f, 1.0f };
 
 void CreateProxyResource(ID3D12Device* device, uint64_t width, uint64_t height, int64_t format, ID3D12Resource* resource);
 

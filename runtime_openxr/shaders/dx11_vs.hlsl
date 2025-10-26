@@ -13,7 +13,7 @@ static float4 vertices[3] =
 };
 
 // Draw the texture square in the lower left 'half' of the triangle.
-// Since the upper left and lower right vertices are outside the screen, the texture has to be 'pushed' inwards from the top and the right.
+// Since the upper left and lower right vertices are outside the screen, the texture has to be 'squeezed' inwards from the top and the right.
 // So wrapping the texture at the top and right sides we move it to the visible area of the triangle.
 static float2 uvcoords[3] =
 {
@@ -23,7 +23,7 @@ static float2 uvcoords[3] =
 };
 
 // Constant buffer
-struct temp
+cbuffer cbShaderParams : register(b0)
 {
     int is_opaque;
     int multiply_alpha;
@@ -34,7 +34,11 @@ struct temp
     float uvmax_y;
     float pad;
 };
-ConstantBuffer<temp> settings : register(b0, space0);
+
+struct VSInput
+{
+    uint VertexIndex : SV_VertexID;
+};
 
 // Pixel shader input
 struct PSInput
@@ -44,17 +48,17 @@ struct PSInput
 };
 
 // Vertex shader
-PSInput main(uint VertexIndex : SV_VertexID)
+PSInput main(VSInput input)
 {
     PSInput result;
 
-    float2 uvmin = { settings.uvmin_x, settings.uvmin_y };
-    float2 uvmax = { settings.uvmax_x, settings.uvmax_y };
+    float2 uvmin = { uvmin_x, uvmin_y };
+    float2 uvmax = { uvmax_x, uvmax_y };
 
-    result.pos = vertices[VertexIndex];
+    result.pos = vertices[input.VertexIndex];
 
     // Scale the uvcoords to a 0, 1 system
-    float2 uv_scaled = { uvcoords[VertexIndex].x, uvcoords[VertexIndex].y + 1 };
+    float2 uv_scaled = { uvcoords[input.VertexIndex].x, uvcoords[input.VertexIndex].y + 1 };
     uv_scaled = uvmin + uv_scaled * (uvmax - uvmin);
     float2 uv_final = { uv_scaled.x, uv_scaled.y -1 };
 

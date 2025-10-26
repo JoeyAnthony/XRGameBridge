@@ -3,52 +3,67 @@ cmake_minimum_required(VERSION 3.23)
 set (CMAKE_CXX_STANDARD 20)
 
 project (RuntimeOpenXR VERSION 0.1)
-message("3D Game Bridge Version: ${3DGameBridge_VERSION}")
 
 set(CMAKE_DEBUG_POSTFIX d)
 
 set(SHADERS
-	shaders/layering_vertex.hlsl
-	shaders/layering_pixel.hlsl
+    shaders/layering_vertex.hlsl
+    shaders/layering_pixel.hlsl
+    shaders/dx11_vs.hlsl
+    shaders/dx11_ps.hlsl
 )
 
 # Source files
 add_library(RuntimeOpenXR SHARED
-		src/main.cpp
-		src/dll.h
-		src/instance.h
-		src/instance.cpp
-		src/openxr_functions.h
-		src/openxr_includes.h
-		src/system.h
-		src/system.cpp
-		src/session.h
-		src/session.cpp
-		src/swapchain.h
-		src/swapchain.cpp
-		src/settings.h
-		src/settings.cpp
-		src/events.h
-		src/events.cpp
-		src/actions.h
-		src/actions.cpp
-		src/compositor.h
-		src/compositor.cpp
-		src/window.h
-		src/window.cpp
-		src/dxhelpers.h
-		src/dxhelpers.cpp
-		src/srhelpers.h
-		src/srhelpers.cpp
+        src/main.cpp
+        src/dll.h
+        src/instance.h
+        src/instance.cpp
+        src/openxr_functions.h
+        src/openxr_includes.h
+        src/system.h
+        src/system.cpp
+        src/session.h
+        src/session.cpp
+        src/swapchain.h
+        src/swapchain.cpp
+        src/settings.h
+        src/settings.cpp
+        src/events.h
+        src/events.cpp
+        src/actions.h
+        src/actions.cpp
+        src/window.h
+        src/window.cpp
+        src/dxhelpers.h
+        src/dxhelpers.cpp
+        src/srhelpers.h
+        src/srhelpers.cpp
+        src/xrrendering.h
+        src/d3d12renderer.h
+        src/d3d12renderer.cpp
+        src/d3d12compositor.h
+        src/d3d12compositor.cpp
+        src/d3d12swapchain.h
+        src/d3d12swapchain.cpp
+        src/d3d11renderer.h
+        src/d3d11renderer.cpp
+        src/d3d11compositor.h
+        src/d3d11compositor.cpp
+        src/d3d11swapchain.h
+        src/d3d11swapchain.cpp
+        src/types.h
+        src/result.h
+        src/debug.h
+        src/debug.cpp
 
-		${SHADERS}
-
-		${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src/easylogging++.cc
+        ${SHADERS}
 )
 
 # Don't let Visual Studio build the shaders with wrong settings
 set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 
+## OPENXR COMPILE DEFINITIONS
 # Khronos definitions
 #target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_VULKAN)
 #target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_OPENGL)
@@ -58,32 +73,36 @@ target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
 
+# Debuging definitions
+# target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
+
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
-target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/easyloggingpp/src)
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
 
-# Link dependencies
-target_link_libraries(${PROJECT_NAME} PRIVATE ${TARGET_DXHEADERS})
+# Add logging library
+add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/spdlog spdlog)
 
-set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
+# Add 3D Game Bridge
+add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/3DGameBridge 3DGameBridge)
+message("3D Game Bridge Version: ${3DGameBridge_VERSION}")
 
-find_package(srDirectX)
-
+# Add glm
 include(FetchContent)
-
+set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
+find_package(srDirectX)
 FetchContent_Declare(
-	glm
-	GIT_REPOSITORY	https://github.com/g-truc/glm.git
-	GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
+    glm
+    GIT_REPOSITORY	https://github.com/g-truc/glm.git
+    GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
 )
-
 FetchContent_MakeAvailable(glm)
-#find_package(glm REQUIRED)
 
-
+# Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
-		3DGameBridge
+        ${TARGET_DXHEADERS}
+        spdlog::spdlog
+        3DGameBridge
         glm::glm
 )
 
@@ -91,37 +110,40 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 add_custom_command(
     TARGET RuntimeOpenXR POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	DEPENDS 3DGameBridge
+    DEPENDS 3DGameBridge
 )
 
 # Copy all dependencies
-add_custom_command(
-    TARGET RuntimeOpenXR POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:RuntimeOpenXR>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	DEPENDS 3DGameBridge
-	COMMAND_EXPAND_LISTS
-)
+# add_custom_command(
+#     TARGET RuntimeOpenXR POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:RuntimeOpenXR>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
+# 	DEPENDS 3DGameBridge
+# 	COMMAND_EXPAND_LISTS
+# )
 # Copy all dependencies
 # add_custom_command(
     # TARGET RuntimeOpenXR POST_BUILD
     # COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_RUNTIME_DLLS:3DGameBridge>" "$<TARGET_FILE_DIR:RuntimeOpenXR>"
-	# DEPENDS 3DGameBridge
-	# COMMAND_EXPAND_LISTS
+    # DEPENDS 3DGameBridge
+    # COMMAND_EXPAND_LISTS
 # )
 
 # Compile shaders
 add_custom_command(TARGET RuntimeOpenXR POST_BUILD
-	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compile_shaders.bat
 )
 
+# Set debug shader directory
+target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_SHADER_PATH="${CMAKE_SOURCE_DIR}/runtime_openxr/shaders")
+
 # Copy shaders to output directory
-foreach(item ${SHADERS})
-string(REGEX REPLACE "\\.[^.]*$" "" item_no_ext ${item})
-	add_custom_command(TARGET RuntimeOpenXR POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders/"
-		COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/${item_no_ext}.cso" "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders"
-	)
-endforeach()
+# foreach(item ${SHADERS})
+# string(REGEX REPLACE "\\.[^.]*$" "" item_no_ext ${item})
+# 	add_custom_command(TARGET RuntimeOpenXR POST_BUILD
+# 		COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders/"
+# 		COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/${item_no_ext}.cso" "$<TARGET_FILE_DIR:RuntimeOpenXR>/shaders"
+# 	)
+# endforeach()
 
 message("DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 

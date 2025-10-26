@@ -1,22 +1,28 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #pragma once
 #include <regex>
 #include <windows.h>
 #include <string>
-#include <easylogging++.h>
 #include <filesystem>
 #include  <array>
 
+#include "debug.h"
+
 namespace fs = std::filesystem;
 
-namespace XRGameBridge {
-    struct GB_RuntimeSettings {
-        bool support_d3d12 = true;
-        bool support_d3d11 = false;
-        bool support_vk = false;
-        bool support_gl = false;
-        HINSTANCE hInst;
-    } inline g_runtime_settings;
-}
+struct GB_RuntimeSettings {
+    bool support_d3d12 = true;
+    bool support_d3d11 = false;
+    bool support_vk = false;
+    bool support_gl = false;
+    HINSTANCE hInst;
+} inline g_runtime_settings;
 
 constexpr std::array sr_dlls = {
 L"SimulatedRealityDirectX.dll",
@@ -46,7 +52,7 @@ static void FindPathEnv() {
     for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
         std::smatch match = *i;
         std::string match_str = match.str();
-        LOG(INFO) << match_str << '\n';
+        spdlog::info(match_str);
         if (match_str.find("Simulated Reality") != std::string::npos) {
             if (match_str.find("x86") != std::string::npos) {
                 sr_install_path_win32 = match_str;

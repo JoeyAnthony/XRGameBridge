@@ -1,41 +1,52 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #include "session.h"
 
 #include <stdexcept>
 #include <shellscalingapi.h>
+
+#define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <glm/ext/scalar_constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
-#include "easylogging++.h"
+#include "debug.h"
 #include "openxr_functions.h"
 #include "instance.h"
 #include "system.h"
 #include "settings.h"
-#include "compositor.h"
-#include "swapchain.h"
-
-using namespace XRGameBridge;
+#include "d3d11renderer.h"
+#include "d3d12renderer.h"
+//#include "swapchain.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    GB_System system = g_systems[createInfo->systemId];
-    LOG(INFO) << "Creating session: " << session_creation_count;
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
+    GB_System& system = g_systems[createInfo->systemId];
+    spdlog::info("Creating session: {}", session_creation_count);
 
     if (!system.features_enumerated) {
-        LOG(ERROR) << "Graphics requirements call missing";
+        spdlog::error("Graphics requirements call missing");
         return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
     }
 
     if (system.instance != instance) {
-        LOG(ERROR) << "Couldn't find system. System invalid";
+        spdlog::error("Couldn't find system. System invalid");
         return XR_ERROR_SYSTEM_INVALID;
     }
 
     // Create entry if it doesn't exist
     // Note: This means it overwrite all except for the id member it if it does exist
     XrSession handle = reinterpret_cast<XrSession>(session_creation_count);
-    XRGameBridge::GB_Session& new_session = XRGameBridge::g_sessions[handle];
+    GB_Session& new_session = g_sessions[handle];
 
     // Initialize session with state idle
     new_session.id = handle;
@@ -51,11 +62,11 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // view space
     new_session.views[0].type = XR_TYPE_VIEW;
     new_session.views[0].next = nullptr;
-    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {-0.17f, 0, 0} }; // Orientation, Position
+    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1} }; // Orientation, Position
 
     new_session.views[1].type = XR_TYPE_VIEW;
     new_session.views[1].next = nullptr;
-    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.17f, 0, 0} }; // Orientation, Position
+    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1 } }; // Orientation, Position
 
     // Set FOV per eye
     glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
@@ -63,151 +74,103 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.views[0].fov = system.GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
     new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
-    // DirectX 12
-    if (XRGameBridge::g_runtime_settings.support_d3d12) {
-        const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (createInfo->next);
-        new_session.d3d12_device = d3d12_bindings->device;
-        new_session.command_queue = d3d12_bindings->queue;
-        LOG(INFO) << "Create session with DirectX 12";
+    // Create Renderer
+    if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
+        new_session.renderer = D3D12Renderer::Create(createInfo->systemId, createInfo->next);;
+    }
+    else if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D11) {
+        new_session.renderer = D3D11Renderer::Create(createInfo->systemId, createInfo->next);
     }
     else {
-        LOG(ERROR) << "Trying to create session with unsupported graphics api";
+        spdlog::error("Trying to create session with unsupported graphics api");
+        LOG_RUNTIME_ERROR
+        return XR_ERROR_RUNTIME_FAILURE;
     }
 
     // Get hot-key event stream reader
-    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstane()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
+    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstance()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
 
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
-    XRGameBridge::g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
+
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_UP, VK_LCONTROL, VK_NUMPAD8);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_DOWN, VK_LCONTROL, VK_NUMPAD2);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_LEFT, VK_LCONTROL, VK_NUMPAD4);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RIGHT, VK_LCONTROL, VK_NUMPAD6);
+    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RESET, VK_LCONTROL, VK_NUMPAD5);
 
     *session = handle;
     session_creation_count++;
 
-    // TODO Not sure where to put the compositor, it has to be initialized by the session, but you render to a system
-    // Maybe a system should own a compositor, but it is created and destroyed by the client?
-    if (new_session.compositor.Initialize(new_session.d3d12_device, new_session.command_queue, 2) == false) {
-        LOG(ERROR) << "Failed to create compositor";
-        return XR_ERROR_RUNTIME_FAILURE;
-    }
-
     // Create sr context, blocks till there is a connection
     new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
 
-    // Start session idle thread
-    new_session.StartSessionIdle();
+    // Initialize rendering pipeline
+    new_session.renderer->InitializePipeline(gb_instance);
 
-    LOG(INFO) << "Successfully created session: " << session_creation_count;
+    ChangeSessionState(new_session, XR_SESSION_STATE_READY);
+    UpdateSession(new_session);
+
+    spdlog::info("Successfully created session: {}", session_creation_count);
     return XR_SUCCESS;
 }
 
 XrResult xrDestroySession(XrSession session) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO Should probably destroy all objects related to a session.
-    // Swap chains depend on the session since it's holds the device and command queue, so swap chains should be destroyed on session destroy.
     // Also action sets/g_actions attached to the session should be destroyed
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-
-    gb_session.intermediate_resource.DestroyResources();
-
-    gb_session.compositor.Deinitialize();
-
-    //gb_session.window = {};
-    delete gb_session.d3d12weaver;
-
-    gb_session.window_swapchain = {};
-
-    gb_session.command_queue.Reset();
-
-    gb_session.d3d12_device.Reset();
-
+    GB_Session& gb_session = g_sessions[session];
     gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
 
+    delete gb_session.renderer;
+
     try {
-        XRGameBridge::g_sessions.erase(session);
+        g_sessions.erase(session);
     }
     catch (std::exception& e) {
-        LOG(ERROR) << "" << e.what();
+        spdlog::error("{}", e.what());
     }
     catch (...) {
-        LOG(ERROR) << "Error occurred while destroying the session";
+        spdlog::error("Error occurred while destroying the session");
     }
 
     return XR_SUCCESS;
 }
 
 XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO check if view configuration type is supported
     // TODO, move SESSION_READY logic to here, check here whether all components are initialized for the session to be put on READY.
 
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[gb_session.system];
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(gb_session.instance);
+    GB_Session& gb_session = g_sessions[session];
+    GB_System& gb_system = g_systems[gb_session.system];
 
-    gb_session.idle_thread.join();
+    //gb_session.idle_thread.join();
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
-        LOG(ERROR) << "Session not ready";
+        spdlog::error("Session not ready");
         return XR_ERROR_SESSION_NOT_READY;
     }
     if (gb_session.session_state != XR_SESSION_STATE_READY) {
-        LOG(ERROR) << "Session is already running";
+        spdlog::error("Session is already running");
         return XR_ERROR_SESSION_RUNNING;
     }
 
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
-    // TODO Move creation of objects to CreateSession, except for the creation of the window swapchain and the window perhaps.
-
-    if(gb_session.window.TryGetExternalDisplay() != nullptr)
-    {
-        LOG(INFO) << "Got window";
-    }
-
-    // Create debug window
-    auto system_resolution = GetSystemResolution(gb_system);
-
-    gb_session.window.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
-    // Debugging with non full screen mode
-    //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
-
-    // Create intermediate resources for weaving render target
-    gb_session.intermediate_resource = GB_ProxySwapchain(0, session); // Handle 0 is not being used by xrCreateSwapchain
-    gb_session.intermediate_resource.CreateResources(gb_session.d3d12_device, system_resolution.x, system_resolution.y, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET, L"Intermediate resource");
-
-    // Create swapchain info for the window swapchain
-    XrSwapchainCreateInfo window_swapchain_info;
-    window_swapchain_info.width = system_resolution.x;
-    window_swapchain_info.height = system_resolution.y;
-    window_swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
-
-    // Create swapchain for debug window
-    gb_session.window_swapchain.CreateSwapChain(gb_session.d3d12_device, gb_session.command_queue, &window_swapchain_info, gb_session.window.GetWindowHandle());
-
-    // Initialize weaver params
-    DX12WeaverInitialize params{};
-    params.command_queue = gb_session.command_queue;
-    params.device = gb_session.d3d12_device;
-    params.game_bridge = gb_instance->GetGameBridgeInstane();
-    params.input_resource = gb_session.intermediate_resource.GetBuffers()[0];
-    params.render_target = gb_session.window_swapchain.GetImages()[0];
-    params.window = gb_session.window.GetWindowHandle();
-
-    // Create weaver
-    gb_session.d3d12weaver = new DirectX12Weaver(params);
-    gb_session.d3d12weaver->InitializeWeaver(gb_session.sr_context);
-    gb_session.sr_context->initialize();
-
     // Send all state changes
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
 
     // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
     gb_session.should_render = true;
@@ -216,7 +179,9 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 }
 
 XrResult xrEndSession(XrSession session) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_Session& gb_session = g_sessions[session];
 
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED & XR_SESSION_STATE_STOPPING == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
@@ -224,25 +189,12 @@ XrResult xrEndSession(XrSession session) {
 
     std::unique_lock unique_guard(gb_session.mutex_wait_frame_state, std::try_to_lock);
     if (unique_guard.owns_lock() == false) {
-        LOG(WARNING) << "Trying to stop the session but the frame mutex is in use";
+        spdlog::warn("Trying to stop the session but the frame mutex is in use");
         return XR_ERROR_SESSION_NOT_STOPPING;
     }
 
-    // Destroy resources created by BeginSession
-    delete gb_session.d3d12weaver;
-    gb_session.d3d12weaver = nullptr;
-
-    // Not necessary as it uses ComPtr for resources
-    gb_session.intermediate_resource.DestroyResources();
-
-    // Reset window swapchain
-    gb_session.window_swapchain = {};
-
-    // Destroy window
-    gb_session.window.DestroyApplicationWindow();
-
     // Reset state
-    gb_session.wait_frame_state = XRGameBridge::NewFrameAllowed;
+    gb_session.wait_frame_state = NewFrameAllowed;
     gb_session.waited_frame = 0;
     gb_session.started_frame = 0;
     gb_session.end_frame_called = 0;
@@ -253,24 +205,23 @@ XrResult xrEndSession(XrSession session) {
 
     // Change session state to idle
     if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
-        XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
-        XRGameBridge::UpdateSession(gb_session);
-
-        // Start Session Idle thread
-        gb_session.StartSessionIdle();
+        ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
+        UpdateSession(gb_session);
     }
 
     return XR_SUCCESS;
 }
 
 XrResult xrRequestExitSession(XrSession session) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_Session& gb_session = g_sessions[session];
     if (gb_session.session_state & XR_SESSION_STATE_SYNCHRONIZED & XR_SESSION_STATE_VISIBLE & XR_SESSION_STATE_FOCUSED == false) {
         return XR_ERROR_SESSION_NOT_RUNNING;
     }
 
     // Change session state to stopping
-    XRGameBridge::ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
+    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
     ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
 
@@ -279,15 +230,17 @@ XrResult xrRequestExitSession(XrSession session) {
 
 // TODO Use frame display time as frame ids
 XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, XrFrameState* frameState) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO simple implementation so the application can continue. Should when I understand this part better
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    GB_Session& gb_session = g_sessions[session];
     bool should_wait = true;
 
     // Blocking wait, blocks until BeginFrame was called
     while (should_wait) {
         if (gb_session.mutex_wait_frame_state.try_lock()) {
-            if (gb_session.wait_frame_state == XRGameBridge::NewFrameAllowed) {
-                gb_session.wait_frame_state = XRGameBridge::NewFrameBusy;
+            if (gb_session.wait_frame_state == NewFrameAllowed) {
+                gb_session.wait_frame_state = NewFrameBusy;
                 break;
             }
             gb_session.mutex_wait_frame_state.unlock();
@@ -311,7 +264,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
     // Time since the epoch the application is running now, add the refresh rate to predict the time the next image will be displayed.
     auto display_time = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate);
 
-    XRGameBridge::UpdateSession(gb_session);
+    UpdateSession(gb_session);
 
     frameState->predictedDisplayPeriod = display_period.count();
     frameState->predictedDisplayTime = display_time.count();
@@ -321,13 +274,15 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     gb_session.mutex_wait_frame_state.unlock();
 
-    //LOG(INFO) << "PredictedDisplayTime: " << frameState->predictedDisplayTime;
+    //spdlog::info("PredictedDisplayTime: " << frameState->predictedDisplayTime;
 
     return XR_SUCCESS;
 }
 
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_Session& gb_session = g_sessions[session];
 
     std::lock_guard guard(gb_session.mutex_wait_frame_state);
 
@@ -339,20 +294,20 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
         // Skip frame
         // TODO If no layers are provided then the display must be cleared.
         gb_session.started_frame = 0;
-        gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+        gb_session.wait_frame_state = FrameState::NewFrameAllowed;
         return XR_FRAME_DISCARDED;
     }
 
     if (gb_session.ended_frame > gb_session.started_frame) {
         // Should be impossible
-        LOG(WARNING) << "Previous frame is later than current";
+        spdlog::warn("Previous frame is later than current");
     }
 
-    if (gb_session.wait_frame_state != XRGameBridge::NewFrameBusy) {
+    if (gb_session.wait_frame_state != NewFrameBusy) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
 
-    gb_session.wait_frame_state = XRGameBridge::FrameState::NewFrameAllowed;
+    gb_session.wait_frame_state = FrameState::NewFrameAllowed;
     gb_session.started_frame = gb_session.waited_frame;
 
     gb_session.end_frame_called = false;
@@ -360,16 +315,17 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
     // Log time left
     //uint64_t time_now = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch).count();
     //uint64_t time_left = gb_session.started_frame - time_now;
-    //LOG(INFO) << "Frame started. Time left: " << time_left;
+    //spdlog::info("Frame started. Time left: " << time_left;
 
     return XR_SUCCESS;
 }
 
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
-    auto& gb_compositor = gb_session.compositor;
+    GB_Session& gb_session = g_sessions[session];
 
     if (frameEndInfo->layerCount == 0) {
         return XR_ERROR_LAYER_INVALID;
@@ -378,14 +334,14 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     // Frame too late, signal fences and return success
     //if (time_now > gb_session.started_frame) {
     //    // Application too late
-    //    LOG(INFO) << "Application too late, skipping compose";
+    //    spdlog::info("Application too late, skipping compose";
     //    gb_compositor.SignalSwapchainsForFrame(frameEndInfo);
     //    return XR_SUCCESS;
     //}
     //if(gb_session.started_frame == 0)
     //{
     //    // Call order invalid
-    //    LOG(INFO) << "No frame started";
+    //    spdlog::info("No frame started";
     //    return XR_SUCCESS;
     //}
     //if(gb_session.started_frame == gb_session.ended_frame)
@@ -393,10 +349,10 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     //    // Same frame to be re-presented, can choose to only weave here.
     //}
 
-    gb_compositor.RenderFrame(gb_session, frameEndInfo);
+    gb_session.renderer->RenderFrame(frameEndInfo);
 
     // Update window
-    gb_session.window.UpdateWindow();
+    gb_session.renderer->Update();
 
     gb_session.ended_frame = gb_session.started_frame;
 
@@ -405,35 +361,40 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-void XRGameBridge::GB_Session::StartSessionIdle() {
-    idle_thread = std::thread(&GB_Session::IdleFunc, this);
+//void GB_Session::IdleFunc() {
+//    while (session_state == XR_SESSION_STATE_IDLE) {
+//        if (g_proxy_swapchains.size() > 0) {
+//            ChangeSessionState(*this, XR_SESSION_STATE_READY);
+//        }
+//
+//        UpdateSession(*this);
+//
+//        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+//    }
+//}
+
+void GB_Session::InitializeView() {
+
 }
 
-void XRGameBridge::GB_Session::IdleFunc() {
-    while (session_state == XR_SESSION_STATE_IDLE) {
-        if (g_proxy_swapchains.size() > 0) {
-            ChangeSessionState(*this, XR_SESSION_STATE_READY);
-        }
-
-        UpdateSession(*this);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-}
-
-void XRGameBridge::ChangeSessionState(GB_Session& session, XrSessionState state) {
+void ChangeSessionState(GB_Session& session, XrSessionState state) {
     if (session.session_state == state) {
         return;
     }
 
     std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
     session.session_state_queue.push_back(state);
+
+    char buffer[XR_MAX_RESULT_STRING_SIZE];
+    if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
+        spdlog::info("Session state queued: {}", std::string(buffer));
+    }
 }
 
-void XRGameBridge::UpdateSession(GB_Session& session) {
+void UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
-    XRGameBridge::GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
-    EventManager& event_manager = gb_instance->GetGameBridgeInstane()->GetEventManager();
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
+    EventManager& event_manager = gb_instance->GetGameBridgeInstance()->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
     GB_System system = g_systems[session.system];
@@ -452,6 +413,11 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
 
             // Set new session state
             session.session_state = state;
+
+            char buffer[XR_MAX_RESULT_STRING_SIZE];
+            if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
+                spdlog::info("Session state submitted: {}", std::string(buffer));
+            }
         }
 
         // Clear session state queue
@@ -465,21 +431,21 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     // Not allowed to send messages after this function
     event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
 
-    LPMSG msg = nullptr;
-    if (session.window.PeekMessageExternal(msg)) {
-        switch (msg->message) {
-        case WM_KEYDOWN:
-            if (GetAsyncKeyState(VK_F1) & 0x80) {
-                LOG(INFO) << "Pressed";
-            }
-            break;
-        case WM_KEYUP:
-            if (GetAsyncKeyState(VK_F1) & 0x00) {
-                LOG(INFO) << "Released";
-            }
-            break;
-        }
-    }
+    //LPMSG msg = nullptr;
+    //if (session.window.PeekMessageExternal(msg)) {
+    //    switch (msg->message) {
+    //    case WM_KEYDOWN:
+    //        if (GetAsyncKeyState(VK_F1) & 0x80) {
+    //            spdlog::info("Pressed";
+    //        }
+    //        break;
+    //    case WM_KEYUP:
+    //        if (GetAsyncKeyState(VK_F1) & 0x00) {
+    //            spdlog::info("Released";
+    //        }
+    //        break;
+    //    }
+    //}
 
     // Check if the F1 key is up
     static bool f1_pressed = false;
@@ -556,6 +522,40 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
             value_changed = true;
         }
 
+        ///////
+        float rotation_speed = 1;
+        static glm::quat orientation = glm::identity<glm::quat>();
+        if (event_type == GB_EVENT_TEST_UP) {
+            float factor_pose = 1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_DOWN) {
+            float factor_pose = -1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_LEFT) {
+            float factor_pose = 1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_RIGHT) {
+            float factor_pose = -1.0f;
+            float angle = rotation_speed * factor_pose;
+            value_changed = true;
+            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
+        }
+        if (event_type == GB_EVENT_TEST_RESET) {
+            orientation = glm::identity<glm::quat>();
+        }
+        view_l.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+        view_r.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+        ///////
+
         glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
         glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
 
@@ -571,20 +571,20 @@ void XRGameBridge::UpdateSession(GB_Session& session) {
     }
 }
 
-void XRGameBridge::SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
+void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
 {
     if (index > session.views.size() - 1) {
-        LOG(WARNING) << "Session view array index out of bounds";
+        spdlog::error("Session view array index out of bounds");
         return;
     }
 
     session.views[index].pose = pose;
 }
 
-void XRGameBridge::SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
+void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
 {
     if (index > session.views.size() - 1) {
-        LOG(WARNING) << "Session view array index out of bounds";
+        spdlog::error("Session view array index out of bounds");
         return;
     }
 

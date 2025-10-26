@@ -1,18 +1,27 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #include "system.h"
 
 #include <array>
 #include <complex>
 
-#include "easylogging++.h"
+#include "debug.h"
 #include "openxr_includes.h"
 #include "instance.h"
 #include "session.h"
 
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // Check if the requested form factor is supported
     bool found = false;
     bool available = false;
-    for (auto it = XRGameBridge::g_systems.begin(); it != XRGameBridge::g_systems.end(); it++) {
+    for (auto it = g_systems.begin(); it != g_systems.end(); it++) {
         found = std::find(it->second.supported_formfactors.begin(), it->second.supported_formfactors.end(), getInfo->formFactor) != it->second.supported_formfactors.end();
         if (found) {
             *systemId = it->second.id;
@@ -37,15 +46,18 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
 }
 
 XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties) {
+    TraceLogFunctionCall(__func__, __LINE__);
 
-    XRGameBridge::GB_System& gb_system = XRGameBridge::g_systems[systemId];
-    *properties = XRGameBridge::GetSystemProperties(gb_system);
+    GB_System& gb_system = g_systems[systemId];
+    *properties = GetSystemProperties(gb_system);
 
     return XR_SUCCESS;
 }
 
 XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes) {
-    LOG(INFO) << "Requested view configuration type: " << viewConfigurationType;
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    spdlog::info("Requested view configuration type: {}", static_cast<uint32_t>(viewConfigurationType));
     // SR only supports XR_ENVIRONMENT_BLEND_MODE_OPAQUE 
     const std::array supported_blend_modes = { XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
     *environmentBlendModeCountOutput = supported_blend_modes.size();
@@ -66,8 +78,11 @@ XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId system
 }
 
 XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId, uint32_t viewConfigurationTypeCapacityInput, uint32_t* viewConfigurationTypeCountOutput, XrViewConfigurationType* viewConfigurationTypes) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     // TODO check if mono as primary is ok
-    const std::array supported_view_configurations = { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
+    auto set = GB_System::GetViewConfigurationTypes();
+    const std::vector <XrViewConfigurationType> supported_view_configurations = std::vector(set.begin(), set.end());
     *viewConfigurationTypeCountOutput = supported_view_configurations.size();
 
     // Request for the extension array or the extension array itself
@@ -87,6 +102,8 @@ XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId,
 }
 
 XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, XrViewConfigurationProperties* configurationProperties) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrResult res = XR_ERROR_RUNTIME_FAILURE;
 
     switch (viewConfigurationType) {
@@ -100,7 +117,7 @@ XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId system
         configurationProperties->fovMutable = true;
         res = XR_SUCCESS;
         break;
-    default:;
+    default:
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
     }
 
@@ -108,11 +125,13 @@ XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId system
 }
 
 XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrViewConfigurationView* views) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     XrResult res = XR_ERROR_RUNTIME_FAILURE;
 
-    XRGameBridge::GB_System gb_system = XRGameBridge::g_systems[systemId];
-    XRGameBridge::GBVector2i render_resolution = XRGameBridge::GetRenderResolution(gb_system);
-    XRGameBridge::GBVector2i system_resolution = XRGameBridge::GetSystemResolution(gb_system);
+    GB_System gb_system = g_systems[systemId];
+    GBVector2i render_resolution = GetRenderResolution(gb_system);
+    GBVector2i system_resolution = GetSystemResolution(gb_system);
 
     std::vector<XrViewConfigurationView> supported_views;
     if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
@@ -132,10 +151,11 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
         res = XR_SUCCESS;
     }
     else if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        LOG(ERROR) << "Mono view configuration requested. Not suppoerted";
+    spdlog::error("Mono view configuration requested. Not suppoerted");
     }
     else {
         res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+        LOG_RUNTIME_ERROR
     }
 
     // Set output count
@@ -157,13 +177,23 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
 }
 
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_Session& gb_session = g_sessions[session];
+
+    if(viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
+        return XR_ERROR_VALIDATION_FAILURE;
+    }
+
+    if (GB_System::GetViewConfigurationTypes().contains(viewLocateInfo->viewConfigurationType) == false) {
+        return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+    }
 
     // TODO mono configuration is not supported
-    if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+    if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
         *viewCountOutput = gb_session.views.size();
     }
-    else if (viewLocateInfo->viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+    else if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
         *viewCountOutput = gb_session.views.size();
     }
 
@@ -176,27 +206,24 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
-    viewLocateInfo->displayTime;
+    glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
+    std::vector<XrView> sr_views;
+    for (uint32_t i = 0; i < gb_session.views.size(); i++) {
+        XrPosef pose = gb_session.views[i].pose;
+        glm::mat4 view_transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
 
-    XRGameBridge::GB_ReferenceSpace& gb_ref_space = XRGameBridge::g_reference_spaces[viewLocateInfo->space];
-    if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_VIEW) // Camera space
-    {
-        // TODO Save position/orientation in the session or in the spaces array?
-        gb_ref_space.pose_in_reference_space.position;
+        // Transform
+        glm::mat4 transform = glm::inverse(base_transform) * view_transform;
+        glm::vec3 position = glm::vec3(transform[3]);
+        glm::quat orientation = glm::quat_cast(transform);
 
-        std::vector<XrView> sr_views;
-        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
-
-        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
-    }
-    if (gb_ref_space.space_type == XR_REFERENCE_SPACE_TYPE_LOCAL) { // World space
-        //LOG(INFO) << "World space not implemented: " << __func__;
         XrView view;
-        view.pose = gb_ref_space.pose_in_reference_space;
-        std::vector<XrView> sr_views;
-        sr_views.insert(sr_views.begin(), gb_session.views.begin(), gb_session.views.end());
-        memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
+        view.pose = { { orientation.x, orientation.y, orientation.z, orientation.w }, { position.x, position.y, position.z } };
+        view.fov = gb_session.views[i].fov;
+        sr_views.push_back(view);
     }
+
+    memcpy_s(views, viewCapacityInput * sizeof(XrView), sr_views.data(), sr_views.size() * sizeof(XrView));
 
     viewState->viewStateFlags = XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
 
@@ -204,7 +231,9 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 }
 
 XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInput, uint32_t* spaceCountOutput, XrReferenceSpaceType* spaces) {
-    XRGameBridge::GB_Session& gb_session = XRGameBridge::g_sessions[session];
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_Session& gb_session = g_sessions[session];
 
     std::array reference_space_types{
         XR_REFERENCE_SPACE_TYPE_VIEW,
@@ -226,31 +255,43 @@ XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInp
     return XR_SUCCESS;
 }
 
-#include "openxr_functions.h"
 XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateInfo* createInfo, XrSpace* space) {
     static uint64_t reference_space_count = 1;
     XrSpace handle = reinterpret_cast<XrSpace>(reference_space_count);
-    XRGameBridge::GB_ReferenceSpace new_space;
-    new_space.session = session;
-    new_space.handle = handle;
-    new_space.pose_in_reference_space = createInfo->poseInReferenceSpace;
-    new_space.space_type = createInfo->referenceSpaceType;
+    GB_ReferenceSpace new_space {
+        createInfo->referenceSpaceType
+    };
 
     if (createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_VIEW &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_LOCAL &&
         createInfo->referenceSpaceType != XR_REFERENCE_SPACE_TYPE_STAGE) {
+
+        spdlog::error("ERROR Reference space unsupported: {}", static_cast<uint32_t>(createInfo->referenceSpaceType));
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
 
+    // Take space from the app
+    XrPosef pose = createInfo->poseInReferenceSpace;
+
     if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
-        new_space.pose_in_reference_space.position = {0.0f, 1.72f, 0.f};
+        // Update position in session
     }
     else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
-        // Local space must be 0, we shouldn't need to recalibrate this
+        // Set a hardcoded floor
+        pose.position.y -= 1.72f;
+    }
+    else if (createInfo->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE) {
+        // Set a hardcoded floor
+        //pose.position.y -= 1.72f;
     }
 
-    const auto inserted = XRGameBridge::g_reference_spaces.insert({ handle, new_space });
+    // Create transform
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
+    const auto inserted = g_reference_spaces.insert({ handle, new_space });
+    g_space_transforms.insert({ handle, transform });
+
     if (!inserted.second) {
+        LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
@@ -261,81 +302,88 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
 }
 
 XrResult xrGetReferenceSpaceBoundsRect(XrSession session, XrReferenceSpaceType referenceSpaceType, XrExtent2Df* bounds) {
-    LOG(INFO) << "Called " << __func__; return XR_ERROR_RUNTIME_FAILURE;
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+        bounds->width = 0;
+        bounds->height = 0;
+        return XR_SPACE_BOUNDS_UNAVAILABLE;
+    }
+    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL){
+        // Bounds can be defined by the eye tracker bounding box.
+        // Current values are hardcoded defaults because the box is different for every screen.
+        // TODO get eyetracker box 
+        bounds->width = 1.10f;
+        bounds->height = 1.10f;
+    }
+    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE) {
+        bounds->width = 1.10f;
+        bounds->height = 1.10f;
+    }
+    else {
+        spdlog::error("ERROR Reference space unsupported: {}", static_cast<uint32_t>(referenceSpaceType));
+        return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
+    }
+    
+    return XR_SUCCESS;
 }
 
 XrResult xrCreateActionSpace(XrSession session, const XrActionSpaceCreateInfo* createInfo, XrSpace* space) {
-    XRGameBridge::GB_ActionSpace new_space{};
-    new_space.session = session;
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    GB_ActionSpace new_space{};
     new_space.action = createInfo->action;
     new_space.sub_action_path = createInfo->subactionPath;
-    new_space.pose_in_action_space = createInfo->poseInActionSpace;
+    XrPosef pose = createInfo->poseInActionSpace;
+
+    // Create transform
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), {pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y , pose.orientation.z });
 
     // Add action handle to sub action handle for a space handle hash
     XrSpace handle = reinterpret_cast<XrSpace>(reinterpret_cast<uint64_t>(new_space.action) + createInfo->subactionPath);
     *space = handle;
-    XRGameBridge::g_action_spaces.insert({ handle, new_space });
+    g_action_spaces.insert({ handle, new_space });
+    g_space_transforms.insert({ handle, transform });
     return XR_SUCCESS;
 }
 
 XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLocation* location) {
-    // TODO Return to this with a better understanding of spaces. Are there only single View and Local spaces, or do more of them exist?
-    // TODO Should we have both action and reference spaces in a single array for quicker lookup?
+    TraceLogFunctionCall(__func__, __LINE__);
 
-
-    // TODO check location flags
     location->locationFlags;
 
     // TODO Application may ask for a velocity of the tracked object
     if (location->next != nullptr) {
         XrSpaceVelocity* velocity = static_cast<XrSpaceVelocity*>(location->next);
-        velocity->velocityFlags;
+        velocity->velocityFlags = XR_SPACE_VELOCITY_ANGULAR_VALID_BIT;
     }
 
-    // For Reference spaces
-    XRGameBridge::GB_ReferenceSpace& gb_space = XRGameBridge::g_reference_spaces[space];
-    XRGameBridge::GB_ReferenceSpace& gb_base_space = XRGameBridge::g_reference_spaces[baseSpace];
-    if (gb_space.session != nullptr) {
-        // TODO, Transform to base space? just returning it for now, in the test the local space is 0 anyways
-        // Telling the application the view position is valid but never being tracked
-        location->pose = gb_space.pose_in_reference_space;
-        location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+    // Get spaces
+    glm::mat4 gb_space = g_space_transforms[space];
+    glm::mat4 gb_base_space = g_space_transforms[baseSpace];
 
-        return XR_SUCCESS;
-    }
+    // Transform
+    glm::mat4 transform = glm::inverse(gb_base_space) * gb_space;
+    glm::vec3 position = glm::vec3(transform[3]);
+    glm::quat orientation = glm::quat_cast(transform);
 
-    // For Action spaces
+    location->pose = { {orientation.x, orientation.y , orientation.z, orientation.w }, {position.x, position.y, position.z} };
+    location->locationFlags = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
-    // Retreiving action spaces is not supported
-    XRGameBridge::GB_ActionSpace& gb_a_space = XRGameBridge::g_action_spaces[space];
-    XRGameBridge::GB_ActionSpace& gb_a_base_space = XRGameBridge::g_action_spaces[baseSpace];
-    if (gb_a_space.session == nullptr) {
-        LOG(INFO) << "Space does not exist";
-    }
-
-    std::string& path = XRGameBridge::g_xrpath_storage[gb_a_space.sub_action_path];
-
-    // TODO Actions are never located now, might be what we want anyways
-    // Application is told the actions are never being tracked this way
-    location->pose = XrPosef{ 0.f };
-    location->locationFlags = 0;
     return XR_SUCCESS;
 }
 
 XrResult xrDestroySpace(XrSpace space) {
-    // Todo If the space is not a reference space, unorderedmap::[] creates an entry for it. This may not be desired but won't do any harm.
-    // Check for reference space
-     XRGameBridge::GB_ReferenceSpace& gb_reference_space = XRGameBridge::g_reference_spaces[space];
-    if(gb_reference_space.session != nullptr)
+    TraceLogFunctionCall(__func__, __LINE__);
+
+    if(g_reference_spaces.contains(space))
     {
-        XRGameBridge::g_reference_spaces.erase(space);
+        g_reference_spaces.erase(space);
         return XR_SUCCESS;
     }
 
-    // Check for action space
-    XRGameBridge::GB_ActionSpace& gb_action_space = XRGameBridge::g_action_spaces[space];
-    if (gb_action_space.session != nullptr) {
-        XRGameBridge::g_action_spaces.erase(space);
+    if (g_action_spaces.contains(space)) {
+        g_action_spaces.erase(space);
         return XR_SUCCESS;
     }
 
@@ -343,16 +391,20 @@ XrResult xrDestroySpace(XrSpace space) {
 }
 
 XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     *time = performanceCounter->QuadPart;
     return XR_SUCCESS;
 }
 
 XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter) {
+    TraceLogFunctionCall(__func__, __LINE__);
+
     performanceCounter->QuadPart = time;
     return XR_SUCCESS;
 }
 
-//XRGameBridge::GBVector2i XRGameBridge::GetDummyScreenResolution() {
+//GBVector2i GetDummyScreenResolution() {
 //    //TODO dependent on the SR screen, hopefully we can set reset this later on runtime. It would be cool to setup everything without having to connect to the sr service since that might take some time.
 //    // MS docs: The width/height of the client area for a full-screen window on the primary display monitor, in pixels.
 //    const uint32_t primary_display_res_x = static_cast<uint32_t>(GetSystemMetrics(SM_CXSCREEN) / 2); // Divided by 2 since we render in sbs
@@ -360,8 +412,8 @@ XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime t
 //    return { primary_display_res_x, primary_display_res_y };
 //}
 //
-//XrSystemProperties XRGameBridge::GetDummySystemProperties() {
-//    auto screen_resolution = XRGameBridge::GetDummyScreenResolution();
+//XrSystemProperties GetDummySystemProperties() {
+//    auto screen_resolution = GetDummyScreenResolution();
 //
 //    XrSystemGraphicsProperties g_props{};
 //    g_props.maxLayerCount = 1;
@@ -384,11 +436,15 @@ XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime t
 //    return sys_props;
 //}
 
-bool XRGameBridge::GB_System::GetIsConnected() {
+bool GB_System::GetIsConnected() {
     return device_is_connected;
 }
 
-XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
+std::set<XrViewConfigurationType> GB_System::GetViewConfigurationTypes() {
+    return { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
+}
+
+XrSystemId CreateXrGameBridgeSystems(XrInstance instance)
 {
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
 
@@ -397,7 +453,7 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
     system.id = g_systems.size() + 1; // 0 is NULL_SYSTEM_HANDLE
     system.instance = instance;
     system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
-    system.sr_device = XRGameBridge::SRDisplay::SR_DISPLAY;
+    system.sr_device = SRDisplay::SR_DISPLAY;
     system.sr_display = gb_instance->GetPlatformManager()->GetDisplay();
     system.lens_hint = gb_instance->GetPlatformManager()->GetLensHint();
     system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_display->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_display->getPhysicalResolutionHeight()) };
@@ -423,11 +479,11 @@ XrSystemId XRGameBridge::CreateXrGameBridgeSystems(XrInstance instance)
 
     g_systems.insert({ system.id, system });
 
-    LOG(INFO) << "Created system: " << system.id;
+    spdlog::info("Created system: {}", system.id);
     return system.id;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetRenderResolution(const GB_System& gb_system) {
+GBVector2i GetRenderResolution(const GB_System& gb_system) {
     GBVector2i physical_res = gb_system.physical_resolution;
     auto form_factor = gb_system.form_factor;
     bool use_halved_width = form_factor == XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY || form_factor == XR_FORM_FACTOR_HANDHELD_DISPLAY;
@@ -439,17 +495,17 @@ XRGameBridge::GBVector2i XRGameBridge::GetRenderResolution(const GB_System& gb_s
     return physical_res;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetSystemResolution(const GB_System& gb_system) {
+GBVector2i GetSystemResolution(const GB_System& gb_system) {
     return gb_system.physical_resolution;
 }
 
-XRGameBridge::GBVector2i XRGameBridge::GetResolutionMainDisplay() {
+GBVector2i GetResolutionMainDisplay() {
     size_t width = GetSystemMetrics(SM_CXSCREEN);
     size_t height = GetSystemMetrics(SM_CYSCREEN);
     return GBVector2i{ static_cast<uint32_t>(width) ,static_cast<uint32_t>(height) };
 }
 
-XrSystemProperties XRGameBridge::GetSystemProperties(const GB_System& gb_system) {
+XrSystemProperties GetSystemProperties(const GB_System& gb_system) {
     GBVector2i native_resolution = GetRenderResolution(gb_system);
 
     XrSystemGraphicsProperties g_props{};

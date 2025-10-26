@@ -6,9 +6,18 @@
  */
 
 #pragma once
+#include <stdint.h>
 
-#define DllExport extern "C" __declspec(dllexport)
+enum class GraphicsBackend {
+    undefined = 0,
+    D3D11 = 1,
+    D3D12 = 2,
+    Vulkan = 3,
+    OpenGL = 4
+};
 
-//namespace XRGameBridge{};
-
-//namespace GB = XRGameBridge;
+// Data types
+struct GBVector2i {
+    uint32_t x;
+    uint32_t y;
+};

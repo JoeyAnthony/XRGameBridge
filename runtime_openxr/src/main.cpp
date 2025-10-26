@@ -1,52 +1,49 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #include <string>
 #include <format>
 
-#include <easylogging++.h>
+#include <spdlog/spdlog.h>
 #include <openxr/openxr.h>
 
 #include "settings.h"
-
-INITIALIZE_EASYLOGGINGPP
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
 
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
     {
-        el::Configurations defaultConf;
-        el::Loggers::reconfigureLogger("default", defaultConf);
-        defaultConf.setToDefault();
-
-        defaultConf.setGlobally(el::ConfigurationType::Format, "%datetime %level %loc %msg");
-        defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "true");
-        defaultConf.setGlobally(el::ConfigurationType::ToFile, "true");
-
         char module_path[MAX_PATH];
         GetModuleFileNameA(hInst, module_path, MAX_PATH);
         runtime_path = std::string(module_path);
 
         std::string log_path = (fs::path(runtime_path).parent_path() /= "log.txt").string();
-        defaultConf.setGlobally(el::ConfigurationType::Filename, log_path);
+        spdlog::info("Runtime path: {}", log_path);
 
         FindPathEnv();
 
-        LOG(INFO) << "DLL_PROCESS_ATTACH";
+        spdlog::info("DLL_PROCESS_ATTACH");
 
-        LOG(INFO) << "XR Game Bridge Loaded";
+        spdlog::info("XR Game Bridge Loaded");
 
-        LOG(INFO) << "Runtime location: " << module_path;
+        spdlog::info("Runtime location: {}", module_path);
 
-        LOG(INFO) << "Game Bridge: VERSION";
+        spdlog::info("Game Bridge: VERSION");
 
-        LOG(INFO) << "OpenXR API: " << std::format("{}.{}.{}", XR_VERSION_MAJOR(XR_CURRENT_API_VERSION), XR_VERSION_MINOR(XR_CURRENT_API_VERSION), XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
+        spdlog::info("OpenXR API: {}.{}.{}", XR_VERSION_MAJOR(XR_CURRENT_API_VERSION), XR_VERSION_MINOR(XR_CURRENT_API_VERSION), XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
 
-        LOG(INFO) << "Process: ";
-        LOG(INFO) << "Executable: ";
+        spdlog::info("Process: ");
+        spdlog::info("Executable: ");
 
-        LOG(INFO) << "Support D3D11 " << (XRGameBridge::g_runtime_settings.support_d3d11 ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support D3D12 " << (XRGameBridge::g_runtime_settings.support_d3d12 ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support GL " << (XRGameBridge::g_runtime_settings.support_gl ? "TRUE" : "FALSE");
-        LOG(INFO) << "Support VK " << (XRGameBridge::g_runtime_settings.support_vk ? "TRUE" : "FALSE");
+        spdlog::info("Support D3D11 {}", g_runtime_settings.support_d3d11 ? "TRUE" : "FALSE");
+        spdlog::info("Support D3D12 {}", g_runtime_settings.support_d3d12 ? "TRUE" : "FALSE");
+        spdlog::info("Support GL {}", g_runtime_settings.support_gl ? "TRUE" : "FALSE");
+        spdlog::info("Support VK {}", g_runtime_settings.support_vk ? "TRUE" : "FALSE");
 
         //if (FClientSettings::ClientSettings.AllowVK)
         //{
@@ -54,7 +51,7 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
         //    Log(FLogOpenXRInterface, Trace, "GLAD VK status: %i", Status);
         //}
 
-        XRGameBridge::g_runtime_settings.hInst = hInst;
+        g_runtime_settings.hInst = hInst;
 
         // Allocate console for when none exists for debugging
         //AllocConsole();
@@ -64,9 +61,9 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
 
     case DLL_PROCESS_DETACH:
     {
-        LOG(INFO) << "DLL_PROCESS_DETACH";
+        spdlog::info("DLL_PROCESS_DETACH");
 
-        LOG(INFO) << "XR Game Bridge Unloaded";
+        spdlog::info("XR Game Bridge Unloaded");
 
         //FreeConsole();
         break;
@@ -75,98 +72,6 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
     default: { break; }
     }
     return TRUE;
-}
-
-#include <winternl.h>
-typedef NTSTATUS(NTAPI* _LdrLoadDll)(
-    PWSTR DllPath, 
-    ULONG pFlags, 
-    PUNICODE_STRING DllName, 
-    HMODULE* BaseAddress
-    );
-_LdrLoadDll LdrLoadDll;
-
-#include <stdio.h>
-#include <signal.h>
-#include <tchar.h>
-
-
-HMODULE LoadwithLdrLoadDLl(std::wstring dll_path)
-{
-    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
-    if (!ntdll) {
-        LOG(ERROR) << "Failed to get ntdll";
-        return NULL;
-    }
-
-    LdrLoadDll = (_LdrLoadDll)GetProcAddress(ntdll, "LdrLoadDll");
-    if (!LdrLoadDll) {
-        LOG(ERROR) << "Failed loading function";
-        return NULL;
-    }
-
-    LOG(INFO) << "Attempting to load dll";
-    UNICODE_STRING udll_name;
-    RtlInitUnicodeString(&udll_name, dll_path.data());
-
-    HMODULE loaded_module;
-    NTSTATUS result = LdrLoadDll(NULL, 0, &udll_name, &loaded_module);
-    if (!NT_SUCCESS(result)) {
-        LOG(INFO) << "Failed loading dll";
-        return NULL;
-    }
-
-    return loaded_module;
-}
-
-FARPROC LoadSRWithLoaderLoadDll(HMODULE module, std::string dll_name, std::string gb_dll_name) {
-    std::wstring wdll_name = fs::path(dll_name).wstring();
-    static bool weaving_loaded = false;
-    if (!weaving_loaded) {
-        LoadwithLdrLoadDLl(L"DimencoWeaving.dll");
-        HMODULE mopd = GetModuleHandleW(L"DimencoWeaving.dll");
-        weaving_loaded = true;
-    }
-
-    if (std::find(sr_dlls.begin(), sr_dlls.end(), wdll_name) != sr_dlls.end()) {
-        //fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-        //HMODULE gb_module = LoadLibraryExW(gb_path.wstring().data(), NULL, NULL);
-
-        module = LoadwithLdrLoadDLl(wdll_name.data());
-        //loaded_module = LoadLibraryExW(wdll_name.data(), NULL, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
-
-        LOG(INFO) << "Loading success";
-        //LOG(INFO) << "Loading dll: " << gb_path.string();
-
-        if (module == NULL) {
-            //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
-            return 0;
-        }
-
-        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
-        return reinterpret_cast<FARPROC>(module);
-    }
-    else if (dll_name.find(gb_dll_name) != std::string::npos) {
-        LOG(INFO) << "Loading dll " << dll_name;
-
-        fs::path gb_path = fs::path(runtime_path).parent_path() /= dll_name;
-        std::wstring wpath = gb_path.wstring();
-        HMODULE gb_module = LoadwithLdrLoadDLl(wpath.data());
-
-        LOG(INFO) << "Loading success";
-        //LOG(INFO) << "Loading dll: " << gb_path.string();
-
-        if (gb_module == NULL) {
-            //LOG(ERROR) << "Failed to load " << gb_path << " error: " << GetLastError();
-            return 0;
-        }
-
-        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
-        return reinterpret_cast<FARPROC>(gb_module);
-    }
-    else {
-
-    }
 }
 
 // Targets are delayed in CMake
@@ -200,7 +105,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // that will be used instead, thereby bypassing the rest
         // of the helper.
 
-        //LOG(INFO) << "dliStartProcessing " << "DLL Name: " << pdli->szDll;if (!eos_path.empty()) {
+        //spdlog::info("dliStartProcessing " << "DLL Name: " << pdli->szDll;if (!eos_path.empty()) {
         //eos_module = GetModuleHandleA("EOSOVH-Win64-Shipping.dll");
         //FreeLibrary(eos_module);
         break;
@@ -210,32 +115,29 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // If you want to return control to the helper, return 0.
         // Otherwise, return your own HMODULE to be used by the
         // helper instead of having it call LoadLibrary itself.
-        //LOG(INFO) << "dliNotePreLoadLibrary " << "DLL Name: " << pdli->szDll;
-        LOG(INFO) << "Loading dll " << dll_name;
+        //spdlog::info("dliNotePreLoadLibrary " << "DLL Name: " << pdli->szDll;
+        spdlog::info("Loading dll ", dll_name);
         fs::path dll_path = fs::path(dll_name);
         if (dll_name.find(gb_dll_name) != std::string::npos) {
             dll_path = fs::path(runtime_path).parent_path() /= dll_name;
             if (fs::exists(dll_path) == false) {
-                LOG(INFO) << "Debug this!";
+                spdlog::info("Debug this!");
             }
 
-            LOG(INFO) << "Try loading " << dll_name << " from: " << dll_path;
+            spdlog::info("Try loading {} from: {}", dll_name, dll_path.string());
             loaded_module = LoadLibraryA(dll_path.string().data());
         }
         else {
             std::wstring wpath = dll_path.wstring();
             loaded_module = LoadLibraryExW(wpath.data(), NULL, NULL);
         }
-        //else if(dll_name.find(gb_dll_name) != std::string::npos) {
-        //    LOG(INFO) << "Loading dll " << dll_name;
 
         if (loaded_module == NULL) {
-            LOG(ERROR) << "Failed to load " << dll_path << " error: " << GetLastError();
+            spdlog::error("Failed to load {} error: {}", dll_path.string(), GetLastError());
             return 0;
         }
 
-        LOG(INFO) << "Loading success";
-        //LOG(INFO) << "Successfully loaded " << gb_dll_name;
+        spdlog::info("Loading success");
         return reinterpret_cast<FARPROC>(loaded_module);
 
     }
@@ -243,7 +145,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // If you want to return control to the helper, return 0.
         // If you choose you may supply your own FARPROC function
         // address and bypass the helper's call to GetProcAddress.
-        //LOG(INFO) << "dliNotePreGetProcAddress " << "DLL Name: " << pdli->szDll;
+        //spdlog::info("dliNotePreGetProcAddress " << "DLL Name: " << pdli->szDll;
 
 
         //return reinterpret_cast<FARPROC>(loaded_module);
@@ -260,9 +162,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // this alternate DLL and attempt to find the
         // requested entrypoint via GetProcAddress.
 
-        //LOG(INFO) << "dliFailLoadLib " << "DLL Name: " << pdli->szDll;
-
-
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, std::format("LoadLibrary failed: {}", pdli->szDll));
         break;
 
     case dliFailGetProc:
@@ -272,7 +172,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // (ERROR_PROC_NOT_FOUND) and exit.
         // If you choose, you may handle the failure by returning
         // an alternate FARPROC function address.
-        //LOG(INFO) << "dliFailGetProc " << "DLL Name: " << pdli->szDll;
+        //spdlog::info("dliFailGetProc " << "DLL Name: " << pdli->szDll;
 
 
         break;
@@ -283,7 +183,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         // at this point except by longjmp()/throw()/RaiseException.
         // No return value is processed.
 
-        //LOG(INFO) << "dliNoteEndProcessing " << "DLL Name: " << pdli->szDll;
+        //spdlog::info("dliNoteEndProcessing " << "DLL Name: " << pdli->szDll;
 
 
         //eos_module = LoadLibraryA(eos_path.data());
@@ -291,7 +191,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         break;
 
     default:
-        //LOG(INFO) << "default" << "DLL Name: " << pdli->szDll;
+        //spdlog::info("default" << "DLL Name: " << pdli->szDll;
         return NULL;
     }
 
