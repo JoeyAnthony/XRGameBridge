@@ -14,12 +14,8 @@
 #include "session.h"
 #include "system.h"
 
-#include <game_bridge.h>
-#include <hooks.h>
-
-#include "event_manager.h"
-#include "hotkey_manager.h"
-#include "platform_manager.h"
+#include "events.h"
+#include "hotkeys/hotkeymanager.h"
 
 //TODO fix versioning
 #define RUNTIME_VERSION_MAYOR 0
@@ -71,13 +67,16 @@ inline XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData);
 
 //inline size_t XrHandleToInt() { return 0; };
 
+class WindowHooks;
+
 class GB_Instance {
     // Cannot be longer than XR_MAX_RUNTIME_NAME_SIZE
     const std::string runtime_name = "XR Game Bridge";
     const uint64_t runtime_version = XR_MAKE_VERSION(RUNTIME_VERSION_MAYOR, RUNTIME_VERSION_MINOR, RUNTIME_VERSION_PATCH);
-    GraphicsBackend active_graphics_backend = GraphicsBackend::undefined;
-    GameBridge* gamebridge_instance = nullptr;
-    PlatformManager* platform_manager = nullptr;
+    GraphicsBackend active_graphics_backend = GraphicsBackend::Uninitialized;
+    EventManager event_manager;
+    std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
+    std::shared_ptr<SR::SRContext> sr_context;
 
     // Currently not being used
    // XrInteractionProfileSuggestedBinding suggested_bindings;
@@ -88,9 +87,9 @@ public:
     ~GB_Instance();
 
     XrResult ActivateGraphicsAPI(GraphicsBackend api);
-
-    GameBridge* GetGameBridgeInstance();
-    PlatformManager* GetPlatformManager();
+    EventManager& GetEventManager();
+    std::shared_ptr<EventStreamWriter> GetInstanceEventStreamWriter();
+    std::shared_ptr<SR::SRContext> GetSrContext();
     std::string GetRuntimeName();
     uint64_t GetRuntimeVersion();
     GraphicsBackend GetActiveGraphicsAPI();
@@ -119,8 +118,7 @@ inline WindowHooks* window_hook;
 #endif
 
 inline HotkeyManager* g_hotkey_manager = nullptr;
-inline std::shared_ptr<EventStreamWriter> g_openxr_event_stream_writer;
-inline std::shared_ptr<EventStreamReader> g_openxr_event_stream_reader;
+
 
 ///! \brief Initialize XR Systems
 void InitializeSystems(XrInstance instance);

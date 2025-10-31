@@ -1,3 +1,5 @@
+include(FetchContent)
+
 cmake_minimum_required(VERSION 3.23)
 
 set (CMAKE_CXX_STANDARD 20)
@@ -12,56 +14,69 @@ set(SHADERS
     shaders/dx11_vs.hlsl
     shaders/dx11_ps.hlsl
 )
-
-# Source files
-add_library(RuntimeOpenXR SHARED
-        src/main.cpp
-        src/dll.h
-        src/instance.h
-        src/instance.cpp
-        src/openxr_functions.h
-        src/openxr_includes.h
-        src/system.h
-        src/system.cpp
-        src/session.h
-        src/session.cpp
-        src/swapchain.h
-        src/swapchain.cpp
-        src/settings.h
-        src/settings.cpp
-        src/events.h
-        src/events.cpp
-        src/actions.h
-        src/actions.cpp
-        src/window.h
-        src/window.cpp
-        src/dxhelpers.h
-        src/dxhelpers.cpp
-        src/srhelpers.h
-        src/srhelpers.cpp
-        src/xrrendering.h
-        src/d3d12renderer.h
-        src/d3d12renderer.cpp
-        src/d3d12compositor.h
-        src/d3d12compositor.cpp
-        src/d3d12swapchain.h
-        src/d3d12swapchain.cpp
-        src/d3d11renderer.h
-        src/d3d11renderer.cpp
-        src/d3d11compositor.h
-        src/d3d11compositor.cpp
-        src/d3d11swapchain.h
-        src/d3d11swapchain.cpp
-        src/types.h
-        src/result.h
-        src/debug.h
-        src/debug.cpp
-
-        ${SHADERS}
+set(HOTKEYS
+	src/hotkeys/hotkeyinterface.h
+	src/hotkeys/hotkeymanager.h
+	src/hotkeys/hotkeymanager.cpp
+	src/hotkeys/hotkeywindows.h
+	src/hotkeys/hotkeywindows.cpp
+)
+set(GRAPHICS
+	src/graphics/xrrendering.h
+	src/graphics/swapchain.h
+	src/graphics/swapchain.cpp
+	src/graphics/d3d12renderer.h
+	src/graphics/d3d12renderer.cpp
+	src/graphics/d3d12compositor.h
+	src/graphics/d3d12compositor.cpp
+	src/graphics/d3d12swapchain.h
+	src/graphics/d3d12swapchain.cpp
+	src/graphics/d3d11renderer.h
+	src/graphics/d3d11renderer.cpp
+	src/graphics/d3d11compositor.h
+	src/graphics/d3d11compositor.cpp
+	src/graphics/d3d11swapchain.h
+	src/graphics/d3d11swapchain.cpp
+)
+set(SROUCES
+	src/main.cpp
+	src/dll.h
+	src/instance.h
+	src/instance.cpp
+	src/openxr_functions.h
+	src/openxr_includes.h
+	src/system.h
+	src/system.cpp
+	src/session.h
+	src/session.cpp
+	src/settings.h
+	src/settings.cpp
+	src/events.h
+	src/events.cpp
+	src/actions.h
+	src/actions.cpp
+	src/window.h
+	src/window.cpp
+	src/dxhelpers.h
+	src/dxhelpers.cpp
+	src/types.h
+	src/result.h
+	src/debug.h
+	src/debug.cpp
+	src/game_bridge_structs.h
+	src/hooks.h
+	src/hooks.cpp
+	${SHADERS}
+	${HOTKEYS}
+	${GRAPHICS}
 )
 
-# Don't let Visual Studio build the shaders with wrong settings
-set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
+# Add target
+add_library(RuntimeOpenXR SHARED
+	${SROUCES}
+)
+
+target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 ## OPENXR COMPILE DEFINITIONS
 # Khronos definitions
@@ -76,6 +91,12 @@ target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
 # Debuging definitions
 # target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)
 
+# Add filters for visual studio
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SROUCES})
+
+# Don't let Visual Studio build the shaders with wrong settings
+set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
+
 # Include OpenXR
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
 target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include/)
@@ -84,9 +105,6 @@ target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_SOURCE_DIR}/third-party
 add_subdirectory(${CMAKE_SOURCE_DIR}/third-party/spdlog spdlog)
 
 # Add glm
-include(FetchContent)
-set(glm_DIR ${CMAKE_SOURCE_DIR}/third-party/glm/share/glm)
-find_package(srDirectX)
 FetchContent_Declare(
     glm
     GIT_REPOSITORY	https://github.com/g-truc/glm.git
@@ -94,11 +112,38 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+# Safetyhook
+FetchContent_Declare(
+    safetyhook
+    GIT_REPOSITORY "https://github.com/cursey/safetyhook.git"
+    GIT_TAG c3f3f306a0f12d1811c0b713ad2ed2a8ddc6cf55
+)
+FetchContent_MakeAvailable(safetyhook)
+
+#  link with LeiaSR SDK
+if(DEFINED LEIASR_SDKROOT)
+	message("LeiaSR SDK found in ${LEIASR_SDKROOT}")
+elseif(DEFINED ENV{LEIASR_SDKROOT})
+	set(LEIASR_SDKROOT $ENV{LEIASR_SDKROOT})
+	message("LeiaSR SDK found with environment variable ${LEIASR_SDKROOT}")
+else()
+	message(FATAL_ERROR "LEIASR_SDKROOT not found, either set it or add it as an environment variable.")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${LEIASR_SDKROOT}/lib/cmake")
+
+# Include SR
+find_package(simulatedreality REQUIRED)
+find_package(srDirectX REQUIRED)
+
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
         ${TARGET_DXHEADERS}
         spdlog::spdlog
         glm::glm
+		simulatedreality
+		srDirectX::srDirectX
+		safetyhook
 )
 
 # Copy all dependencies

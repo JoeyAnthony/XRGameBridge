@@ -6,7 +6,6 @@
  */
 
 #pragma once
-#include <string>
 #include <set>
 
 #define GLM_FORCE_LEFT_HANDED
@@ -15,8 +14,10 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "openxr_includes.h"
-#include "platform_manager.h"
 #include "types.h"
+
+#include <sr/world/display/display.h>
+#include <sr/sense/display/switchablehint.h>
 
 // System
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId);

@@ -5,24 +5,15 @@
  * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
  */
 
-#include "srhelpers.h"
+#pragma once
 
-#include "instance.h"
+#include "hotkeyinterface.h"
 
-#include <game_bridge.h>
-#include <hotkey_windows_impl.h>
+class WindowsHotkeyImplementation : public IHotkeys {
+public:
+    ~WindowsHotkeyImplementation() override = default;
 
-XRGameBridge::GameBridgeInstance::GameBridgeInstance() {
+    std::map<CombinedHotkeyStrokes, bool, UnionComparator> CheckHotkeys(std::vector<CombinedHotkeyStrokes> key_codes) override;
 
-}
-
-XRGameBridge::GameBridgeInstance::~GameBridgeInstance() {
-
-}
-
-SR::SRContext* XRGameBridge::GameBridgeInstance::GetSrContext() {
-    return nullptr;
-}
-
-void XRGameBridge::GameBridgeInstance::GetScreen() {
-}
+    std::vector<uint32_t> GetKeysPressed() override;
+};

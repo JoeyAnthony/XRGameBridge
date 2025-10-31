@@ -50,7 +50,7 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
 
 XrResult D3D11Renderer::CreateWeaver(GB_Instance* instance, GB_System& gb_system) {
 
-    SR::SRContext* sr_context = instance->GetPlatformManager()->GetContext();
+    auto sr_context = instance->GetSrContext();
     auto system_resolution = GetSystemResolution(gb_system);
     native_weaver = new SR::PredictingDX11Weaver(*sr_context, d3d11_device.Get(), d3d11_device_context.Get(), system_resolution.x, system_resolution.y, window.GetWindowHandle());
     sr_context->initialize();

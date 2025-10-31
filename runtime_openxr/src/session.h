@@ -15,7 +15,8 @@
 #include "window.h"
 
 #include "sr/management/srcontext.h"
-#include "xrrendering.h"
+#include "graphics/xrrendering.h"
+#include "events.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session);
 XrResult xrDestroySession(XrSession session);
@@ -47,6 +48,7 @@ struct GB_Session {
     XrSystemId system;
     XrViewConfigurationType view_configuration;
     std::shared_ptr<EventStreamReader> hotkey_events_reader;
+    std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
 
     // Session state
     std::mutex mutex_session_state_queue;
@@ -76,7 +78,7 @@ struct GB_Session {
     Renderer* renderer;
 
     // SR
-    SR::SRContext* sr_context;
+    std::shared_ptr<SR::SRContext> sr_context;
 
     void IdleFunc();
     void InitializeView();
