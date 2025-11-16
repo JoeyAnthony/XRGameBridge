@@ -464,10 +464,6 @@ uint32_t D3D12WindowSwapchain::GetRtvDescriptorSize() {
     return rtv_descriptor_size;
 }
 
-uint32_t D3D12WindowSwapchain::GetCbcSrvUavDescriptorSize() {
-    return GetCbcSrvUavDescriptorSize();
-}
-
 uint32_t D3D12WindowSwapchain::AcquireNextImage() {
     // TODO get image index from the swapchain
     return swap_chain->GetCurrentBackBufferIndex();

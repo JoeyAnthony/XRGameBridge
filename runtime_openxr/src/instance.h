@@ -76,6 +76,7 @@ class GB_Instance {
     GraphicsBackend active_graphics_backend = GraphicsBackend::Uninitialized;
     EventManager event_manager;
     std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
+    std::shared_ptr<EventStreamReader> instance_event_stream_reader;
     std::shared_ptr<SR::SRContext> sr_context;
 
     // Currently not being used
@@ -89,6 +90,7 @@ public:
     XrResult ActivateGraphicsAPI(GraphicsBackend api);
     EventManager& GetEventManager();
     std::shared_ptr<EventStreamWriter> GetInstanceEventStreamWriter();
+    std::shared_ptr<EventStreamReader> GetInstanceEventStreamReader();
     std::shared_ptr<SR::SRContext> GetSrContext();
     std::string GetRuntimeName();
     uint64_t GetRuntimeVersion();

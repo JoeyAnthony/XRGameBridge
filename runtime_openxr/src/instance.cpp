@@ -530,7 +530,7 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
     // TODO need event stream reader for poll events
     uint32_t event_type;
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    void* data = gb_instance->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE)->GetNextEvent(event_type);
+    void* data = gb_instance->GetInstanceEventStreamReader()->GetNextEvent(event_type);
     if (event_type == GB_EVENT_NULL) {
         return XR_EVENT_UNAVAILABLE;
     }
@@ -563,6 +563,7 @@ GB_Instance::GB_Instance() {
     // TODO move to event xr handler class
     // Get event stream so xr events can be read from the instance
     instance_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
+    instance_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
     g_hotkey_manager = new HotkeyManager(event_manager);
 
 #ifdef _DEBUG
@@ -638,6 +639,10 @@ EventManager& GB_Instance::GetEventManager() {
 
 std::shared_ptr<EventStreamWriter> GB_Instance::GetInstanceEventStreamWriter() {
     return instance_event_stream_writer;
+}
+
+std::shared_ptr<EventStreamReader> GB_Instance::GetInstanceEventStreamReader() {
+    return instance_event_stream_reader;
 }
 
 std::string GB_Instance::GetRuntimeName() {

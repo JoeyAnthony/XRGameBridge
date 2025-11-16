@@ -97,7 +97,6 @@ public:
     ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();
     ComPtr<ID3D12DescriptorHeap>& GetSrvHeap();
     uint32_t GetRtvDescriptorSize();
-    uint32_t GetCbcSrvUavDescriptorSize();
     uint32_t AcquireNextImage();
     void PresentFrame();
 

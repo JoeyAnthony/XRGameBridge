@@ -6,23 +6,11 @@
  */
 
 #pragma once
-#include <regex>
-#include <windows.h>
 #include <string>
-#include <filesystem>
-#include  <array>
 
-#include "debug.h"
-
-namespace fs = std::filesystem;
-
-struct GB_RuntimeSettings {
-    bool support_d3d12 = true;
-    bool support_d3d11 = false;
-    bool support_vk = false;
-    bool support_gl = false;
-    HINSTANCE hInst;
-} inline g_runtime_settings;
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 constexpr std::array sr_dlls = {
 L"SimulatedRealityDirectX.dll",
@@ -39,27 +27,42 @@ L"LeapC.dll",
 L"opencv_world343.dll"
 };
 
-inline std::string sr_install_path;
-inline std::string sr_install_path_win32;
-inline std::string runtime_path;
-static void FindPathEnv() {
-    std::string path_environment_variable = std::getenv("PATH");
-    std::regex path_search_regex("[a-zA-Z0-9+_\\-\\.:%()\\s\\\\]+");
+namespace fs = std::filesystem;
 
-    auto words_begin = std::sregex_iterator(path_environment_variable.begin(), path_environment_variable.end(), path_search_regex);
-    auto words_end = std::sregex_iterator();
+class RuntimeLogger {
+    static constexpr std::string_view log_name = "xrgb_log.txt";
+    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> stderr_sink;
+    std::shared_ptr<spdlog::sinks::basic_file_sink_mt> file_sink;
+    std::shared_ptr<spdlog::logger> multi_sink_logger;
 
-    for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
-        std::smatch match = *i;
-        std::string match_str = match.str();
-        spdlog::info(match_str);
-        if (match_str.find("Simulated Reality") != std::string::npos) {
-            if (match_str.find("x86") != std::string::npos) {
-                sr_install_path_win32 = match_str;
-            }
-            else {
-                sr_install_path = match_str;
-            }
-        }
-    }
-}
+public:
+    RuntimeLogger();
+    std::shared_ptr<spdlog::logger> GetLogger();
+};
+
+class RuntimeSettings {
+    std::string sr_install_path;
+    std::string sr_install_path_win32;
+    std::string runtime_path;
+
+    void* h_Instance;
+
+    void FetchRuntimePath();
+    void FetchPathEnvSR();
+
+public:
+    static constexpr bool support_d3d12 = true;
+    static constexpr bool support_d3d11 = false;
+    static constexpr bool support_vk = false;
+    static constexpr bool support_gl = false;
+
+    RuntimeSettings() = delete;
+    explicit RuntimeSettings(void* h_Inst);
+
+    std::string GetSrInstallPath();
+    std::string GetRuntimePath();
+    void* GethInstance();
+};
+
+inline std::unique_ptr<RuntimeSettings> g_runtime_settings;
+inline std::unique_ptr<RuntimeLogger> g_runtime_logger;

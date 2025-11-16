@@ -54,7 +54,7 @@ XrResult D3D12Renderer::CreateSystemWindow(GB_System& gb_system) {
     // Create debug window
     auto system_resolution = GetSystemResolution(gb_system);
 
-    window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
+    window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 

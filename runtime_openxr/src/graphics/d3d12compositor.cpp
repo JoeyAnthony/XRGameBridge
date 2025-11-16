@@ -134,24 +134,8 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
 bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state) {
     // Create the pipeline state, which includes loading shaders.
     {
-        std::vector<char>vertex_shader;
-        std::vector<char>pixel_shader;
-
-        // Try shader path in shipping location, otherwise the debug location
-        fs::path shader_dir = fs::path(runtime_path).parent_path();
-        if (fs::exists(shader_dir / shader_path)) {
-            fs::path vertex = shader_dir / dx12_vs;
-            fs::path pixel = shader_dir / dx12_ps;
-            vertex_shader = LoadBinaryFile(vertex.string());
-            pixel_shader = LoadBinaryFile(pixel.string());
-        }
-        else {
-            fs::path vertex = fs::path(DEBUG_SHADER_PATH) / dx12_vs;
-            fs::path pixel = fs::path(DEBUG_SHADER_PATH) / dx12_ps;
-            vertex_shader = LoadBinaryFile(vertex.string());
-            pixel_shader = LoadBinaryFile(pixel.string());
-            spdlog::info("Loading shaders with debug paths");
-        }
+        std::vector<uint8_t>vertex_shader = LoadShader(dx12_vs);
+        std::vector<uint8_t>pixel_shader = LoadShader(dx12_fs);
 
         if (vertex_shader.empty() || pixel_shader.empty()) {
             spdlog::error("Couldn't find shaders");

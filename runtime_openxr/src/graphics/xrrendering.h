@@ -9,9 +9,15 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <map>
 
 #include "openxr_includes.h"
+#include "settings.h"
 #include "types.h"
+
+#include "../generated/shaders_generated.h"
+
+namespace fs = std::filesystem;
 
 class GB_Instance;
 constexpr unsigned short standard_swapchain_buffer_count = 2;
@@ -33,11 +39,11 @@ enum ImageState {
 
 class Compositor {
 public:
-    const std::string shader_path = "shaders/";
-    const std::string dx11_vs = "dx11.vs";
-    const std::string dx11_ps = "dx11.ps";
-    const std::string dx12_vs = "dx12.vs";
-    const std::string dx12_ps = "dx12.ps";
+    static constexpr std::string_view shader_path = "shaders/";
+    static constexpr std::string_view dx11_vs = "dx11_vs_layering.vs";
+    static constexpr std::string_view dx11_fs = "dx11_fs_layering.fs";
+    static constexpr std::string_view dx12_vs = "dx12_vs_layering.vs";
+    static constexpr std::string_view dx12_fs = "dx12_fs_layering.fs";
 
     virtual ~Compositor() = default;
 
@@ -46,13 +52,13 @@ public:
     */
     //virtual void Destroy() = 0;
 
-    static std::vector<char> LoadBinaryFile(std::string path) {
-        std::filesystem::path file_path(path);
-        std::string abs_path = std::filesystem::absolute(file_path).string();
+    static std::vector<uint8_t> LoadBinaryFile(std::string path) {
+        fs::path file_path(path);
+        std::string abs_path = fs::absolute(file_path).string();
 
         std::ifstream file(abs_path, std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
-            return std::vector<char>(0);
+            return std::vector<uint8_t>(0);
         }
 
         // Get size and reset cursor
@@ -60,12 +66,37 @@ public:
         file.seekg(0);
 
         // Load into buffer
-        std::vector<char> buffer(size);
-        if (!file.read(buffer.data(), size)) {
-            return std::vector<char>(0);
+        std::vector<uint8_t> buffer(size);
+        if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
+            return std::vector<uint8_t>(0);
         }
 
         return buffer;
+    }
+
+    static std::vector<uint8_t> LoadShader(const std::string_view shader_name) {
+#ifdef EMBED_SHADERS
+        std::map<std::string_view, decltype(EmbeddedShaders::shader_vertex_dx11)> map{
+            {dx11_vs, EmbeddedShaders::shader_vertex_dx11},
+            {dx11_fs, EmbeddedShaders::shader_fragment_dx11},
+            { dx12_vs, EmbeddedShaders::shader_vertex_dx12 },
+            { dx12_fs, EmbeddedShaders::shader_fragment_dx12 },
+        };
+
+        return map[shader_name];
+#else
+        // Try shader path in release location, otherwise the debug location
+        fs::path shader_dir = fs::path(runtime_path).parent_path() / shader_path;
+        if (fs::exists(shader_dir)) {
+            fs::path shader = shader_dir / shader_name;
+            return LoadBinaryFile(shader.string());
+        }
+        else {
+            spdlog::info("Loading shader from debug location");
+            fs::path shader = fs::path(DEBUG_SHADER_PATH) / shader_name;
+            return LoadBinaryFile(shader.string());
+        }
+#endif
     }
 };
 

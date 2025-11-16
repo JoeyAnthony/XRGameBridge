@@ -174,6 +174,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
     ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
+    UpdateSession(gb_session);
 
     // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
     gb_session.should_render = true;
@@ -227,6 +228,7 @@ XrResult xrRequestExitSession(XrSession session) {
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
     ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
+    UpdateSession(gb_session);
 
     return XR_SUCCESS;
 }
