@@ -45,6 +45,9 @@ set(SROUCES
     src/openxr_includes.h
     src/system.h
     src/system.cpp
+    src/featuremodule.h
+    src/srsystem.h
+    src/srsystem.cpp
     src/session.h
     src/session.cpp
     src/settings.h
@@ -171,6 +174,7 @@ FetchContent_Declare(
     GIT_TAG 	0af55ccecd98d4e5a8d1fad7de25ba429d60e863
 )
 FetchContent_MakeAvailable(glm)
+target_compile_definitions(RuntimeOpenXR PRIVATE GLM_FORCE_LEFT_HANDED)
 
 # Safetyhook
 FetchContent_Declare(

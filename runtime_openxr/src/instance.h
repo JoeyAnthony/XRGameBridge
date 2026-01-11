@@ -12,10 +12,6 @@
 #include "dll.h"
 #include "openxr_includes.h"
 #include "session.h"
-#include "system.h"
-
-#include "events.h"
-#include "hotkeys/hotkeymanager.h"
 
 //TODO fix versioning
 #define RUNTIME_VERSION_MAYOR 0
@@ -55,19 +51,8 @@ XrResult xrGetCurrentInteractionProfile(XrSession session, XrPath topLevelUserPa
 // Events
 inline XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData);
 
-//// Handle functions
-//template<typename T>
-//T PtrToXrHandle() { return T(); };
-
-//template<typename T>
-//T XrhandleToPtr() { return T(); };
-
-//template<typename T>
-//T IntToXrHandle() { return T(); };
-
-//inline size_t XrHandleToInt() { return 0; };
-
 class WindowHooks;
+class HotkeyManager;
 
 class GB_Instance {
     // Cannot be longer than XR_MAX_RUNTIME_NAME_SIZE
@@ -77,11 +62,9 @@ class GB_Instance {
     EventManager event_manager;
     std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
     std::shared_ptr<EventStreamReader> instance_event_stream_reader;
-    std::shared_ptr<SR::SRContext> sr_context;
 
     // Currently not being used
    // XrInteractionProfileSuggestedBinding suggested_bindings;
-    void InitializeSR();
 public:
 
     GB_Instance();
@@ -91,7 +74,6 @@ public:
     EventManager& GetEventManager();
     std::shared_ptr<EventStreamWriter> GetInstanceEventStreamWriter();
     std::shared_ptr<EventStreamReader> GetInstanceEventStreamReader();
-    std::shared_ptr<SR::SRContext> GetSrContext();
     std::string GetRuntimeName();
     uint64_t GetRuntimeVersion();
     GraphicsBackend GetActiveGraphicsAPI();
@@ -119,8 +101,8 @@ inline GB_Instance* g_xr_instance = nullptr;
 inline WindowHooks* window_hook;
 #endif
 
+// Hotkey manager
 inline HotkeyManager* g_hotkey_manager = nullptr;
-
 
 ///! \brief Initialize XR Systems
 void InitializeSystems(XrInstance instance);
@@ -135,7 +117,7 @@ inline std::unordered_map<XrPath, std::string> g_xrpath_storage;
 // TODO get rid of globals :)
 //inline std::unordered_map<XrInstance, GB_Instance> instances;
 inline std::unordered_map<XrSession, GB_Session> g_sessions;
-inline std::unordered_map<XrSystemId, GB_System> g_systems;
+
 // OpenXR makes a distinction between active and inactive action sets, only active ones have to be updated.
 // Since we don't plan on handling VR actions I left this distinction out, but it might be good to have later.
 inline std::unordered_map<XrActionSet, GB_ActionSet> g_action_sets;

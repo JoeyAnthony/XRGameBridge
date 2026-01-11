@@ -10,7 +10,6 @@
 #include <stdexcept>
 #include <shellscalingapi.h>
 
-#define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -22,6 +21,7 @@
 #include "settings.h"
 #include "graphics/d3d11renderer.h"
 #include "graphics/d3d12renderer.h"
+#include "hotkeys/hotkeymanager.h"
 //#include "swapchain.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
@@ -30,15 +30,16 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // TODO refactor local scope static variables
     static uint64_t session_creation_count = 1;
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    GB_System& system = g_systems[createInfo->systemId];
+    // TODO make this the bas type
+    auto system = std::dynamic_pointer_cast<SRSystem>( g_systems[createInfo->systemId]);
     spdlog::info("Creating session: {}", session_creation_count);
 
-    if (!system.features_enumerated) {
+    if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::Uninitialized) {
         spdlog::error("Graphics requirements call missing");
         return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
     }
 
-    if (system.instance != instance) {
+    if (!system) {
         spdlog::error("Couldn't find system. System invalid");
         return XR_ERROR_SYSTEM_INVALID;
     }
@@ -71,8 +72,8 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Set FOV per eye
     glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
     glm::vec3 eye_r {new_session.reye_x, new_session.views[1].pose.position.y, new_session.eye_z};
-    new_session.views[0].fov = system.GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
-    new_session.views[1].fov = system.GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
+    new_session.views[0].fov = system->GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
+    new_session.views[1].fov = system->GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
     // Create Renderer
     if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
@@ -112,9 +113,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     *session = handle;
     session_creation_count++;
 
-    // Create sr context, blocks till there is a connection
-    new_session.sr_context = gb_instance->GetSrContext();
-
     // Initialize rendering pipeline
     new_session.renderer->InitializePipeline(gb_instance);
 
@@ -131,7 +129,6 @@ XrResult xrDestroySession(XrSession session) {
     // TODO Should probably destroy all objects related to a session.
     // Also action sets/g_actions attached to the session should be destroyed
     GB_Session& gb_session = g_sessions[session];
-    gb_session.sr_context = nullptr; //It comes from 3DGameBridge but I use it here as a bare pointer...
 
     delete gb_session.renderer;
 
@@ -155,9 +152,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     // TODO, move SESSION_READY logic to here, check here whether all components are initialized for the session to be put on READY.
 
     GB_Session& gb_session = g_sessions[session];
-    GB_System& gb_system = g_systems[gb_session.system];
-
-    //gb_session.idle_thread.join();
+    const auto gb_system = g_systems[gb_session.system];
 
     if (gb_session.session_state == XR_SESSION_STATE_IDLE) {
         spdlog::error("Session not ready");
@@ -168,6 +163,13 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
         return XR_ERROR_SESSION_RUNNING;
     }
 
+    if (!std::ranges::any_of(
+        gb_system->GetViewConfigurationProperties(),
+        [&](const auto& prop) {
+            return prop.viewConfigurationType == beginInfo->primaryViewConfigurationType;
+        })) {
+        return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+    }
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
 
     // Send all state changes
@@ -366,22 +368,6 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
-//void GB_Session::IdleFunc() {
-//    while (session_state == XR_SESSION_STATE_IDLE) {
-//        if (g_proxy_swapchains.size() > 0) {
-//            ChangeSessionState(*this, XR_SESSION_STATE_READY);
-//        }
-//
-//        UpdateSession(*this);
-//
-//        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-//    }
-//}
-
-void GB_Session::InitializeView() {
-
-}
-
 void ChangeSessionState(GB_Session& session, XrSessionState state) {
     if (session.session_state == state) {
         return;
@@ -402,7 +388,8 @@ void UpdateSession(GB_Session& session) {
     EventManager& event_manager = gb_instance->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
-    GB_System system = g_systems[session.system];
+    // TODO make this the bas type
+    auto system = std::dynamic_pointer_cast<SRSystem>(g_systems[session.system]);
 
     {
         std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
@@ -564,8 +551,8 @@ void UpdateSession(GB_Session& session) {
         glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
         glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
 
-        view_l.fov = system.GetConvergingFov({ eye_l });
-        view_r.fov = system.GetConvergingFov({ eye_r });
+        view_l.fov = system->GetConvergingFov({ eye_l });
+        view_r.fov = system->GetConvergingFov({ eye_r });
 
         if (value_changed) {
             SetXrViewPose(session, 0, view_l.pose);

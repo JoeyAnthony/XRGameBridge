@@ -11,7 +11,7 @@
 #include "xrrendering.h"
 #include "window.h"
 
-class GB_System;
+class SRSystem;
 class D3D11Compositor;
 class D3D11ProxySwapchain;
 class D3D11WindowSwapchain;
@@ -33,10 +33,10 @@ class D3D11Renderer : public Renderer {
     uint8_t frame_in_flight = 0;
 
     // Initialization
-    XrResult CreateIntermediateTexture(GB_System& gb_system);
-    XrResult CreateWeaver(GB_Instance* instance, GB_System& gb_system);
-    XrResult CreateSystemWindow(GB_System& gb_system);
-    XrResult CreateWindowSwapchain(GB_System& gb_system);
+    XrResult CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateWeaver(const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system);
     bool CreateCommandLists();
     XrResult CreateCompositor();
 

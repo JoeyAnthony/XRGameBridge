@@ -14,7 +14,6 @@
 #include "openxr_includes.h"
 #include "window.h"
 
-#include "sr/management/srcontext.h"
 #include "graphics/xrrendering.h"
 #include "events.h"
 
@@ -42,7 +41,8 @@ enum FrameState {
     Ended
 };
 
-struct GB_Session {
+class GB_Session {
+public:
     XrSession id;
     XrInstance instance;
     XrSystemId system;
@@ -76,12 +76,6 @@ struct GB_Session {
 
     // Compositor
     Renderer* renderer;
-
-    // SR
-    std::shared_ptr<SR::SRContext> sr_context;
-
-    void IdleFunc();
-    void InitializeView();
 };
 
 class GB_FrameTimer {

@@ -11,15 +11,14 @@
 #include <vector>
 #include <set>
 
-#include <sr/utility/exception.h>
-
-#include "game_bridge_structs.h"
-#include "debug.h"
-#include "actions.h"
 #include "openxr_functions.h"
+#include "debug.h"
+#include "game_bridge_structs.h"
 #include "dxhelpers.h"
-#include "system.h"
+#include "srsystem.h"
+#include "hotkeys/hotkeymanager.h"
 #include "hooks.h"
+#include "actions.h"
 
 //class OpenXRContainers {
 //public:
@@ -172,13 +171,6 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
 
     InitializeSystems(*instance);
 
-    // Check the context
-    if (g_xr_instance->GetSrContext() == nullptr) {
-        spdlog::error("Failed to connect to the SR service");
-        LOG_RUNTIME_ERROR
-        return XR_ERROR_RUNTIME_FAILURE;
-    }
-
     spdlog::info("XR Instance created");
     return XR_SUCCESS;
 }
@@ -225,19 +217,13 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
     }
 
     try {
-        GB_System& system = g_systems.at(systemId);
-
-        if (system.instance != instance) {
+        if (instance != reinterpret_cast<XrInstance>(g_xr_instance)) {
             spdlog::error("Instance not bound to this system");
             return XR_ERROR_HANDLE_INVALID;
         }
 
-        system.feature_level = D3D_FEATURE_LEVEL_11_0;
-        system.features_enumerated = true;
-
         //GB_Instance gb_instance = instances.at(instance);
         g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D11);
-        system.active_graphics_backend = GraphicsBackend::D3D11;
     }
     catch (std::out_of_range& e) {
         return XR_ERROR_SYSTEM_INVALID;
@@ -270,20 +256,13 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
     }
 
     try {
-        GB_System& system = g_systems.at(systemId);
-
-        if (system.instance != instance) {
+        if (instance != reinterpret_cast<XrInstance>(g_xr_instance)) {
             spdlog::error("Instance not bound to this system");
             return XR_ERROR_HANDLE_INVALID;
         }
-
-        system.feature_level = D3D_FEATURE_LEVEL_11_0;
-        system.features_enumerated = true;
-
         //GB_Instance gb_instance = instances.at(instance);
-        //TODO Do I need this in both? Maybe only in system sincen that the device that renders in the end
+        //TODO Do I need this in both? Maybe only in system since that the device that renders in the end
         g_xr_instance->ActivateGraphicsAPI(GraphicsBackend::D3D12);
-        system.active_graphics_backend = GraphicsBackend::D3D12;
     }
     catch (std::out_of_range& e) {
         LOG_RUNTIME_ERROR
@@ -549,13 +528,13 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
 }
 
 void InitializeSystems(XrInstance instance) {
-    CreateXrGameBridgeSystems(instance);
+    auto system = SRSystem::Create(instance);
+    g_systems.insert({system->GetId(), system});
 };
 
 GB_Instance::GB_Instance() {
     // Set dpi awareness for the application
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
-    InitializeSR();
 
     // TODO move to input class
     // Initialize hotkey manager
@@ -588,35 +567,6 @@ GB_Instance::~GB_Instance() {
     //delete window_hook;
 }
 
-void GB_Instance::InitializeSR() {
-    constexpr uint32_t max_retries = 5;
-    for (uint32_t retries = 0; retries < max_retries; retries++) {
-        if (sr_context == nullptr) {
-            try {
-                sr_context = std::make_shared<SR::SRContext>(false);
-            }
-            catch (SR::ServerNotAvailableException& ex) {
-                // Unable to construct SR Context.
-                spdlog::error("SR Service not available");
-                continue;
-            }
-
-            try {
-                //display = SR::Display::create(*sr_context);
-                //lens_hint = SR::SwitchableLensHint::create(*sr_context);
-            }
-            catch (...) {
-            }
-        }
-
-        if (retries >= max_retries) {
-            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not connect to sr service");
-        }
-    }
-
-    sr_context->initialize();
-}
-
 XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::Uninitialized) {
         active_graphics_backend = api;
@@ -627,10 +577,6 @@ XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
     }
-}
-
-std::shared_ptr<SR::SRContext> GB_Instance::GetSrContext() {
-    return sr_context;
 }
 
 EventManager& GB_Instance::GetEventManager() {
