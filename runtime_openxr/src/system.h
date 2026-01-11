@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include <string>
+#include <set>
 
 #define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
@@ -14,8 +14,10 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "openxr_includes.h"
-#include "platform_manager.h"
 #include "types.h"
+
+#include <sr/world/display/display.h>
+#include <sr/sense/display/switchablehint.h>
 
 // System
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId);
@@ -54,13 +56,14 @@ public:
     XrSystemId id;
     std::array<XrFormFactor, 2> supported_formfactors;
     XrFormFactor form_factor;
-    SRDisplay sr_device;
     D3D_FEATURE_LEVEL feature_level;
     bool features_enumerated = false;
     GraphicsBackend active_graphics_backend;
     GBVector2i physical_resolution;
     bool device_is_connected = false;
 
+    // TODO decouple SR from systems
+    SRDisplay sr_device;
     SR::Display* sr_display;
     SR::SwitchableLensHint* lens_hint;
 

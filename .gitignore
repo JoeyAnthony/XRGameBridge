@@ -6,6 +6,8 @@
 *.lo
 *.o
 *.obj
+*.ps
+*.vs
 
 # Precompiled Headers
 *.gch
@@ -36,3 +38,4 @@
 
 # Folders
 build/
+generated/

@@ -9,7 +9,7 @@
 
 #include "openxr_includes.h"
 
-#include <weaver_directx_12.h>
+#include <sr/weaver/dx12weaver.h>
 #include "types.h"
 #include "window.h"
 #include "xrrendering.h"
@@ -25,7 +25,7 @@ class D3D12Renderer : public Renderer {
 
     // Graphics
     D3D12Compositor compositor;
-    DirectX12Weaver* d3d12weaver = nullptr;
+    SR::PredictingDX12Weaver* d3d12weaver = nullptr;
     D3D12ProxySwapchain* intermediate_resource = nullptr;
     // Windowing
     GameBridgeWindow window;

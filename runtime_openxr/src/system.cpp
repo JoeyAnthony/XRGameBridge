@@ -447,6 +447,7 @@ std::set<XrViewConfigurationType> GB_System::GetViewConfigurationTypes() {
 XrSystemId CreateXrGameBridgeSystems(XrInstance instance)
 {
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
+    auto sr_context = gb_instance->GetSrContext();
 
     // Create system
     GB_System system;
@@ -454,8 +455,8 @@ XrSystemId CreateXrGameBridgeSystems(XrInstance instance)
     system.instance = instance;
     system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
     system.sr_device = SRDisplay::SR_DISPLAY;
-    system.sr_display = gb_instance->GetPlatformManager()->GetDisplay();
-    system.lens_hint = gb_instance->GetPlatformManager()->GetLensHint();
+    system.sr_display = SR::Display::create(*sr_context);
+    system.lens_hint = SR::SwitchableLensHint::create(*sr_context);
     system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_display->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_display->getPhysicalResolutionHeight()) };
 
     system.physical_screen_width_m = system.sr_display->getPhysicalSizeWidth() / 100.f;

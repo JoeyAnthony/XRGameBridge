@@ -7,31 +7,29 @@
 
 #include <string>
 #include <format>
+#include <filesystem>
 
 #include <spdlog/spdlog.h>
 #include <openxr/openxr.h>
 
 #include "settings.h"
+#include "debug.h"
+
+namespace fs = std::filesystem;
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
 
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
     {
-        char module_path[MAX_PATH];
-        GetModuleFileNameA(hInst, module_path, MAX_PATH);
-        runtime_path = std::string(module_path);
-
-        std::string log_path = (fs::path(runtime_path).parent_path() /= "log.txt").string();
-        spdlog::info("Runtime path: {}", log_path);
-
-        FindPathEnv();
+        g_runtime_settings = std::make_unique<RuntimeSettings>(hInst);
+        g_runtime_logger = std::make_unique<RuntimeLogger>();
 
         spdlog::info("DLL_PROCESS_ATTACH");
 
         spdlog::info("XR Game Bridge Loaded");
 
-        spdlog::info("Runtime location: {}", module_path);
+        spdlog::info("Runtime location: {}", g_runtime_settings->GetRuntimePath());
 
         spdlog::info("Game Bridge: VERSION");
 
@@ -40,18 +38,16 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
         spdlog::info("Process: ");
         spdlog::info("Executable: ");
 
-        spdlog::info("Support D3D11 {}", g_runtime_settings.support_d3d11 ? "TRUE" : "FALSE");
-        spdlog::info("Support D3D12 {}", g_runtime_settings.support_d3d12 ? "TRUE" : "FALSE");
-        spdlog::info("Support GL {}", g_runtime_settings.support_gl ? "TRUE" : "FALSE");
-        spdlog::info("Support VK {}", g_runtime_settings.support_vk ? "TRUE" : "FALSE");
+        spdlog::info("Support D3D11 {}", RuntimeSettings::support_d3d11 ? "TRUE" : "FALSE");
+        spdlog::info("Support D3D12 {}", RuntimeSettings::support_d3d12 ? "TRUE" : "FALSE");
+        spdlog::info("Support GL {}", RuntimeSettings::support_gl ? "TRUE" : "FALSE");
+        spdlog::info("Support VK {}", RuntimeSettings::support_vk ? "TRUE" : "FALSE");
 
         //if (FClientSettings::ClientSettings.AllowVK)
         //{
         //    int Status = gladLoaderLoadVulkan(nullptr, nullptr, nullptr);
         //    Log(FLogOpenXRInterface, Trace, "GLAD VK status: %i", Status);
         //}
-
-        g_runtime_settings.hInst = hInst;
 
         // Allocate console for when none exists for debugging
         //AllocConsole();
@@ -119,7 +115,7 @@ FARPROC WINAPI delayHook(unsigned dliNotify, PDelayLoadInfo pdli) {
         spdlog::info("Loading dll ", dll_name);
         fs::path dll_path = fs::path(dll_name);
         if (dll_name.find(gb_dll_name) != std::string::npos) {
-            dll_path = fs::path(runtime_path).parent_path() /= dll_name;
+            dll_path = fs::path(g_runtime_settings->GetRuntimePath()).parent_path() /= dll_name;
             if (fs::exists(dll_path) == false) {
                 spdlog::info("Debug this!");
             }

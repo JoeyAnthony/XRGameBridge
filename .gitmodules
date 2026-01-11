@@ -1,9 +1,3 @@
-[submodule "third-party/3DGameBridge"]
-	path = third-party/3DGameBridge
-	url = https://github.com/BramTeurlings/3DGameBridge.git
-[submodule "third-party/easyloggingpp"]
-	path = third-party/easyloggingpp
-	url = https://github.com/abumq/easyloggingpp.git
 [submodule "third-party/DirectX-Headers"]
 	path = third-party/DirectX-Headers
 	url = https://github.com/microsoft/DirectX-Headers.git

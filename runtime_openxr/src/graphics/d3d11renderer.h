@@ -6,6 +6,8 @@
  */
 
 #pragma once
+#include <sr/weaver/dx11weaver.h>
+
 #include "xrrendering.h"
 #include "window.h"
 

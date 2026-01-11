@@ -14,30 +14,12 @@
 #include "d3d11swapchain.h"
 #include "swapchain.h"
 
-namespace fs = std::filesystem;
-
 bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     d3d11_device = renderer->GetDevice();
 
     // Load shaders
-    std::vector<char>v_shader_buffer;
-    std::vector<char>p_shader_buffer;
-
-    // Try shader path in shipping location, otherwise the debug location
-    fs::path shader_dir = fs::path(runtime_path).parent_path();
-    if (fs::exists(shader_dir / shader_path)) {
-        fs::path vertex = shader_dir / dx11_vs;
-        fs::path pixel = shader_dir / dx11_ps;
-        v_shader_buffer = LoadBinaryFile(vertex.string());
-        p_shader_buffer = LoadBinaryFile(pixel.string());
-    }
-    else {
-        fs::path vertex = fs::path(DEBUG_SHADER_PATH) / dx11_vs;
-        fs::path pixel = fs::path(DEBUG_SHADER_PATH) / dx11_ps;
-        v_shader_buffer = LoadBinaryFile(vertex.string());
-        p_shader_buffer = LoadBinaryFile(pixel.string());
-        spdlog::info("Loading shaders with debug paths");
-    }
+    std::vector<uint8_t>v_shader_buffer = LoadShader(dx11_vs);
+    std::vector<uint8_t>p_shader_buffer = LoadShader(dx11_fs);
 
     if (v_shader_buffer.empty() || p_shader_buffer.empty()) {
         spdlog::error("Couldn't find shaders");

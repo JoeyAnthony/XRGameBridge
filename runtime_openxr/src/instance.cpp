@@ -11,15 +11,15 @@
 #include <vector>
 #include <set>
 
-#include <hotkey_windows_impl.h>
+#include <sr/utility/exception.h>
 
-#include <game_bridge_structs.h>
-
+#include "game_bridge_structs.h"
 #include "debug.h"
 #include "actions.h"
 #include "openxr_functions.h"
 #include "dxhelpers.h"
 #include "system.h"
+#include "hooks.h"
 
 //class OpenXRContainers {
 //public:
@@ -173,7 +173,7 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
     InitializeSystems(*instance);
 
     // Check the context
-    if (g_xr_instance->GetPlatformManager()->GetContext() == nullptr) {
+    if (g_xr_instance->GetSrContext() == nullptr) {
         spdlog::error("Failed to connect to the SR service");
         LOG_RUNTIME_ERROR
         return XR_ERROR_RUNTIME_FAILURE;
@@ -529,7 +529,8 @@ XrResult xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData) {
 
     // TODO need event stream reader for poll events
     uint32_t event_type;
-    void* data = g_openxr_event_stream_reader->GetNextEvent(event_type);
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
+    void* data = gb_instance->GetInstanceEventStreamReader()->GetNextEvent(event_type);
     if (event_type == GB_EVENT_NULL) {
         return XR_EVENT_UNAVAILABLE;
     }
@@ -558,18 +559,12 @@ GB_Instance::GB_Instance() {
 
     // TODO move to input class
     // Initialize hotkey manager
-    HotkeyManagerInitialize hotkey_params{};
-    hotkey_params.game_bridge = gamebridge_instance;
-    hotkey_params.implementation = std::make_shared<WindowsHotkeyImplementation>();
-    g_hotkey_manager = new HotkeyManager(hotkey_params);
 
     // TODO move to event xr handler class
-    // Set-up event streams for the runtime
-    auto& event_manager = gamebridge_instance->GetEventManager();
-    g_openxr_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE, 300, XR_MAX_EVENT_DATA_SIZE);
-    g_openxr_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
-
-    //g_openxr_event_stream_writer->SubmitEvent(XR_TYPE_EVENT_DATA_EVENTS_LOST, 200, nullptr);
+    // Get event stream so xr events can be read from the instance
+    instance_event_stream_writer = event_manager.CreateEventStream(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
+    instance_event_stream_reader = event_manager.GetEventStreamReader(GB_EVENT_STREAM_TYPE_XR_GAME_BRIDGE);
+    g_hotkey_manager = new HotkeyManager(event_manager);
 
 #ifdef _DEBUG
     window_hook = new WindowHooks();
@@ -580,9 +575,6 @@ GB_Instance::GB_Instance() {
 }
 
 GB_Instance::~GB_Instance() {
-    delete gamebridge_instance;
-    delete platform_manager;
-
     g_sessions.clear();
     g_systems.clear();
     g_action_sets.clear();
@@ -593,25 +585,40 @@ GB_Instance::~GB_Instance() {
     g_xrpath_storage.clear();
 
     delete g_hotkey_manager;
-    g_openxr_event_stream_writer.reset();
-    g_openxr_event_stream_reader.reset();
-
     //delete window_hook;
 }
 
 void GB_Instance::InitializeSR() {
-    gamebridge_instance = new GameBridge(EventManager());
+    constexpr uint32_t max_retries = 5;
+    for (uint32_t retries = 0; retries < max_retries; retries++) {
+        if (sr_context == nullptr) {
+            try {
+                sr_context = std::make_shared<SR::SRContext>(false);
+            }
+            catch (SR::ServerNotAvailableException& ex) {
+                // Unable to construct SR Context.
+                spdlog::error("SR Service not available");
+                continue;
+            }
 
-    SRPlatformManagerInitialize params{};
-    platform_manager = new PlatformManager(params);
+            try {
+                //display = SR::Display::create(*sr_context);
+                //lens_hint = SR::SwitchableLensHint::create(*sr_context);
+            }
+            catch (...) {
+            }
+        }
 
-    while (!platform_manager->InitializeSRContext()) {
-        spdlog::info("Failed creating SR context, retrying..");
+        if (retries >= max_retries) {
+            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not connect to sr service");
+        }
     }
+
+    sr_context->initialize();
 }
 
 XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
-    if (active_graphics_backend == GraphicsBackend::undefined) {
+    if (active_graphics_backend == GraphicsBackend::Uninitialized) {
         active_graphics_backend = api;
         return XR_SUCCESS;
     }
@@ -622,12 +629,20 @@ XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     }
 }
 
-GameBridge* GB_Instance::GetGameBridgeInstance() {
-    return gamebridge_instance;
+std::shared_ptr<SR::SRContext> GB_Instance::GetSrContext() {
+    return sr_context;
 }
 
-PlatformManager* GB_Instance::GetPlatformManager() {
-    return platform_manager;
+EventManager& GB_Instance::GetEventManager() {
+    return event_manager;
+}
+
+std::shared_ptr<EventStreamWriter> GB_Instance::GetInstanceEventStreamWriter() {
+    return instance_event_stream_writer;
+}
+
+std::shared_ptr<EventStreamReader> GB_Instance::GetInstanceEventStreamReader() {
+    return instance_event_stream_reader;
 }
 
 std::string GB_Instance::GetRuntimeName() {

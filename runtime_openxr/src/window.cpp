@@ -6,9 +6,7 @@
  */
 
 #include "window.h"
-
 #include <Windows.h>
-#include "platform_manager.h"
 
 void MessageLoop() {
     // Main message loop:

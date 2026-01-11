@@ -40,20 +40,9 @@ XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
 }
 
 XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
-    // Initialize weaver params
-    DX12WeaverInitialize params{};
-    params.command_queue = d3d12_command_queue;
-    params.device = d3d12_device;
-    params.game_bridge = instance->GetGameBridgeInstance();
-    params.input_resource = intermediate_resource->GetBuffers()[0];
-    params.render_target = window_swapchain.GetImages()[0];
-    params.window = window.GetWindowHandle();
-
-    SR::SRContext* context = instance->GetPlatformManager()->GetContext();
-    d3d12weaver = new DirectX12Weaver(params);
-    d3d12weaver->InitializeWeaver(context);
-    context->initialize();
-
+    auto sr_context = instance->GetSrContext();
+    d3d12weaver = new SR::PredictingDX12Weaver(*sr_context, d3d12_device.Get(), command_allocators[0].Get(), d3d12_command_queue.Get(), intermediate_resource->GetBuffers()[0].Get(), window_swapchain.GetImages()[0].Get(), window.GetWindowHandle());
+    sr_context->initialize();
     return XR_SUCCESS;
 }
 
@@ -65,7 +54,7 @@ XrResult D3D12Renderer::CreateSystemWindow(GB_System& gb_system) {
     // Create debug window
     auto system_resolution = GetSystemResolution(gb_system);
 
-    window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, system_resolution.x, system_resolution.y, true, true);
+    window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, system_resolution.x, system_resolution.y, true, true);
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 
@@ -115,6 +104,7 @@ bool D3D12Renderer::CreateCommandLists() {
         command_lists[i]->SetName(name.c_str());
         command_lists[i]->Close();
     }
+    return true;
 }
 
 bool D3D12Renderer::CreateFenceObjects() {
@@ -131,6 +121,7 @@ bool D3D12Renderer::CreateFenceObjects() {
         HRESULT_FROM_WIN32(GetLastError());
         return false;
     }
+    return true;
 }
 
 bool D3D12Renderer::DestroyFences() {
@@ -259,7 +250,7 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
     // Do weaving
-    d3d12weaver->Weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
+    d3d12weaver->weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
 
     // Transition to render target
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -319,6 +310,7 @@ XrResult D3D12Renderer::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
             return XR_TIMEOUT_EXPIRED;
         }
     }
+    return XR_SUCCESS;
 }
 
 void D3D12Renderer::WaitForGpu() {
@@ -374,8 +366,8 @@ void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
     GB_System& gb_system = g_systems[xr_system];
     CreateIntermediateTexture(gb_system);
     CreateSystemWindow(gb_system);
-    CreateWindowSwapchain(gb_system);
-    CreateWeaver(instance);
+    CreateWindowSwapchain(gb_system); // Needs a window
+    CreateWeaver(instance); // Needs command allocators created in CreateCommandLists
 }
 
 D3D12Renderer* D3D12Renderer::Create(XrSystemId systemId, const void* graphics_binding)

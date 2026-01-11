@@ -20,8 +20,8 @@
 #include "instance.h"
 #include "system.h"
 #include "settings.h"
-#include "d3d11renderer.h"
-#include "d3d12renderer.h"
+#include "graphics/d3d11renderer.h"
+#include "graphics/d3d12renderer.h"
 //#include "swapchain.h"
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) {
@@ -88,7 +88,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     }
 
     // Get hot-key event stream reader
-    new_session.hotkey_events_reader = gb_instance->GetGameBridgeInstance()->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
+    new_session.hotkey_events_reader = gb_instance->GetEventManager().GetEventStreamReader(GB_EVENT_STREAM_TYPE_HOTKEY);
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_TOGGLE_WEAVING, VK_LCONTROL, VK_F1);
 
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
@@ -106,11 +106,14 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RIGHT, VK_LCONTROL, VK_NUMPAD6);
     g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RESET, VK_LCONTROL, VK_NUMPAD5);
 
+    // Get instance even stream writer
+    new_session.instance_event_stream_writer = gb_instance->GetInstanceEventStreamWriter();
+
     *session = handle;
     session_creation_count++;
 
     // Create sr context, blocks till there is a connection
-    new_session.sr_context = gb_instance->GetPlatformManager()->GetContext();
+    new_session.sr_context = gb_instance->GetSrContext();
 
     // Initialize rendering pipeline
     new_session.renderer->InitializePipeline(gb_instance);
@@ -171,6 +174,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
     ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
+    UpdateSession(gb_session);
 
     // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
     gb_session.should_render = true;
@@ -224,6 +228,7 @@ XrResult xrRequestExitSession(XrSession session) {
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
     ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
     ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
+    UpdateSession(gb_session);
 
     return XR_SUCCESS;
 }
@@ -394,7 +399,7 @@ void ChangeSessionState(GB_Session& session, XrSessionState state) {
 void UpdateSession(GB_Session& session) {
     // Only allowed to send messages between event submission and processing
     GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
-    EventManager& event_manager = gb_instance->GetGameBridgeInstance()->GetEventManager();
+    EventManager& event_manager = gb_instance->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
     GB_System system = g_systems[session.system];
@@ -409,7 +414,7 @@ void UpdateSession(GB_Session& session) {
             state_change.session = session.id;
             state_change.state = state;
             state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
-            g_openxr_event_stream_writer->SubmitEvent(state, sizeof(XrEventDataSessionStateChanged), &state_change);
+            session.instance_event_stream_writer->SubmitEvent(state, sizeof(XrEventDataSessionStateChanged), &state_change);
 
             // Set new session state
             session.session_state = state;
