@@ -1,5 +1,6 @@
 #pragma once
 #include "openxr_includes.h"
+#include "featuremodule.h"
 
 #include <set>
 
@@ -50,6 +51,8 @@ public:
     virtual uint32_t RecommendedHeight() const = 0;
     virtual uint32_t PhysicalResolutionWidth() const = 0;
     virtual uint32_t PhysicalResolutionHeight() const = 0;
+    virtual uint32_t PhysicalSizeWidth() const = 0;
+    virtual uint32_t PhysicalSizeHeight() const = 0;
     virtual uint32_t GetViewCount() const = 0; // 1,2, or more for multiview
 
 
@@ -60,6 +63,7 @@ public:
     virtual std::vector<XrViewConfigurationProperties> GetViewConfigurationProperties() const = 0;
     virtual std::vector<XrViewConfigurationView> GetViewConfigurationViews(XrViewConfigurationType type) const = 0;
     virtual std::vector<XrEnvironmentBlendMode> GetEnvironmentBlendModes() const = 0;
+    virtual const FaceTrackingModule* GetFaceTracking() = 0;
     virtual bool IsAvailable() const = 0;
 
 

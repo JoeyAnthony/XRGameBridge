@@ -39,32 +39,36 @@ public:
 };
 
 class SrEyePairListener final : public SR::EyePairListener {
-public:
     SR::InputStream<SR::EyePairStream> stream;
     glm::dvec3 left = {-30.0f, 0.0f, 600.0f};
     glm::dvec3 right = { 30.0f, 0.0f, 600.0f };
 
-    SrEyePairListener() = default;
+    void accept(const SR_eyePair& eyePair) override {
+        left = { eyePair.left.x, eyePair.left.y, eyePair.left.z };
+        right = { eyePair.right.x, eyePair.right.y, eyePair.right.z };
+    }
+
+public:
+    SrEyePairListener() = delete;
     ~SrEyePairListener() = default;
 
     explicit SrEyePairListener(SR::EyeTracker* tracker) {
         stream.set(tracker->openEyePairStream(this));
     }
 
-    void accept(const SR_eyePair& eyePair) override {
-        left = { eyePair.left.x, eyePair.left.y, eyePair.left.z };
-        right = { eyePair.right.x, eyePair.right.y, eyePair.right.z };
+    std::tuple<glm::dvec3, glm::dvec3> GetEyePositions() const {
+        return { left, right };
     }
 };
 
-class SrEyeTracking final : public FaceTrackingModule {
+class SrEyeTrackingSystemFeature final : public FaceTrackingModule {
     SrEyePairListener eye_pair_listener;
 public:
-    SrEyeTracking() = delete;
-    explicit SrEyeTracking(const std::shared_ptr<SR::SRContext>& sr_context);
-    ~SrEyeTracking() override = default;
+    SrEyeTrackingSystemFeature() = delete;
+    explicit SrEyeTrackingSystemFeature(SR::SRContext& sr_context);
+    ~SrEyeTrackingSystemFeature() override {};
 
-    std::vector<XrView> GetEyePositions() override;
+    std::tuple<XrVector3f, XrVector3f> SrEyeTrackingSystemFeature::GetEyePositions(double x_offset) const override;
 };
 
 class PipelineStep {
@@ -136,10 +140,14 @@ class SRSystem: public XRSystem {
 
 
     // SR
-    std::shared_ptr<SR::SRContext> context;
-    std::shared_ptr<SrSystemEventListener> system_event_listener;
-    std::shared_ptr<SR::Display> display;
-    std::shared_ptr<SR::SwitchableLensHint> lens_hint;
+    std::unique_ptr <SR::SRContext> context;
+    SrSystemEventListener system_event_listener;
+    SR::Display* display;
+    SR::SwitchableLensHint* lens_hint;
+
+
+    // System features
+    std::array<std::unique_ptr<FeatureModule>, static_cast<int>(FeatureType::FeatureCount)> feature_modules;
 
 
     // Head params
@@ -156,10 +164,6 @@ class SRSystem: public XRSystem {
 public:
     void GetHeadPosition();
 
-    // Clamps the separation
-    // pupil distance in meters
-    float GetSeparation(float pupil_distance);
-
     // Eye positions relative to the center of the screen in meters
     XrFovf GetConvergingFov(const glm::vec3& eye_position);
     
@@ -172,7 +176,7 @@ public:
 
 
     //Temporary
-    std::shared_ptr<SR::SRContext>& GetSrContext() { return context; };
+   SR::SRContext* GetSrContext() { return context.get(); };
 
 public:
     SRSystem() = delete;
@@ -191,6 +195,9 @@ public:
     std::vector<XrViewConfigurationView> GetViewConfigurationViews(XrViewConfigurationType type) const override;
     std::vector<XrEnvironmentBlendMode> GetEnvironmentBlendModes() const override { return { XR_ENVIRONMENT_BLEND_MODE_OPAQUE }; };
     bool IsAvailable() const override;
+    const FaceTrackingModule* GetFaceTracking() override;
+    uint32_t PhysicalSizeWidth() const override;
+    uint32_t PhysicalSizeHeight() const override;
 
 private:
 };

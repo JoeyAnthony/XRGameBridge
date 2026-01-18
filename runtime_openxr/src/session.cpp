@@ -57,23 +57,23 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.session_epoch = std::chrono::high_resolution_clock::now();
 
     // Set default values for the eye pairs
-    float fovx = glm::pi<float>() / 4.0f;
-    float fovy = glm::pi<float>() / 6.0f;
+    //float fovx = glm::pi<float>() / 4.0f;
+    //float fovy = glm::pi<float>() / 6.0f;
 
-    // view space
-    new_session.views[0].type = XR_TYPE_VIEW;
-    new_session.views[0].next = nullptr;
-    new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1} }; // Orientation, Position
+    //// view space
+    //new_session.views[0].type = XR_TYPE_VIEW;
+    //new_session.views[0].next = nullptr;
+    //new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1} }; // Orientation, Position
 
-    new_session.views[1].type = XR_TYPE_VIEW;
-    new_session.views[1].next = nullptr;
-    new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1 } }; // Orientation, Position
+    //new_session.views[1].type = XR_TYPE_VIEW;
+    //new_session.views[1].next = nullptr;
+    //new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1 } }; // Orientation, Position
 
-    // Set FOV per eye
-    glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
-    glm::vec3 eye_r {new_session.reye_x, new_session.views[1].pose.position.y, new_session.eye_z};
-    new_session.views[0].fov = system->GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
-    new_session.views[1].fov = system->GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
+    //// Set FOV per eye
+    //glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
+    //glm::vec3 eye_r {new_session.reye_x, new_session.views[1].pose.position.y, new_session.eye_z};
+    //new_session.views[0].fov = system->GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
+    //new_session.views[1].fov = system->GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
 
     // Create Renderer
     if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
@@ -171,6 +171,8 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
         return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
     }
     gb_session.view_configuration = beginInfo->primaryViewConfigurationType;
+
+    gb_session.face_tracking = gb_system->GetFaceTracking();
 
     // Send all state changes
     ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
@@ -368,6 +370,35 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
+const std::shared_ptr<XRSystem>& GB_Session::GetSystem() {
+    return g_systems[system];
+}
+
+std::vector<XrView> GB_Session::GetViewPositions() const {
+    auto [left, right] = face_tracking->GetEyePositions(0);
+    const float ipd = glm::abs(left.x - right.x) + 0.03f;
+
+    auto& sys =  *static_cast<SRSystem*>(g_systems[system].get());
+
+    const auto left_eye = XrVector3f{ -ipd / 2, 0, 0 };
+    const auto right_eye = XrVector3f{ ipd / 2, 0, 0 };
+    // Formula to go from FOV to a distance. This keeps us in control over FOV.
+    // Using tan(1/4*pi), which is 1, means for a 90deg fov the distance is the same as the x distance from the eye to the edge of the display.
+    const auto d = (sys.PhysicalSizeWidth() / 100.f / 2 - ipd / 2) / glm::tan(1.f/4.f * glm::pi<float>());
+    auto vec = std::vector{
+        XrView {
+            .pose = XrPosef{{0}, left_eye},
+            .fov = sys.GetConvergingFov({left_eye.x, left_eye.y, d})
+        },
+        XrView {
+            .pose = XrPosef{{0}, right_eye},
+            .fov = sys.GetConvergingFov({right_eye.x, right_eye.y, d})
+        }
+    };
+    vec.shrink_to_fit();
+    return vec;
+}
+
 void ChangeSessionState(GB_Session& session, XrSessionState state) {
     if (session.session_state == state) {
         return;
@@ -459,8 +490,8 @@ void UpdateSession(GB_Session& session) {
         bool value_changed = false;
         const float incremental_value_pose = 0.001f;
         const float incremental_value_fov = 0.001f;
-        XrView view_l = session.views[0];
-        XrView view_r = session.views[1];
+        XrView view_l = {};//session.views[0];
+        XrView view_r = {};// session.views[1];
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float factor_pose = 1.0f;
@@ -486,8 +517,8 @@ void UpdateSession(GB_Session& session) {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            session.leye_x = session.leye_x += addition * -1.0f;
-            session.reye_x = session.reye_x += addition;
+            //session.leye_x = session.leye_x += addition * -1.0f;
+            //session.reye_x = session.reye_x += addition;
 
             value_changed = true;
         }
@@ -496,21 +527,21 @@ void UpdateSession(GB_Session& session) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
 
-            session.leye_x = session.leye_x += addition * -1.0f;
-            session.reye_x = session.reye_x += addition;
+            //session.leye_x = session.leye_x += addition * -1.0f;
+            //session.reye_x = session.reye_x += addition;
 
             value_changed = true;
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
             float factor_pose = 1.0f;
-            session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
+            //session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
             value_changed = true;
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
             float factor_pose = -1.0f;
-            session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
+            //session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
             value_changed = true;
         }
 
@@ -548,37 +579,37 @@ void UpdateSession(GB_Session& session) {
         view_r.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
         ///////
 
-        glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
-        glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
+        //glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
+        //glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
 
-        view_l.fov = system->GetConvergingFov({ eye_l });
-        view_r.fov = system->GetConvergingFov({ eye_r });
+        //view_l.fov = system->GetConvergingFov({ eye_l });
+        //view_r.fov = system->GetConvergingFov({ eye_r });
 
         if (value_changed) {
-            SetXrViewPose(session, 0, view_l.pose);
-            SetXrViewPose(session, 1, view_r.pose);
-            SetXrViewFov(session, 0, view_l.fov);
-            SetXrViewFov(session, 1, view_r.fov);
+            //SetXrViewPose(session, 0, view_l.pose);
+            //SetXrViewPose(session, 1, view_r.pose);
+            //SetXrViewFov(session, 0, view_l.fov);
+            //SetXrViewFov(session, 1, view_r.fov);
         }
     }
 }
 
-void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
-{
-    if (index > session.views.size() - 1) {
-        spdlog::error("Session view array index out of bounds");
-        return;
-    }
-
-    session.views[index].pose = pose;
-}
-
-void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
-{
-    if (index > session.views.size() - 1) {
-        spdlog::error("Session view array index out of bounds");
-        return;
-    }
-
-    session.views[index].fov = fov;
-}
+//void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
+//{
+//    //if (index > session.views.size() - 1) {
+//    //    spdlog::error("Session view array index out of bounds");
+//    //    return;
+//    //}
+//
+//    //session.views[index].pose = pose;
+//}
+//
+//void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
+//{
+//    //if (index > session.views.size() - 1) {
+//    //    spdlog::error("Session view array index out of bounds");
+//    //    return;
+//    //}
+//
+//    //session.views[index].fov = fov;
+//}

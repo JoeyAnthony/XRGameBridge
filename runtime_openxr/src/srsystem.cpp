@@ -14,12 +14,25 @@
 
 #include "instance.h"
 
-SrEyeTracking::SrEyeTracking(const std::shared_ptr<SR::SRContext>& sr_context) {
-    eye_pair_listener = SrEyePairListener(SR::EyeTracker::create(*sr_context));
+SrEyeTrackingSystemFeature::SrEyeTrackingSystemFeature(SR::SRContext& sr_context) :
+    eye_pair_listener(SrEyePairListener(SR::EyeTracker::create(sr_context))) {
 }
 
-std::vector<XrView> SrEyeTracking::GetEyePositions() {
-    return {};
+std::tuple<XrVector3f, XrVector3f> SrEyeTrackingSystemFeature::GetEyePositions(double x_offset) const {
+    auto [right, left] = eye_pair_listener.GetEyePositions();
+    std::tuple vec = {
+        XrVector3f {
+        .x = static_cast<float>(right.x / 1000),
+        .y = static_cast<float>(right.y / 1000),
+        .z = static_cast<float>(right.z / 1000)
+        },
+        XrVector3f {
+        .x = static_cast<float>(left.x / 1000),
+        .y = static_cast<float>(left.y / 1000),
+        .z = static_cast<float>(left.z / 1000)
+        },
+    };
+    return vec;
 }
 
 D3D12WeaverPipeline::D3D12WeaverPipeline(const std::shared_ptr<SR::SRContext>& context) : WeaverPipeline(GraphicsBackend::D3D12) {
@@ -30,7 +43,7 @@ D3D12WeaverPipeline::~D3D12WeaverPipeline() {
 }
 
 void D3D12WeaverPipeline::execute_pipeline_step(void* command_list) {
-    
+
 }
 
 SrPipelineFactory::SrPipelineFactory(std::shared_ptr<SR::SRContext> context) {
@@ -49,12 +62,11 @@ void SRSystem::InitializeSrContext() {
 
         if (context == nullptr) {
             try {
-                context = std::shared_ptr<SR::SRContext>(SR::SRContext::create());
+                context = std::make_unique<SR::SRContext>(SR::SRContext::create());
 
                 // Set systemEvent listener to the newly constructed systemsense
                 SR::SystemSense* systemSense = SR::SystemSense::create(*context);
-                system_event_listener = std::make_shared<SrSystemEventListener>();
-                system_event_listener->stream.set(systemSense->openSystemEventStream(system_event_listener.get()));
+                system_event_listener.stream.set(systemSense->openSystemEventStream(&system_event_listener));
 
                 break;
             }
@@ -75,7 +87,7 @@ void SRSystem::InitializeSrDisplay() {
             throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not find any connected SR display");
         }
 
-        display = std::shared_ptr<SR::Display>(SR::Display::create(*context));
+        display = SR::Display::create(*context);
         if(display) {
             context->initialize();
             break;
@@ -119,7 +131,7 @@ SRSystem::SRSystem(XrSystemId sys_id, GraphicsBackend graphics) : XRSystem(sys_i
 
     device_is_connected = true;
 
-    lens_hint = std::shared_ptr <SR::SwitchableLensHint>(SR::SwitchableLensHint::create(*context));
+    lens_hint = SR::SwitchableLensHint::create(*context);
 
     physical_resolution_width = static_cast<uint32_t>(display->getPhysicalResolutionWidth());
     physical_resolution_height = static_cast<uint32_t>(display->getPhysicalResolutionHeight());
@@ -133,51 +145,6 @@ SRSystem::SRSystem(XrSystemId sys_id, GraphicsBackend graphics) : XRSystem(sys_i
 
     physical_screen_width_m = display->getPhysicalSizeWidth() / 100.f;
     physical_screen_height_m = display->getPhysicalSizeHeight() / 100.f;
-}
-
-//GBVector2i GetDummyScreenResolution() {
-//    //TODO dependent on the SR screen, hopefully we can set reset this later on runtime. It would be cool to setup everything without having to connect to the sr service since that might take some time.
-//    // MS docs: The width/height of the client area for a full-screen window on the primary display monitor, in pixels.
-//    const uint32_t primary_display_res_x = static_cast<uint32_t>(GetSystemMetrics(SM_CXSCREEN) / 2); // Divided by 2 since we render in sbs
-//    const uint32_t primary_display_res_y = static_cast<uint32_t>(GetSystemMetrics(SM_CYSCREEN));
-//    return { primary_display_res_x, primary_display_res_y };
-//}
-//
-//XrSystemProperties GetDummySystemProperties() {
-//    auto screen_resolution = GetDummyScreenResolution();
-//
-//    XrSystemGraphicsProperties g_props{};
-//    g_props.maxLayerCount = 1;
-//    g_props.maxSwapchainImageWidth = screen_resolution.x;
-//    g_props.maxSwapchainImageHeight = screen_resolution.y;
-//
-//    XrSystemTrackingProperties t_props{};
-//    t_props.positionTracking = false;
-//    t_props.orientationTracking = false;
-//
-//    XrSystemProperties sys_props{
-//        XR_TYPE_SYSTEM_PROPERTIES,
-//        nullptr,
-//        1,
-//        0x354B, // USB Vendor ID
-//        "SR Monitor",
-//        g_props,
-//        t_props
-//    };
-//    return sys_props;
-//}
-
-float SRSystem::GetSeparation(float pupil_distance) {
-    // Normalized interaxial
-    pupil_distance = glm::clamp(glm::abs(pupil_distance), 0.0f, interpupillary_distance_m);
-
-    float val = pupil_distance / physical_screen_width_m;
-    float separation = glm::clamp(glm::abs(val), 0.0f, 1.f);
-
-    if (pupil_distance < 0.0f) {
-        return separation * -1.0f;
-    }
-    return separation;
 }
 
 XrFovf SRSystem::GetConvergingFov(const glm::vec3& eye_position) {
@@ -330,4 +297,20 @@ bool SRSystem::IsAvailable() const {
         return false;
     }
     return true;
+}
+
+const FaceTrackingModule* SRSystem::GetFaceTracking() {
+    if(feature_modules[static_cast<int>(FeatureType::EyeTracking)] == nullptr) {
+        feature_modules[static_cast<int>(FeatureType::EyeTracking)] = std::make_unique<SrEyeTrackingSystemFeature>(*context);
+    }
+
+    return static_cast<FaceTrackingModule*>(feature_modules[static_cast<int>(FeatureType::EyeTracking)].get());
+}
+
+uint32_t SRSystem::PhysicalSizeWidth() const {
+    return physical_screen_width_m;
+}
+
+uint32_t SRSystem::PhysicalSizeHeight() const {
+    return physical_screen_width_m;
 }

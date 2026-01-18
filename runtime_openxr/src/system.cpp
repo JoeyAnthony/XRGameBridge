@@ -160,16 +160,17 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     TraceLogFunctionCall(__func__, __LINE__);
 
     GB_Session& gb_session = g_sessions[session];
+    const auto view_count = gb_session.GetSystem()->GetViewCount();
 
     if (viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
         return XR_ERROR_VALIDATION_FAILURE;
     }
 
     if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        *viewCountOutput = gb_session.views.size();
+        *viewCountOutput = view_count;
     }
     else if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        *viewCountOutput = gb_session.views.size();
+        *viewCountOutput = view_count;
     }
 
     // Request for the extension array or the extension array itself
@@ -177,24 +178,25 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         return XR_SUCCESS;
     }
     // Passed array not large enough
-    if (viewCapacityInput < gb_session.views.size()) {
+    if (viewCapacityInput < view_count) {
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
-    glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
+    const auto eye_positions = gb_session.GetViewPositions();
+    const glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
     std::vector<XrView> sr_views;
-    for (uint32_t i = 0; i < gb_session.views.size(); i++) {
-        XrPosef pose = gb_session.views[i].pose;
+    for (uint32_t i = 0; i < view_count; i++) {
+        XrPosef pose = eye_positions[i].pose;
         glm::mat4 view_transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{ pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
 
         // Transform
-        glm::mat4 transform = glm::inverse(base_transform) * view_transform;
-        glm::vec3 position = glm::vec3(transform[3]);
-        glm::quat orientation = glm::quat_cast(transform);
+        const glm::mat4 transform = glm::inverse(base_transform) * view_transform;
+        const glm::vec3 position = glm::vec3(transform[3]);
+        const glm::quat orientation = glm::quat_cast(transform);
 
         XrView view;
         view.pose = { { orientation.x, orientation.y, orientation.z, orientation.w }, { position.x, position.y, position.z } };
-        view.fov = gb_session.views[i].fov;
+        view.fov = eye_positions[i].fov;
         sr_views.push_back(view);
     }
 

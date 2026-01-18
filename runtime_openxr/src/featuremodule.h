@@ -4,6 +4,7 @@
 enum class FeatureType {
     None,
     EyeTracking,
+    FeatureCount
 };
 
 class FeatureModule {
@@ -19,5 +20,5 @@ class FaceTrackingModule : public FeatureModule {
 protected:
     FaceTrackingModule() : FeatureModule(FeatureType::EyeTracking) {}
 public:
-    virtual std::vector<XrView> GetEyePositions() = 0;
+    virtual std::tuple<XrVector3f, XrVector3f> GetEyePositions(double x_offset) const = 0;
 };
