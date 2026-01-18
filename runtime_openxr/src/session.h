@@ -49,21 +49,17 @@ public:
     std::shared_ptr<EventStreamReader> hotkey_events_reader;
     std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
 
-
-    //System
+    // System
     XrSystemId system;
     const FaceTrackingModule* face_tracking;
-
 
     // Session state
     std::mutex mutex_session_state_queue;
     std::vector<XrSessionState> session_state_queue;
     XrSessionState session_state;
 
-
-    //std
+    // Timing
     std::chrono::high_resolution_clock::time_point session_epoch;
-
 
     // Frame logic
     FrameState wait_frame_state;
@@ -74,20 +70,27 @@ public:
     bool end_frame_called = true;
     bool should_render = false;
 
-    // Views
-    //std::array<XrView, 2> views;
-
-    // We    //float leye_x = -0.0015f, reye_x = 0.0015f;
-    //float eye_z = 0.50f;aving
-    bool should_weave = true;
-
     // Compositor
     Renderer* renderer;
 
+private:
+    // Views
+    float ipd_offset_m = 0.06f;
+    float popout_offset_m = 0.f;
+    bool lookaround_xy = false;
+    bool lookaround_z = false; // Use fov when false
+    float fov_rad = 1.f / 4.f * glm::pi<float>();
+    float camera_lerp = 1.0f;
+    bool should_weave = true;
+
 public:
     const std::shared_ptr<XRSystem>& GetSystem();
-    std::vector<XrView> GetViewPositions() const ;
 
+    std::vector<XrView> GetViewPositions() const;
+
+    void ChangeSessionState(XrSessionState state);
+
+    void UpdateSession();
 };
 
 class GB_FrameTimer {
@@ -113,10 +116,3 @@ class GB_FrameTimer {
 };
 
 inline std::vector<GB_FrameTimer> g_frames;
-
-void ChangeSessionState(GB_Session& session, XrSessionState state);
-
-void UpdateSession(GB_Session& session);
-
-//void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose);
-//void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov);

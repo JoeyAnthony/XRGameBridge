@@ -56,25 +56,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     new_session.session_state = XR_SESSION_STATE_IDLE;
     new_session.session_epoch = std::chrono::high_resolution_clock::now();
 
-    // Set default values for the eye pairs
-    //float fovx = glm::pi<float>() / 4.0f;
-    //float fovy = glm::pi<float>() / 6.0f;
-
-    //// view space
-    //new_session.views[0].type = XR_TYPE_VIEW;
-    //new_session.views[0].next = nullptr;
-    //new_session.views[0].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1} }; // Orientation, Position
-
-    //new_session.views[1].type = XR_TYPE_VIEW;
-    //new_session.views[1].next = nullptr;
-    //new_session.views[1].pose = { {0.0f, 0.0f, 0.0f, 0.0f}, {0, 0, 1 } }; // Orientation, Position
-
-    //// Set FOV per eye
-    //glm::vec3 eye_l {new_session.leye_x, new_session.views[0].pose.position.y, new_session.eye_z};
-    //glm::vec3 eye_r {new_session.reye_x, new_session.views[1].pose.position.y, new_session.eye_z};
-    //new_session.views[0].fov = system->GetConvergingFov({ eye_l }); // FOV angle left, right, up, down
-    //new_session.views[1].fov = system->GetConvergingFov({ eye_r }); // FOV angle left, right, up, down
-
     // Create Renderer
     if (gb_instance->GetActiveGraphicsAPI() == GraphicsBackend::D3D12) {
         new_session.renderer = D3D12Renderer::Create(createInfo->systemId, createInfo->next);;
@@ -116,8 +97,8 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     // Initialize rendering pipeline
     new_session.renderer->InitializePipeline(gb_instance);
 
-    ChangeSessionState(new_session, XR_SESSION_STATE_READY);
-    UpdateSession(new_session);
+    new_session.ChangeSessionState(XR_SESSION_STATE_READY);
+    new_session.UpdateSession();
 
     spdlog::info("Successfully created session: {}", session_creation_count);
     return XR_SUCCESS;
@@ -175,10 +156,10 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
     gb_session.face_tracking = gb_system->GetFaceTracking();
 
     // Send all state changes
-    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
-    ChangeSessionState(gb_session, XR_SESSION_STATE_VISIBLE);
-    ChangeSessionState(gb_session, XR_SESSION_STATE_FOCUSED);
-    UpdateSession(gb_session);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_SYNCHRONIZED);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_VISIBLE);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_FOCUSED);
+    gb_session.UpdateSession();
 
     // TODO runtime cannot handle shoulde_render = false yet. If false, layerCount = 0 in xrwaitframe and no resources will be signaled. Waitimage will timeout
     gb_session.should_render = true;
@@ -213,8 +194,8 @@ XrResult xrEndSession(XrSession session) {
 
     // Change session state to idle
     if (gb_session.session_state != XR_SESSION_STATE_EXITING) {
-        ChangeSessionState(gb_session, XR_SESSION_STATE_IDLE);
-        UpdateSession(gb_session);
+        gb_session.ChangeSessionState(XR_SESSION_STATE_IDLE);
+        gb_session.UpdateSession();
     }
 
     return XR_SUCCESS;
@@ -229,10 +210,10 @@ XrResult xrRequestExitSession(XrSession session) {
     }
 
     // Change session state to stopping
-    ChangeSessionState(gb_session, XR_SESSION_STATE_SYNCHRONIZED);
-    ChangeSessionState(gb_session, XR_SESSION_STATE_STOPPING);
-    ChangeSessionState(gb_session, XR_SESSION_STATE_EXITING);
-    UpdateSession(gb_session);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_SYNCHRONIZED);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_STOPPING);
+    gb_session.ChangeSessionState(XR_SESSION_STATE_EXITING);
+    gb_session.UpdateSession();
 
     return XR_SUCCESS;
 }
@@ -273,7 +254,7 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
     // Time since the epoch the application is running now, add the refresh rate to predict the time the next image will be displayed.
     auto display_time = ch::nanoseconds(ch::high_resolution_clock::now() - gb_session.session_epoch + refresh_rate);
 
-    UpdateSession(gb_session);
+    gb_session.UpdateSession();
 
     frameState->predictedDisplayPeriod = display_period.count();
     frameState->predictedDisplayTime = display_time.count();
@@ -375,37 +356,47 @@ const std::shared_ptr<XRSystem>& GB_Session::GetSystem() {
 }
 
 std::vector<XrView> GB_Session::GetViewPositions() const {
-    auto [left, right] = face_tracking->GetEyePositions(0);
-    const float ipd = glm::abs(left.x - right.x) + 0.03f;
-
     auto& sys =  *static_cast<SRSystem*>(g_systems[system].get());
+    auto [left, right] = face_tracking->GetEyePositions(0);
 
-    const auto left_eye = XrVector3f{ -ipd / 2, 0, 0 };
-    const auto right_eye = XrVector3f{ ipd / 2, 0, 0 };
+    const float ipd = glm::abs(left.x - right.x) + ipd_offset_m;
+    auto left_eye = XrVector3f{ -(ipd / 2 + popout_offset_m), 0, 0 };
+    auto right_eye = XrVector3f{ (ipd / 2 + popout_offset_m), 0, 0 };
+    if(lookaround_xy) {
+        left_eye = left;
+        right_eye = right;
+    }
+
     // Formula to go from FOV to a distance. This keeps us in control over FOV.
     // Using tan(1/4*pi), which is 1, means for a 90deg fov the distance is the same as the x distance from the eye to the edge of the display.
-    const auto d = (sys.PhysicalSizeWidth() / 100.f / 2 - ipd / 2) / glm::tan(1.f/4.f * glm::pi<float>());
+    auto left_distance = (sys.PhysicalSizeWidth() / 2 - ipd / 2) / glm::tan(fov_rad);
+    auto right_distance = left_distance;
+    if(lookaround_z) {
+        left_distance = left.z;
+        right_distance = left.z;
+    }
+
     auto vec = std::vector{
         XrView {
             .pose = XrPosef{{0}, left_eye},
-            .fov = sys.GetConvergingFov({left_eye.x, left_eye.y, d})
+            .fov = sys.GetConvergingFov({left_eye.x, left_eye.y, left_distance})
         },
         XrView {
             .pose = XrPosef{{0}, right_eye},
-            .fov = sys.GetConvergingFov({right_eye.x, right_eye.y, d})
+            .fov = sys.GetConvergingFov({right_eye.x, right_eye.y, right_distance})
         }
     };
     vec.shrink_to_fit();
     return vec;
 }
 
-void ChangeSessionState(GB_Session& session, XrSessionState state) {
-    if (session.session_state == state) {
+void GB_Session::ChangeSessionState(XrSessionState state) {
+    if (session_state == state) {
         return;
     }
 
-    std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
-    session.session_state_queue.push_back(state);
+    std::lock_guard guard_session_state_queue(mutex_session_state_queue);
+    session_state_queue.push_back(state);
 
     char buffer[XR_MAX_RESULT_STRING_SIZE];
     if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
@@ -413,29 +404,26 @@ void ChangeSessionState(GB_Session& session, XrSessionState state) {
     }
 }
 
-void UpdateSession(GB_Session& session) {
+void GB_Session::UpdateSession() {
     // Only allowed to send messages between event submission and processing
-    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(session.instance);
+    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
     EventManager& event_manager = gb_instance->GetEventManager();
     event_manager.PrepareForEventStreamSubmission();
 
-    // TODO make this the bas type
-    auto system = std::dynamic_pointer_cast<SRSystem>(g_systems[session.system]);
-
     {
-        std::lock_guard guard_session_state_queue(session.mutex_session_state_queue);
+        std::lock_guard guard_session_state_queue(mutex_session_state_queue);
 
-        for (auto& state : session.session_state_queue) {
+        for (auto& state : session_state_queue) {
             // Update session state
             XrEventDataSessionStateChanged state_change;
             state_change.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-            state_change.session = session.id;
+            state_change.session = id;
             state_change.state = state;
-            state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session.session_epoch).count();
-            session.instance_event_stream_writer->SubmitEvent(state, sizeof(XrEventDataSessionStateChanged), &state_change);
+            state_change.time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - session_epoch).count();
+            instance_event_stream_writer->SubmitEvent(state, sizeof(XrEventDataSessionStateChanged), &state_change);
 
             // Set new session state
-            session.session_state = state;
+            session_state = state;
 
             char buffer[XR_MAX_RESULT_STRING_SIZE];
             if (GetSessionStateString(state, buffer) == XR_SUCCESS) {
@@ -444,7 +432,7 @@ void UpdateSession(GB_Session& session) {
         }
 
         // Clear session state queue
-        session.session_state_queue.clear();
+        session_state_queue.clear();
     }
 
     // Register hot-key events
@@ -478,71 +466,54 @@ void UpdateSession(GB_Session& session) {
 
     // Process input events
     GB_EVENT event_type;
-    while (session.hotkey_events_reader->GetNextEvent(event_type)) {
+    while (hotkey_events_reader->GetNextEvent(event_type)) {
         // Toggle buttons
-        if(event_type == GB_EVENT_HOTKEY_TOGGLE_WEAVING && f1_pressed == false)
-        {
-            session.should_weave = session.should_weave ? false : true;
+        if (event_type == GB_EVENT_HOTKEY_TOGGLE_WEAVING && f1_pressed == false) {
+            should_weave = should_weave ? false : true;
             f1_pressed = true;
         }
 
         // Separation buttons
         bool value_changed = false;
         const float incremental_value_pose = 0.001f;
-        const float incremental_value_fov = 0.001f;
+        const float incremental_value_fov = 0.01f;
         XrView view_l = {};//session.views[0];
         XrView view_r = {};// session.views[1];
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
-
-            view_l.pose.position.x = view_l.pose.position.x += addition * -1.0f;
-            view_r.pose.position.x = view_r.pose.position.x += addition;
-
-            value_changed = true;
+            popout_offset_m += addition;
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_SEPARATION) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
-
-            view_l.pose.position.x = view_l.pose.position.x += addition * -1.0f;
-            view_r.pose.position.x = view_r.pose.position.x += addition;
-
-            value_changed = true;
+            popout_offset_m += addition;
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV) {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
-
-            //session.leye_x = session.leye_x += addition * -1.0f;
-            //session.reye_x = session.reye_x += addition;
-
-            value_changed = true;
+             ipd_offset_m += addition;
+             ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
-
-            //session.leye_x = session.leye_x += addition * -1.0f;
-            //session.reye_x = session.reye_x += addition;
-
-            value_changed = true;
+            ipd_offset_m += addition;
+            ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
-            float factor_pose = 1.0f;
-            //session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
-            value_changed = true;
+            fov_rad += glm::radians(1.f);
+            fov_rad = glm::clamp(fov_rad, 5.f, 300.f);
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-            float factor_pose = -1.0f;
-            //session.eye_z = incremental_value_fov * factor_pose + session.eye_z;
-            value_changed = true;
+            fov_rad -= glm::radians(1.f);;
+            fov_rad = glm::clamp(fov_rad, 0.001f, 2*glm::pi<float>());
         }
 
         ///////
@@ -575,41 +546,5 @@ void UpdateSession(GB_Session& session) {
         if (event_type == GB_EVENT_TEST_RESET) {
             orientation = glm::identity<glm::quat>();
         }
-        view_l.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
-        view_r.pose.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
-        ///////
-
-        //glm::vec3 eye_l {session.leye_x, view_l.pose.position.y, session.eye_z};
-        //glm::vec3 eye_r {session.reye_x, view_r.pose.position.y, session.eye_z};
-
-        //view_l.fov = system->GetConvergingFov({ eye_l });
-        //view_r.fov = system->GetConvergingFov({ eye_r });
-
-        if (value_changed) {
-            //SetXrViewPose(session, 0, view_l.pose);
-            //SetXrViewPose(session, 1, view_r.pose);
-            //SetXrViewFov(session, 0, view_l.fov);
-            //SetXrViewFov(session, 1, view_r.fov);
-        }
     }
 }
-
-//void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose)
-//{
-//    //if (index > session.views.size() - 1) {
-//    //    spdlog::error("Session view array index out of bounds");
-//    //    return;
-//    //}
-//
-//    //session.views[index].pose = pose;
-//}
-//
-//void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov)
-//{
-//    //if (index > session.views.size() - 1) {
-//    //    spdlog::error("Session view array index out of bounds");
-//    //    return;
-//    //}
-//
-//    //session.views[index].fov = fov;
-//}
