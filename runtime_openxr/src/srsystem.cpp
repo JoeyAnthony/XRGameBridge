@@ -153,7 +153,7 @@ XrFovf SRSystem::GetConvergingFov(const glm::vec3& eye_position) {
     float half_width = physical_screen_width_m / 2;
     float half_height = physical_screen_height_m / 2;
 
-    float z = glm::clamp(eye_position.z, 0.001f, 5.0f); // where to check this and restore valid values?
+    float z = eye_position.z; //glm::clamp(eye_position.z, 0.001f, 5.0f); // where to check this and restore valid values?
     float half_pi = glm::pi<float>() / 2;
 
     float z_scale = half_width / half_height;
@@ -166,11 +166,11 @@ XrFovf SRSystem::GetConvergingFov(const glm::vec3& eye_position) {
     };
 
     // Make sure the view can't be vertically or horizontally flipped. Also the depth is larger than 0.
-    if (fov.angleLeft > fov.angleRight || fov.angleDown > fov.angleUp || eye_position.z < 0.001f) {
-        // Set to last accepted angles
-        //eye_position = old_position;
-        return GetConvergingFov(old_position);
-    }
+    //if (fov.angleLeft > fov.angleRight || fov.angleDown > fov.angleUp /*|| eye_position.z < 0.001f*/) {
+    //    // Set to last accepted angles
+    //    //eye_position = old_position;
+    //    return GetConvergingFov(old_position);
+    //}
 
     old_position = eye_position;
 
@@ -307,10 +307,10 @@ const FaceTrackingModule* SRSystem::GetFaceTracking() {
     return static_cast<FaceTrackingModule*>(feature_modules[static_cast<int>(FeatureType::EyeTracking)].get());
 }
 
-uint32_t SRSystem::PhysicalSizeWidth() const {
+float SRSystem::PhysicalSizeWidth() const {
     return physical_screen_width_m;
 }
 
-uint32_t SRSystem::PhysicalSizeHeight() const {
+float SRSystem::PhysicalSizeHeight() const {
     return physical_screen_width_m;
 }

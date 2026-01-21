@@ -51,8 +51,8 @@ public:
     virtual uint32_t RecommendedHeight() const = 0;
     virtual uint32_t PhysicalResolutionWidth() const = 0;
     virtual uint32_t PhysicalResolutionHeight() const = 0;
-    virtual uint32_t PhysicalSizeWidth() const = 0;
-    virtual uint32_t PhysicalSizeHeight() const = 0;
+    virtual float PhysicalSizeWidth() const = 0;
+    virtual float PhysicalSizeHeight() const = 0;
     virtual uint32_t GetViewCount() const = 0; // 1,2, or more for multiview
 
 

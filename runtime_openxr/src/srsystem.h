@@ -196,8 +196,8 @@ public:
     std::vector<XrEnvironmentBlendMode> GetEnvironmentBlendModes() const override { return { XR_ENVIRONMENT_BLEND_MODE_OPAQUE }; };
     bool IsAvailable() const override;
     const FaceTrackingModule* GetFaceTracking() override;
-    uint32_t PhysicalSizeWidth() const override;
-    uint32_t PhysicalSizeHeight() const override;
+    float PhysicalSizeWidth() const override;
+    float PhysicalSizeHeight() const override;
 
 private:
 };

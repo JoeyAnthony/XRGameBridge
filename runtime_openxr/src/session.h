@@ -75,7 +75,7 @@ public:
 
 private:
     // Views
-    float ipd_offset_m = 0.06f;
+    float ipd_offset_m = 0.0f;
     float popout_offset_m = 0.f;
     bool lookaround_xy = false;
     bool lookaround_z = false; // Use fov when false

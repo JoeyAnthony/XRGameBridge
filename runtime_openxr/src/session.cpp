@@ -496,24 +496,24 @@ void GB_Session::UpdateSession() {
             float factor_pose = 1.0f;
             float addition = incremental_value_pose * factor_pose;
              ipd_offset_m += addition;
-             ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
+             //ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV) {
             float factor_pose = -1.0f;
             float addition = incremental_value_pose * factor_pose;
             ipd_offset_m += addition;
-            ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
+            //ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
         }
 
         if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
             fov_rad += glm::radians(1.f);
-            fov_rad = glm::clamp(fov_rad, 5.f, 300.f);
+            fov_rad = glm::clamp(fov_rad, 0.001f, 1.f/2.f * glm::pi<float>());
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
             fov_rad -= glm::radians(1.f);;
-            fov_rad = glm::clamp(fov_rad, 0.001f, 2*glm::pi<float>());
+            fov_rad = glm::clamp(fov_rad, 0.001f, 1.f / 2.f * glm::pi<float>());
         }
 
         ///////
