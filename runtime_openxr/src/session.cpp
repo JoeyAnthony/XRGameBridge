@@ -359,7 +359,13 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
     auto& sys =  *static_cast<SRSystem*>(g_systems[system].get());
     auto [left, right] = face_tracking->GetEyePositions(0);
 
-    const float ipd = glm::abs(left.x - right.x) + ipd_offset_m;
+    // Derive ipd_scaling
+    float phys_eye_fov = glm::atan(sys.PhysicalSizeWidth() / 2 / left.z);
+    float ipd_scale = phys_eye_fov / fov_rad;
+
+    // Since we define a different fov for games, (let's say 90deg), which is usually larger than the physical fov (let's say 40deg), we need to compensate for that by making the ipd smaller.
+    // For this we derive the ipd scale and multiply it with the ipd.
+    const float ipd = glm::abs(left.x - right.x) * ipd_scale + ipd_offset_m;
     auto left_eye = XrVector3f{ -(ipd / 2 + popout_offset_m), 0, 0 };
     auto right_eye = XrVector3f{ (ipd / 2 + popout_offset_m), 0, 0 };
     if(lookaround_xy) {
@@ -367,9 +373,8 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
         right_eye = right;
     }
 
-    // Formula to go from FOV to a distance. This keeps us in control over FOV.
-    // Using tan(1/4*pi), which is 1, means for a 90deg fov the distance is the same as the x distance from the eye to the edge of the display.
-    auto left_distance = (sys.PhysicalSizeWidth() / 2 - ipd / 2) / glm::tan(fov_rad);
+    // Calculate the distance from the fov that we want to use in game (ex 90deg). And use that to derive the fov angles per eye.
+    auto left_distance = ((sys.PhysicalSizeWidth() - ipd) / 2) / glm::tan(fov_rad);
     auto right_distance = left_distance;
     if(lookaround_z) {
         left_distance = left.z;
@@ -379,6 +384,7 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
     auto vec = std::vector{
         XrView {
             .pose = XrPosef{{0}, left_eye},
+            // Calculate angles with game fov and scaled ipd
             .fov = sys.GetConvergingFov({left_eye.x, left_eye.y, left_distance})
         },
         XrView {
