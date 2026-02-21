@@ -1,4 +1,4 @@
-/*
+ /*
  * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
  * Summary:
  * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
@@ -12,21 +12,20 @@
 #include "d3d11compositor.h"
 #include "openxr_includes.h"
 #include "d3d11swapchain.h"
-#include "system.h"
+#include "SRSystem.h"
 #include "window.h"
 #include "settings.h"
 #include "instance.h"
 
-XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
+XrResult D3D11Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system) {
     // Create intermediate resources for weaving render target
-    // TODO Remove session parameter
 
+    
     // Handle 0 is not being used by xrCreateSwapchain
-    auto system_resolution = GetSystemResolution(gb_system);
     XrSwapchainCreateInfo info;
     info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-    info.width = system_resolution.x;
-    info.height = system_resolution.y;
+    info.width = gb_system->PhysicalResolutionWidth();
+    info.height = gb_system->PhysicalResolutionHeight();
     info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     info.arraySize = 1;
     info.faceCount = 1;
@@ -48,25 +47,23 @@ XrResult D3D11Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     }
 }
 
-XrResult D3D11Renderer::CreateWeaver(GB_Instance* instance, GB_System& gb_system) {
-
-    auto sr_context = instance->GetSrContext();
-    auto system_resolution = GetSystemResolution(gb_system);
-    native_weaver = new SR::PredictingDX11Weaver(*sr_context, d3d11_device.Get(), d3d11_device_context.Get(), system_resolution.x, system_resolution.y, window.GetWindowHandle());
+XrResult D3D11Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
+    auto sr_context = gb_system->GetSrContext();
+    native_weaver = new SR::PredictingDX11Weaver(*sr_context, d3d11_device.Get(), d3d11_device_context.Get(), gb_system->PhysicalResolutionWidth(), gb_system->PhysicalResolutionHeight(), window.GetWindowHandle());
     sr_context->initialize();
     native_weaver->setInputFrameBuffer(intermediate_resource->GetShaderResourceViews()[0].Get());
 
     return XR_SUCCESS;
 }
 
-XrResult D3D11Renderer::CreateSystemWindow(GB_System& gb_system) {
+XrResult D3D11Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
     if (window.TryGetExternalDisplay() != nullptr) {
        spdlog::info("Got window");
     }
 
     // Create debug window
-    auto system_resolution = GetSystemResolution(gb_system);
-    window.CreateApplicationWindow(static_cast<HINSTANCE>(g_runtime_settings->GethInstance()), gb_system, system_resolution.x, system_resolution.y, true, true);
+    glm::ivec2 recommended_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight() };
+    window.CreateApplicationWindow(static_cast<HINSTANCE>(g_runtime_settings->GethInstance()), gb_system, recommended_resolution.x, recommended_resolution.y, true, true);
     // Debugging with non full screen mode
     //window.CreateApplicationWindow(g_runtime_settings.hInst, gb_system, 2560, 1440, true, false, true);
 
@@ -75,12 +72,12 @@ XrResult D3D11Renderer::CreateSystemWindow(GB_System& gb_system) {
     return XR_SUCCESS;
 }
 
-XrResult D3D11Renderer::CreateWindowSwapchain(GB_System& gb_system) {
+XrResult D3D11Renderer::CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system) {
     // Create swapchain info for the window swapchain
-    auto system_resolution = GetSystemResolution(gb_system);
+    glm::ivec2 recommended_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight() };
     XrSwapchainCreateInfo create_info;
-    create_info.width = system_resolution.x;
-    create_info.height = system_resolution.y;
+    create_info.width = recommended_resolution.x;
+    create_info.height = recommended_resolution.y;
     create_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     create_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
@@ -111,7 +108,8 @@ XrResult D3D11Renderer::CreateCompositor() {
 
 XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4]) {
     // TODO pass from caller
-    auto native_resolution = GetSystemResolution(g_systems[xr_system]);
+    auto system = g_systems[xr_system];
+    glm::ivec2 recommended_resolution = { system->RecommendedWidth(), system->RecommendedHeight() };
 
     // Set intermediate resource as render target
     ComPtr<ID3D11RenderTargetView> intermediate_rtv = intermediate_resource->GetRenderTargetViews()[0];
@@ -119,7 +117,7 @@ XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, u
     d3d11_device_context->ClearRenderTargetView(intermediate_rtv.Get(), clear_color);
 
     // Compose and draw to the intermediate resource
-    compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), native_resolution.x, native_resolution.y);
+    compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), recommended_resolution.x, recommended_resolution.y);
 
 
     //// Transition intermediate resource to unordered access for the weaver
@@ -136,14 +134,14 @@ XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, u
 
 
     // Set viewport for weaving to window swapchain
-    D3D11_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
-    D3D11_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
+    D3D11_VIEWPORT view_port{ 0, 0, static_cast<float>(recommended_resolution.x) , static_cast<float>(recommended_resolution.y), 0.0f, 1.0f };
+    D3D11_RECT scissor_rect{ 0, 0, static_cast<long>(recommended_resolution.x) , static_cast<long>(recommended_resolution.y) };
     d3d11_device_context->RSSetViewports(1, &view_port);
     d3d11_device_context->RSSetScissorRects(1, &scissor_rect);
 
 
     // Do weaving
-    native_weaver->weave(native_resolution.x, native_resolution.y);
+    native_weaver->weave(recommended_resolution.x, recommended_resolution.y);
 
     // Transition to render target
     //TransitionImage(d3d11_device_context, intermediate_resource.GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -152,7 +150,8 @@ XrResult D3D11Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, u
 }
 
 XrResult D3D11Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, uint32_t window_swapchain_index, const float clear_color[4]) {
-    auto native_resolution = GetSystemResolution(g_systems[xr_system]);
+    auto system = g_systems[xr_system];
+    glm::ivec2 recommended_resolution = { system->RecommendedWidth(), system->RecommendedHeight() };
     // Transition to render target
     //TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -165,7 +164,7 @@ XrResult D3D11Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     d3d11_device_context->ClearRenderTargetView(window_back_buffer.Get(), clear_color);
 
     // Compose and draw to the intermediate resource
-    compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), native_resolution.x, native_resolution.y);
+    compositor->ComposeImage(frameEndInfo, d3d11_device_context.Get(), recommended_resolution.x, recommended_resolution.y);
 
     return XR_SUCCESS;
 }
@@ -197,14 +196,14 @@ D3D11Renderer::~D3D11Renderer() {
 }
 
 void D3D11Renderer::InitializePipeline(GB_Instance* instance) {
-    auto& system = g_systems[xr_system];
+    std::shared_ptr<SRSystem> system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
 
     CreateCompositor();
     CreateCommandLists();
     CreateIntermediateTexture(system);
 
     CreateSystemWindow(system);
-    CreateWeaver(instance, system);
+    CreateWeaver(system);
     CreateWindowSwapchain(system);
 }
 

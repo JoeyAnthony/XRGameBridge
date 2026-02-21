@@ -1,19 +1,9 @@
-/*
- * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
- * Summary:
- * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
- * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
- */
-
 #include "system.h"
 
 #include <array>
-#include <complex>
 
 #include "debug.h"
-#include "openxr_includes.h"
 #include "instance.h"
-#include "session.h"
 
 XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId) {
     TraceLogFunctionCall(__func__, __LINE__);
@@ -22,12 +12,11 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
     bool found = false;
     bool available = false;
     for (auto it = g_systems.begin(); it != g_systems.end(); it++) {
-        found = std::find(it->second.supported_formfactors.begin(), it->second.supported_formfactors.end(), getInfo->formFactor) != it->second.supported_formfactors.end();
-        if (found) {
-            *systemId = it->second.id;
-            it->second.form_factor = getInfo->formFactor;
+        if (it->second->GetSupportedFormFactors().contains(getInfo->formFactor)) {
+            found = true;
+            *systemId = it->second->GetId();
 
-            if (it->second.sr_display != nullptr) {
+            if (it->second != nullptr && it->second->IsAvailable()) {
                 available = true;
             }
             break;
@@ -39,7 +28,7 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
     }
 
     if (!available) {
-        return XR_ERROR_FORM_FACTOR_UNAVAILABLE;
+        return XR_ERROR_HANDLE_INVALID;
     }
 
     return XR_SUCCESS;
@@ -48,8 +37,11 @@ XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyst
 XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    GB_System& gb_system = g_systems[systemId];
-    *properties = GetSystemProperties(gb_system);
+    const auto gb_system = g_systems[systemId];
+    if(gb_system == nullptr) {
+        return XR_ERROR_HANDLE_INVALID;
+    }
+    *properties = gb_system->GetSystemProperties();
 
     return XR_SUCCESS;
 }
@@ -57,9 +49,13 @@ XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSyste
 XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes) {
     TraceLogFunctionCall(__func__, __LINE__);
 
+    const auto gb_system = g_systems[systemId];
+    if (gb_system == nullptr) {
+        return XR_ERROR_HANDLE_INVALID;
+    }
+
     spdlog::info("Requested view configuration type: {}", static_cast<uint32_t>(viewConfigurationType));
-    // SR only supports XR_ENVIRONMENT_BLEND_MODE_OPAQUE 
-    const std::array supported_blend_modes = { XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
+    const auto supported_blend_modes = gb_system->GetEnvironmentBlendModes();
     *environmentBlendModeCountOutput = supported_blend_modes.size();
 
     // Request for the extension array or the extension array itself
@@ -80,10 +76,12 @@ XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId system
 XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId, uint32_t viewConfigurationTypeCapacityInput, uint32_t* viewConfigurationTypeCountOutput, XrViewConfigurationType* viewConfigurationTypes) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    // TODO check if mono as primary is ok
-    auto set = GB_System::GetViewConfigurationTypes();
-    const std::vector <XrViewConfigurationType> supported_view_configurations = std::vector(set.begin(), set.end());
-    *viewConfigurationTypeCountOutput = supported_view_configurations.size();
+    const auto gb_system = g_systems[systemId];
+    if (gb_system == nullptr) {
+        return XR_ERROR_HANDLE_INVALID;
+    }
+    const auto properties = gb_system->GetViewConfigurationProperties();
+    *viewConfigurationTypeCountOutput = properties.size();
 
     // Request for the extension array or the extension array itself
     if (viewConfigurationTypeCapacityInput == 0) {
@@ -95,8 +93,12 @@ XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId,
     }
     // Return whether the extension exists
     else {
+        // Get view config types from properties
+        std::ranges::transform(properties, viewConfigurationTypes, [](const auto& prop) {
+            return prop.viewConfigurationType;
+        });
+
         // Fill array
-        memcpy_s(viewConfigurationTypes, viewConfigurationTypeCapacityInput * sizeof(XrViewConfigurationType), supported_view_configurations.data(), supported_view_configurations.size() * sizeof(XrViewConfigurationType));
         return XR_SUCCESS;
     }
 }
@@ -104,73 +106,51 @@ XrResult xrEnumerateViewConfigurations(XrInstance instance, XrSystemId systemId,
 XrResult xrGetViewConfigurationProperties(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, XrViewConfigurationProperties* configurationProperties) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    XrResult res = XR_ERROR_RUNTIME_FAILURE;
-
-    switch (viewConfigurationType) {
-    case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-        configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
-        configurationProperties->fovMutable = true;
-        res = XR_SUCCESS;
-        break;
-    case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-        configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-        configurationProperties->fovMutable = true;
-        res = XR_SUCCESS;
-        break;
-    default:
-        res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+    const auto gb_system = g_systems[systemId];
+    if(gb_system == nullptr) {
+        return XR_ERROR_HANDLE_INVALID;
     }
 
+    XrResult res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+    for (const auto& prop : gb_system->GetViewConfigurationProperties()) {
+        if (prop.viewConfigurationType == viewConfigurationType) {
+            *configurationProperties = prop;
+            res = XR_SUCCESS;
+            break;
+        }
+    }
     return res;
 }
 
 XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrViewConfigurationView* views) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    XrResult res = XR_ERROR_RUNTIME_FAILURE;
-
-    GB_System gb_system = g_systems[systemId];
-    GBVector2i render_resolution = GetRenderResolution(gb_system);
-    GBVector2i system_resolution = GetSystemResolution(gb_system);
-
-    std::vector<XrViewConfigurationView> supported_views;
-    if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        XrViewConfigurationView view{};
-        view.type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
-        // recommended is half width, max is full width?
-        view.recommendedImageRectWidth = render_resolution.x;
-        view.maxImageRectWidth = render_resolution.x;
-        view.recommendedImageRectHeight = render_resolution.y;
-        view.maxImageRectHeight = render_resolution.y;
-        view.recommendedSwapchainSampleCount = 1; //TODO idk what this means
-        view.maxSwapchainSampleCount = 1;
-
-        supported_views.push_back(view);
-        supported_views.push_back(view);
-
-        res = XR_SUCCESS;
+    const auto gb_system = g_systems[systemId];
+    if (gb_system == nullptr) {
+        return XR_ERROR_HANDLE_INVALID;
     }
-    else if (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-    spdlog::error("Mono view configuration requested. Not suppoerted");
-    }
-    else {
-        res = XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
-        LOG_RUNTIME_ERROR
+
+    const auto supported_views = gb_system->GetViewConfigurationViews(viewConfigurationType);
+    if (supported_views.size() == 0) {
+        LOG_RUNTIME_ERROR;
+        return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
     }
 
     // Set output count
     *viewCountOutput = supported_views.size();
 
     // Request for the extension array or the extension array itself
+    XrResult res;
     if (viewCapacityInput == 0) {
         res = XR_SUCCESS;
     }
     // Passed array not large enough
     else if (viewCapacityInput < supported_views.size()) {
-        return XR_ERROR_SIZE_INSUFFICIENT;
+        res = XR_ERROR_SIZE_INSUFFICIENT;
     }
     else {
         memcpy_s(views, viewCapacityInput * sizeof(XrViewConfigurationView), supported_views.data(), supported_views.size() * sizeof(XrViewConfigurationView));
+        res = XR_SUCCESS;
     }
 
     return res;
@@ -180,21 +160,17 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
     TraceLogFunctionCall(__func__, __LINE__);
 
     GB_Session& gb_session = g_sessions[session];
+    const auto view_count = gb_session.GetSystem()->GetViewCount();
 
-    if(viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
+    if (viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
         return XR_ERROR_VALIDATION_FAILURE;
     }
 
-    if (GB_System::GetViewConfigurationTypes().contains(viewLocateInfo->viewConfigurationType) == false) {
-        return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
-    }
-
-    // TODO mono configuration is not supported
     if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-        *viewCountOutput = gb_session.views.size();
+        *viewCountOutput = view_count;
     }
     else if (gb_session.view_configuration == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-        *viewCountOutput = gb_session.views.size();
+        *viewCountOutput = view_count;
     }
 
     // Request for the extension array or the extension array itself
@@ -202,24 +178,25 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
         return XR_SUCCESS;
     }
     // Passed array not large enough
-    if (viewCapacityInput < gb_session.views.size()) {
+    if (viewCapacityInput < view_count) {
         return XR_ERROR_SIZE_INSUFFICIENT;
     }
 
-    glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
+    const auto eye_positions = gb_session.GetViewPositions();
+    const glm::mat4 base_transform = g_space_transforms[viewLocateInfo->space];
     std::vector<XrView> sr_views;
-    for (uint32_t i = 0; i < gb_session.views.size(); i++) {
-        XrPosef pose = gb_session.views[i].pose;
-        glm::mat4 view_transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
+    for (uint32_t i = 0; i < view_count; i++) {
+        XrPosef pose = eye_positions[i].pose;
+        glm::mat4 view_transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{ pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
 
         // Transform
-        glm::mat4 transform = glm::inverse(base_transform) * view_transform;
-        glm::vec3 position = glm::vec3(transform[3]);
-        glm::quat orientation = glm::quat_cast(transform);
+        const glm::mat4 transform = glm::inverse(base_transform) * view_transform;
+        const glm::vec3 position = glm::vec3(transform[3]);
+        const glm::quat orientation = glm::quat_cast(transform);
 
         XrView view;
         view.pose = { { orientation.x, orientation.y, orientation.z, orientation.w }, { position.x, position.y, position.z } };
-        view.fov = gb_session.views[i].fov;
+        view.fov = eye_positions[i].fov;
         sr_views.push_back(view);
     }
 
@@ -286,7 +263,7 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
     }
 
     // Create transform
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{ pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z });
     const auto inserted = g_reference_spaces.insert({ handle, new_space });
     g_space_transforms.insert({ handle, transform });
 
@@ -304,12 +281,12 @@ XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateI
 XrResult xrGetReferenceSpaceBoundsRect(XrSession session, XrReferenceSpaceType referenceSpaceType, XrExtent2Df* bounds) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
+    if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW) {
         bounds->width = 0;
         bounds->height = 0;
         return XR_SPACE_BOUNDS_UNAVAILABLE;
     }
-    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL){
+    else if (referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
         // Bounds can be defined by the eye tracker bounding box.
         // Current values are hardcoded defaults because the box is different for every screen.
         // TODO get eyetracker box 
@@ -324,7 +301,7 @@ XrResult xrGetReferenceSpaceBoundsRect(XrSession session, XrReferenceSpaceType r
         spdlog::error("ERROR Reference space unsupported: {}", static_cast<uint32_t>(referenceSpaceType));
         return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
     }
-    
+
     return XR_SUCCESS;
 }
 
@@ -337,7 +314,7 @@ XrResult xrCreateActionSpace(XrSession session, const XrActionSpaceCreateInfo* c
     XrPosef pose = createInfo->poseInActionSpace;
 
     // Create transform
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), {pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{pose.orientation.w, pose.orientation.x, pose.orientation.y , pose.orientation.z });
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), { pose.position.x, pose.position.y , pose.position.z }) * glm::mat4_cast(glm::quat{ pose.orientation.w, pose.orientation.x, pose.orientation.y , pose.orientation.z });
 
     // Add action handle to sub action handle for a space handle hash
     XrSpace handle = reinterpret_cast<XrSpace>(reinterpret_cast<uint64_t>(new_space.action) + createInfo->subactionPath);
@@ -376,8 +353,7 @@ XrResult xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLoc
 XrResult xrDestroySpace(XrSpace space) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    if(g_reference_spaces.contains(space))
-    {
+    if (g_reference_spaces.contains(space)) {
         g_reference_spaces.erase(space);
         return XR_SUCCESS;
     }
@@ -402,130 +378,4 @@ XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime t
 
     performanceCounter->QuadPart = time;
     return XR_SUCCESS;
-}
-
-//GBVector2i GetDummyScreenResolution() {
-//    //TODO dependent on the SR screen, hopefully we can set reset this later on runtime. It would be cool to setup everything without having to connect to the sr service since that might take some time.
-//    // MS docs: The width/height of the client area for a full-screen window on the primary display monitor, in pixels.
-//    const uint32_t primary_display_res_x = static_cast<uint32_t>(GetSystemMetrics(SM_CXSCREEN) / 2); // Divided by 2 since we render in sbs
-//    const uint32_t primary_display_res_y = static_cast<uint32_t>(GetSystemMetrics(SM_CYSCREEN));
-//    return { primary_display_res_x, primary_display_res_y };
-//}
-//
-//XrSystemProperties GetDummySystemProperties() {
-//    auto screen_resolution = GetDummyScreenResolution();
-//
-//    XrSystemGraphicsProperties g_props{};
-//    g_props.maxLayerCount = 1;
-//    g_props.maxSwapchainImageWidth = screen_resolution.x;
-//    g_props.maxSwapchainImageHeight = screen_resolution.y;
-//
-//    XrSystemTrackingProperties t_props{};
-//    t_props.positionTracking = false;
-//    t_props.orientationTracking = false;
-//
-//    XrSystemProperties sys_props{
-//        XR_TYPE_SYSTEM_PROPERTIES,
-//        nullptr,
-//        1,
-//        0x354B, // USB Vendor ID
-//        "SR Monitor",
-//        g_props,
-//        t_props
-//    };
-//    return sys_props;
-//}
-
-bool GB_System::GetIsConnected() {
-    return device_is_connected;
-}
-
-std::set<XrViewConfigurationType> GB_System::GetViewConfigurationTypes() {
-    return { /**XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,**/ XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO };
-}
-
-XrSystemId CreateXrGameBridgeSystems(XrInstance instance)
-{
-    GB_Instance* gb_instance = reinterpret_cast<GB_Instance*>(instance);
-    auto sr_context = gb_instance->GetSrContext();
-
-    // Create system
-    GB_System system;
-    system.id = g_systems.size() + 1; // 0 is NULL_SYSTEM_HANDLE
-    system.instance = instance;
-    system.supported_formfactors = { XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY };
-    system.sr_device = SRDisplay::SR_DISPLAY;
-    system.sr_display = SR::Display::create(*sr_context);
-    system.lens_hint = SR::SwitchableLensHint::create(*sr_context);
-    system.physical_resolution = GBVector2i{ static_cast<uint64_t>(system.sr_display->getPhysicalResolutionWidth()), static_cast<uint64_t>(system.sr_display->getPhysicalResolutionHeight()) };
-
-    system.physical_screen_width_m = system.sr_display->getPhysicalSizeWidth() / 100.f;
-    system.physical_screen_height_m = system.sr_display->getPhysicalSizeHeight() / 100.f;
-
-    // Check if an sr display is connected.
-    // This is done by checking if the virtual display coordinates of the screen are all 0 or not.
-    auto display_coordinates = system.sr_display->getLocation();
-    if( display_coordinates.left == 0 &&
-        display_coordinates.bottom == 0 &&
-        display_coordinates.right == 0 &&
-        display_coordinates.top == 0)
-    {
-        // For when no SR display is connected, and if it's an 8K SR display it should work as well
-        system.device_is_connected = false;
-        system.physical_resolution = GetResolutionMainDisplay();
-    }
-    else {
-        system.device_is_connected = true;
-    }
-
-    g_systems.insert({ system.id, system });
-
-    spdlog::info("Created system: {}", system.id);
-    return system.id;
-}
-
-GBVector2i GetRenderResolution(const GB_System& gb_system) {
-    GBVector2i physical_res = gb_system.physical_resolution;
-    auto form_factor = gb_system.form_factor;
-    bool use_halved_width = form_factor == XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY || form_factor == XR_FORM_FACTOR_HANDHELD_DISPLAY;
-
-    if (use_halved_width) {
-        physical_res.x /= 2;
-    }
-
-    return physical_res;
-}
-
-GBVector2i GetSystemResolution(const GB_System& gb_system) {
-    return gb_system.physical_resolution;
-}
-
-GBVector2i GetResolutionMainDisplay() {
-    size_t width = GetSystemMetrics(SM_CXSCREEN);
-    size_t height = GetSystemMetrics(SM_CYSCREEN);
-    return GBVector2i{ static_cast<uint32_t>(width) ,static_cast<uint32_t>(height) };
-}
-
-XrSystemProperties GetSystemProperties(const GB_System& gb_system) {
-    GBVector2i native_resolution = GetRenderResolution(gb_system);
-
-    XrSystemGraphicsProperties g_props{};
-    g_props.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-    g_props.maxSwapchainImageWidth = native_resolution.x;
-    g_props.maxSwapchainImageHeight = native_resolution.y;
-
-    XrSystemTrackingProperties t_props{};
-    t_props.positionTracking = false;
-    t_props.orientationTracking = false;
-
-    XrSystemProperties sys_props{
-        XR_TYPE_SYSTEM_PROPERTIES,
-        nullptr,
-        gb_system.id,
-        0x354B, // USB Vendor ID
-        "SR Monitor",
-        g_props,
-        t_props
-    };
-    return sys_props;
 }

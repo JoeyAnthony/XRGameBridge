@@ -11,13 +11,12 @@
 #include "settings.h"
 #include "types.h"
 
-XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
+XrResult D3D12Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system) {
     // Create intermediate resources for weaving render target
-    auto system_resolution = GetSystemResolution(gb_system);
     XrSwapchainCreateInfo info;
     info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-    info.width = system_resolution.x;
-    info.height = system_resolution.y;
+    info.width = gb_system->RecommendedWidth();
+    info.height = gb_system->RecommendedHeight();
     info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     info.arraySize = 1;
     info.faceCount = 1;
@@ -39,36 +38,33 @@ XrResult D3D12Renderer::CreateIntermediateTexture(GB_System& gb_system) {
     }
 }
 
-XrResult D3D12Renderer::CreateWeaver(GB_Instance* instance) {
-    auto sr_context = instance->GetSrContext();
+XrResult D3D12Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
+    auto sr_context = gb_system->GetSrContext();
     d3d12weaver = new SR::PredictingDX12Weaver(*sr_context, d3d12_device.Get(), command_allocators[0].Get(), d3d12_command_queue.Get(), intermediate_resource->GetBuffers()[0].Get(), window_swapchain.GetImages()[0].Get(), window.GetWindowHandle());
     sr_context->initialize();
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::CreateSystemWindow(GB_System& gb_system) {
+XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
     if (window.TryGetExternalDisplay() != nullptr) {
         spdlog::info("Got window");
     }
 
     // Create debug window
-    auto system_resolution = GetSystemResolution(gb_system);
-
-    window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, system_resolution.x, system_resolution.y, true, true);
+    window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, gb_system->PhysicalResolutionWidth(), gb_system->PhysicalResolutionHeight(), true, true);
     // Debugging with non full screen mode
     //gb_session.display.CreateApplicationWindow(XRGameBridge::g_runtime_settings.hInst, 2560, 1440, true, false, true);
 
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::CreateWindowSwapchain(GB_System& gb_system) {
+XrResult D3D12Renderer::CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system) {
     // Create swapchain info for the window swapchain
     window_swapchain.Initialize(this);
 
-    auto system_resolution = GetSystemResolution(gb_system);
     XrSwapchainCreateInfo window_swapchain_info;
-    window_swapchain_info.width = system_resolution.x;
-    window_swapchain_info.height = system_resolution.y;
+    window_swapchain_info.width = gb_system->RecommendedWidth();
+    window_swapchain_info.height = gb_system->RecommendedHeight();
     window_swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
@@ -243,7 +239,8 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
 
 
     // Set viewport for weaving to window swapchain
-    auto native_resolution = GetSystemResolution(g_systems[xr_system]);
+    auto gb_system = g_systems[xr_system];
+    glm::ivec2 native_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight()};
     D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
     cmd_list->RSSetViewports(1, &view_port);
@@ -363,11 +360,11 @@ void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create compositor");
     }
 
-    GB_System& gb_system = g_systems[xr_system];
+    std::shared_ptr<SRSystem> gb_system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
     CreateIntermediateTexture(gb_system);
     CreateSystemWindow(gb_system);
     CreateWindowSwapchain(gb_system); // Needs a window
-    CreateWeaver(instance); // Needs command allocators created in CreateCommandLists
+    CreateWeaver(gb_system); // Needs command allocators created in CreateCommandLists
 }
 
 D3D12Renderer* D3D12Renderer::Create(XrSystemId systemId, const void* graphics_binding)

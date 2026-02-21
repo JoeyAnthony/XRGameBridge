@@ -14,7 +14,6 @@
 #include "openxr_includes.h"
 #include "window.h"
 
-#include "sr/management/srcontext.h"
 #include "graphics/xrrendering.h"
 #include "events.h"
 
@@ -42,20 +41,24 @@ enum FrameState {
     Ended
 };
 
-struct GB_Session {
+class GB_Session {
+public:
     XrSession id;
     XrInstance instance;
-    XrSystemId system;
     XrViewConfigurationType view_configuration;
     std::shared_ptr<EventStreamReader> hotkey_events_reader;
     std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
+
+    // System
+    XrSystemId system;
+    const FaceTrackingModule* face_tracking;
 
     // Session state
     std::mutex mutex_session_state_queue;
     std::vector<XrSessionState> session_state_queue;
     XrSessionState session_state;
 
-    //std
+    // Timing
     std::chrono::high_resolution_clock::time_point session_epoch;
 
     // Frame logic
@@ -67,21 +70,34 @@ struct GB_Session {
     bool end_frame_called = true;
     bool should_render = false;
 
-    // Views
-    std::array<XrView, 2> views;
-    float leye_x = -0.0015f, reye_x = 0.0015f;
-    float eye_z = 0.50f;
-    // Weaving
-    bool should_weave = true;
 
     // Compositor
     Renderer* renderer;
 
-    // SR
-    std::shared_ptr<SR::SRContext> sr_context;
+private:
+    // Views
+    float separation_scale = 0.6f;
+    float popout_scale = 4.f;
+    float separation_scale_max = 3.f;
+    float fov_max = 0.5f * glm::pi<float>();
+    float popout_scale_max = 30.f;
+    float scale_min = 0.0001;
 
-    void IdleFunc();
-    void InitializeView();
+
+    bool lookaround_xy = false;
+    bool lookaround_z = false; // Use fov when false
+    float virtual_fov_rad = 1.f / 4.f * glm::pi<float>();
+    float camera_lerp = 1.0f;
+    bool should_weave = true;
+
+public:
+    const std::shared_ptr<XRSystem>& GetSystem();
+
+    std::vector<XrView> GetViewPositions() const;
+
+    void ChangeSessionState(XrSessionState state);
+
+    void UpdateSession();
 };
 
 class GB_FrameTimer {
@@ -107,10 +123,3 @@ class GB_FrameTimer {
 };
 
 inline std::vector<GB_FrameTimer> g_frames;
-
-void ChangeSessionState(GB_Session& session, XrSessionState state);
-
-void UpdateSession(GB_Session& session);
-
-void SetXrViewPose(GB_Session& session, uint32_t index, const XrPosef& pose);
-void SetXrViewFov(GB_Session& session, uint32_t index, const XrFovf& fov);

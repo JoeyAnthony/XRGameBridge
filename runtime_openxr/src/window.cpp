@@ -7,6 +7,7 @@
 
 #include "window.h"
 #include <Windows.h>
+#include "srsystem.h"
 
 void MessageLoop() {
     // Main message loop:
@@ -79,7 +80,7 @@ GameBridgeWindow::~GameBridgeWindow() {
     DestroyApplicationWindow();
 }
 
-bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, GB_System& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
+bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::shared_ptr<SRSystem>& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
     // TODO better window creation checking code
     static bool window_created = false;
     if (h_wnd != nullptr) {
@@ -116,12 +117,15 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, GB_System& s
 
     // Get position of the SR display
     int window_x = CW_USEDEFAULT, window_y = CW_USEDEFAULT;
-    if (system.GetIsConnected()) {
-        auto display_rect = system.sr_display->getLocation();
-        window_x = display_rect.left;
-        window_y = display_rect.top;
-        RECT rect(display_rect.left, display_rect.top, display_rect.right, display_rect.bottom);
-        HMONITOR h_monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+    if (system->IsConnected()) {
+        const auto [offset, extent] = system->GetDisplayRect();
+        const RECT rect{
+            .left = offset.x,
+            .top = offset.y,
+            .right = offset.x + extent.width,
+            .bottom = offset.y + extent.height
+        };
+        const HMONITOR h_monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
 
         MONITORINFO monitor_info;
         monitor_info.cbSize = sizeof(MONITORINFO);

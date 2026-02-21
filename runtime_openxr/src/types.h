@@ -8,16 +8,22 @@
 #pragma once
 #include <stdint.h>
 
+ //// Handle functions
+ //template<typename T>
+ //T PtrToXrHandle() { return T(); };
+
+ //template<typename T>
+ //T XrhandleToPtr() { return T(); };
+
+ //template<typename T>
+ //T IntToXrHandle() { return T(); };
+
+ inline size_t XrHandleToInt() { return 0; };
+
 enum class GraphicsBackend {
     Uninitialized = 0,
     D3D11 = 1,
     D3D12 = 2,
     Vulkan = 3,
     OpenGL = 4
-};
-
-// Data types
-struct GBVector2i {
-    uint32_t x;
-    uint32_t y;
 };
