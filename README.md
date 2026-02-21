@@ -9,9 +9,9 @@ Supported displays include:
 - Acer Spatiallabs compatible displays
 - Samsung Odyssey 3D displays
 
-If you want to play other games in 3D, see [3DGamebridgeProjects](https://github.com/JoeyAnthony/3DGameBridgeProjects)
+If you want to play other games in 3D, see [3DGamebridgeProjects](https://github.com/JoeyAnthony/3DGameBridgeProjects).
 
-If you need help or have any other questions, you can join our discord server: [join the community today](https://discord.gg/K46jgbzwDa)
+If you need help or have any other questions, you can join our discord server: [join the community today](https://discord.gg/K46jgbzwDa).
 
 ## Compatibility
 This runtime is mostly tested with `Returnal`, other UEVR supported games "should" work but they must be using DirectX12.
@@ -31,16 +31,16 @@ A UEVR game compatibility list can be found in the [Flatscreen to VR](https://di
 10. Give focus to the original game window to start playing.
 
 ## Known issues
-- On some screens, Only part of the game image is visible, as if it is zoomed in. This can be fixed by setting the display scaling to 100% in the Windows Display Settings
+- On some screens, Only part of the game image is visible, as if it is zoomed in. This can be fixed by setting the display scaling to 100% in the Windows Display Settings.
 - FOV related effects (like zoom) in games won't work (well) as the FOV is decided by the OpenXR Runtime, not by the game anymore.
 - There ia a black flash, this can be very appearent on some systems.
 - If the connected SR display was not detected by the SR runtime yet, the XRGameBridge window may open on a NON sr display. In this case, restart the game en inject again.
 
 ## How to build
-The project was build with CMake and C++ 20 for Visual Studio 2022
+The project was build with CMake and C++ 20 for Visual Studio 2022.
 
 ### Instructions
-- Clone the repo with `git clone  https://github.com/JoeyAnthony/XRGameBridge.git`
-- Update submodules `git submodule update --init --recursive`
-- Run CMake for Visual Studio
-- Build the `RuntimeOpenXR` project
+- Clone the repo with `git clone  https://github.com/JoeyAnthony/XRGameBridge.git`.
+- Update submodules `git submodule update --init --recursive`.
+- Run CMake for Visual Studio.
+- Build the `RuntimeOpenXR` project.

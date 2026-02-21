@@ -367,9 +367,9 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
         right_eye = right;
     }
 
-    // Calculate the distance from the fov that we want to use in game (ex 90deg). And use that to derive the fov angles per eye.
-    auto left_distance = ((sys.PhysicalSizeWidth() - ipd) / 2) / glm::tan(virtual_fov_rad);
-    auto right_distance = left_distance;
+    // Calculate the eye distance distance from the virtual fov that we want to use in games (for example 90deg). This distance can be used to calculate the fov angles.
+    float left_distance = ((sys.PhysicalSizeWidth() - ipd) / 2) / glm::tan(virtual_fov_rad);
+    float right_distance = left_distance;
     if(lookaround_z) {
         left_distance = left.z;
         right_distance = left.z;
