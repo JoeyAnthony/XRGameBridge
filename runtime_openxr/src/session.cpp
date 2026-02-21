@@ -76,17 +76,11 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_SEPARATION, VK_LCONTROL, VK_F5);
     g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_SEPARATION, VK_LCONTROL, VK_F6);
 
-    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F7);
-    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV, VK_LCONTROL, VK_F8);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGEANCE, VK_LCONTROL, VK_F7);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGEANCE, VK_LCONTROL, VK_F8);
 
-    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_CONVERGENCE, VK_LCONTROL, VK_F9);
-    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_CONVERGENCE, VK_LCONTROL, VK_F10);
-
-    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_UP, VK_LCONTROL, VK_NUMPAD8);
-    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_DOWN, VK_LCONTROL, VK_NUMPAD2);
-    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_LEFT, VK_LCONTROL, VK_NUMPAD4);
-    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RIGHT, VK_LCONTROL, VK_NUMPAD6);
-    g_hotkey_manager->AddHotkey(GB_EVENT_TEST_RESET, VK_LCONTROL, VK_NUMPAD5);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_DECREASE_FOV, VK_LCONTROL, VK_F9);
+    g_hotkey_manager->AddHotkey(GB_EVENT_HOTKEY_INCREASE_FOV, VK_LCONTROL, VK_F10);
 
     // Get instance even stream writer
     new_session.instance_event_stream_writer = gb_instance->GetInstanceEventStreamWriter();
@@ -361,20 +355,20 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
 
     // Derive ipd_scaling
     float phys_eye_fov = glm::atan(sys.PhysicalSizeWidth() / 2 / left.z);
-    float ipd_scale = phys_eye_fov / fov_rad;
+    float ipd_scale = phys_eye_fov / virtual_fov_rad;
 
     // Since we define a different fov for games, (let's say 90deg), which is usually larger than the physical fov (let's say 40deg), we need to compensate for that by making the ipd smaller.
     // For this we derive the ipd scale and multiply it with the ipd.
-    const float ipd = glm::abs(left.x - right.x) * ipd_scale + ipd_offset_m;
-    auto left_eye = XrVector3f{ -(ipd / 2 + popout_offset_m), 0, 0 };
-    auto right_eye = XrVector3f{ (ipd / 2 + popout_offset_m), 0, 0 };
+    const float ipd = glm::abs(left.x - right.x) * ipd_scale;
+    auto left_eye = XrVector3f{ -(ipd / 2), 0, 0 };
+    auto right_eye = XrVector3f{ (ipd / 2), 0, 0 };
     if(lookaround_xy) {
         left_eye = left;
         right_eye = right;
     }
 
     // Calculate the distance from the fov that we want to use in game (ex 90deg). And use that to derive the fov angles per eye.
-    auto left_distance = ((sys.PhysicalSizeWidth() - ipd) / 2) / glm::tan(fov_rad);
+    auto left_distance = ((sys.PhysicalSizeWidth() - ipd) / 2) / glm::tan(virtual_fov_rad);
     auto right_distance = left_distance;
     if(lookaround_z) {
         left_distance = left.z;
@@ -383,13 +377,13 @@ std::vector<XrView> GB_Session::GetViewPositions() const {
 
     auto vec = std::vector{
         XrView {
-            .pose = XrPosef{{0}, left_eye},
+            .pose = XrPosef{{0}, {left_eye.x * popout_scale, 0, 0}},
             // Calculate angles with game fov and scaled ipd
-            .fov = sys.GetConvergingFov({left_eye.x, left_eye.y, left_distance})
+            .fov = sys.GetConvergingFov({left_eye.x * separation_scale, left_eye.y, left_distance})
         },
         XrView {
-            .pose = XrPosef{{0}, right_eye},
-            .fov = sys.GetConvergingFov({right_eye.x, right_eye.y, right_distance})
+            .pose = XrPosef{{0}, {right_eye.x * popout_scale, 0, 0}},
+            .fov = sys.GetConvergingFov({right_eye.x * separation_scale, right_eye.y, right_distance})
         }
     };
     vec.shrink_to_fit();
@@ -480,77 +474,31 @@ void GB_Session::UpdateSession() {
         }
 
         // Separation buttons
-        bool value_changed = false;
-        const float incremental_value_pose = 0.001f;
-        const float incremental_value_fov = 0.01f;
-        XrView view_l = {};//session.views[0];
-        XrView view_r = {};// session.views[1];
-
+        constexpr float incremental_value_separation = 0.01f;
+        constexpr float incremental_value_popout = 0.1f;
+        constexpr  float incremental_value_fov = 0.05f;
         if (event_type == GB_EVENT_HOTKEY_INCREASE_SEPARATION) {
-            float factor_pose = 1.0f;
-            float addition = incremental_value_pose * factor_pose;
-            popout_offset_m += addition;
+            separation_scale = glm::clamp(separation_scale + incremental_value_separation, scale_min, separation_scale_max);
         }
 
         if (event_type == GB_EVENT_HOTKEY_DECREASE_SEPARATION) {
-            float factor_pose = -1.0f;
-            float addition = incremental_value_pose * factor_pose;
-            popout_offset_m += addition;
+            separation_scale = glm::clamp(separation_scale + incremental_value_separation * -1, scale_min, separation_scale_max);
         }
 
-        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE_FOV) {
-            float factor_pose = 1.0f;
-            float addition = incremental_value_pose * factor_pose;
-             ipd_offset_m += addition;
-             //ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGEANCE) {
+            popout_scale = glm::clamp(popout_scale + incremental_value_popout, scale_min, popout_scale_max);
         }
 
-        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE_FOV) {
-            float factor_pose = -1.0f;
-            float addition = incremental_value_pose * factor_pose;
-            ipd_offset_m += addition;
-            //ipd_offset_m = glm::clamp(ipd_offset_m, 0.0001f, 0.50f);
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGEANCE) {
+            popout_scale = glm::clamp(popout_scale + incremental_value_popout * -1, scale_min, popout_scale_max);
         }
 
-        if (event_type == GB_EVENT_HOTKEY_INCREASE_CONVERGENCE) {
-            fov_rad += glm::radians(1.f);
-            fov_rad = glm::clamp(fov_rad, 0.001f, 1.f/2.f * glm::pi<float>());
+        if (event_type == GB_EVENT_HOTKEY_INCREASE_FOV) {
+            virtual_fov_rad = glm::clamp(virtual_fov_rad + glm::radians(incremental_value_fov), scale_min, fov_max);
         }
 
-        if (event_type == GB_EVENT_HOTKEY_DECREASE_CONVERGENCE) {
-            fov_rad -= glm::radians(1.f);;
-            fov_rad = glm::clamp(fov_rad, 0.001f, 1.f / 2.f * glm::pi<float>());
-        }
-
-        ///////
-        float rotation_speed = 1;
-        static glm::quat orientation = glm::identity<glm::quat>();
-        if (event_type == GB_EVENT_TEST_UP) {
-            float factor_pose = 1.0f;
-            float angle = rotation_speed * factor_pose;
-            value_changed = true;
-            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
-        }
-        if (event_type == GB_EVENT_TEST_DOWN) {
-            float factor_pose = -1.0f;
-            float angle = rotation_speed * factor_pose;
-            value_changed = true;
-            orientation = glm::rotate(orientation, glm::radians(angle), { 1.f, 0.f, 0.f });
-        }
-        if (event_type == GB_EVENT_TEST_LEFT) {
-            float factor_pose = 1.0f;
-            float angle = rotation_speed * factor_pose;
-            value_changed = true;
-            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
-        }
-        if (event_type == GB_EVENT_TEST_RIGHT) {
-            float factor_pose = -1.0f;
-            float angle = rotation_speed * factor_pose;
-            value_changed = true;
-            orientation = glm::rotate(orientation, glm::radians(angle), { 0.f, 1.f, 0.f });
-        }
-        if (event_type == GB_EVENT_TEST_RESET) {
-            orientation = glm::identity<glm::quat>();
+        if (event_type == GB_EVENT_HOTKEY_DECREASE_FOV) {
+            virtual_fov_rad = glm::clamp(virtual_fov_rad - glm::radians(incremental_value_fov), scale_min, fov_max);
         }
     }
 }

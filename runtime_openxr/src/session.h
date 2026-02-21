@@ -70,16 +70,23 @@ public:
     bool end_frame_called = true;
     bool should_render = false;
 
+
     // Compositor
     Renderer* renderer;
 
 private:
     // Views
-    float ipd_offset_m = 0.0f;
-    float popout_offset_m = 0.f;
+    float separation_scale = 0.6f;
+    float popout_scale = 4.f;
+    float separation_scale_max = 3.f;
+    float fov_max = 0.5f * glm::pi<float>();
+    float popout_scale_max = 30.f;
+    float scale_min = 0.0001;
+
+
     bool lookaround_xy = false;
     bool lookaround_z = false; // Use fov when false
-    float fov_rad = 1.f / 4.f * glm::pi<float>();
+    float virtual_fov_rad = 1.f / 4.f * glm::pi<float>();
     float camera_lerp = 1.0f;
     bool should_weave = true;
 
