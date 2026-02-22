@@ -41,25 +41,50 @@ enum FrameState {
     Ended
 };
 
-class GB_Session {
+class FrameTimer {
+    using time_point = std::chrono::high_resolution_clock::time_point;
+    time_point last_frame_time;
+
+    FrameTimer(FrameTimer& other) = delete;
+    FrameTimer(FrameTimer&& other) = delete;
+
 public:
-    XrSession id;
-    XrInstance instance;
-    XrViewConfigurationType view_configuration;
+    XrDuration GetTimeDelta() {
+        auto current_time = std::chrono::high_resolution_clock::now();
+        auto delta_time = current_time - last_frame_time;
+        last_frame_time = current_time;
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time).count();
+    }
+
+    FrameTimer() {
+        last_frame_time = std::chrono::high_resolution_clock::now();
+    }
+    FrameTimer(XrTime start_time) {
+        last_frame_time = time_point{ std::chrono::duration_cast<time_point::duration>(std::chrono::nanoseconds(start_time)) };
+    }
+};
+
+class XRSession {
+public:
+    XrSession id = nullptr;
+    XrInstance instance = nullptr;
+    XrViewConfigurationType view_configuration = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     std::shared_ptr<EventStreamReader> hotkey_events_reader;
     std::shared_ptr<EventStreamWriter> instance_event_stream_writer;
 
     // System
-    XrSystemId system;
-    const FaceTrackingModule* face_tracking;
+    XrSystemId system = 0;
+    const FaceTrackingModule* face_tracking = nullptr;
 
     // Session state
     std::mutex mutex_session_state_queue;
     std::vector<XrSessionState> session_state_queue;
-    XrSessionState session_state;
+    XrSessionState session_state = XR_SESSION_STATE_IDLE;
 
     // Timing
-    std::chrono::high_resolution_clock::time_point session_epoch;
+    int32_t frame_time_index = 0;
+    std::array<uint32_t, 100> frame_times;
+    FrameTimer frame_timer;
 
     // Frame logic
     FrameState wait_frame_state;
@@ -70,9 +95,8 @@ public:
     bool end_frame_called = true;
     bool should_render = false;
 
-
-    // Compositor
-    Renderer* renderer;
+    // Renderer
+    Renderer* renderer = nullptr;
 
 private:
     // Views
@@ -98,28 +122,9 @@ public:
     void ChangeSessionState(XrSessionState state);
 
     void UpdateSession();
+
+    void ResetFrameState();
+
+    XRSession();
+    ~XRSession() = default;
 };
-
-class GB_FrameTimer {
-    uint32_t frame_index = 0;
-    FrameState state = Waiting;
-
-    std::chrono::high_resolution_clock::time_point last_frame_start;
-    std::chrono::high_resolution_clock::duration last_frame_time;
-    std::chrono::high_resolution_clock::duration next_frame_time;
-
-    GB_FrameTimer() = delete;
-    GB_FrameTimer(GB_FrameTimer& other) = delete;
-    GB_FrameTimer(GB_FrameTimer&& other) = delete;
-
-    explicit GB_FrameTimer(uint32_t frame_index) : frame_index(frame_index) {
-    }
-
-    void StartNewFrame(uint32_t frame_id) {
-    }
-
-    void EndFrame(uint32_t frame_id) {
-    }
-};
-
-inline std::vector<GB_FrameTimer> g_frames;

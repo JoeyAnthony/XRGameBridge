@@ -44,6 +44,7 @@ class RuntimeSettings {
     std::string sr_install_path;
     std::string sr_install_path_win32;
     std::string runtime_path;
+    std::chrono::high_resolution_clock::time_point runtime_epoch;
 
     void* h_Instance;
 
@@ -61,6 +62,7 @@ public:
 
     std::string GetSrInstallPath();
     std::string GetRuntimePath();
+    const std::chrono::high_resolution_clock::time_point& GetRuntimeEpoch();
     void* GethInstance();
 };
 

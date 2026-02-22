@@ -146,6 +146,7 @@ XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* in
 
         return XR_ERROR_EXTENSION_NOT_PRESENT;
     }
+    spdlog::info("All necessary extensions supported");
 
     /* TODO Make a Game Bridge class
     * This class will initialize game bridge and SR
@@ -570,6 +571,7 @@ GB_Instance::~GB_Instance() {
 XrResult GB_Instance::ActivateGraphicsAPI(GraphicsBackend api) {
     if (active_graphics_backend == GraphicsBackend::Uninitialized) {
         active_graphics_backend = api;
+        spdlog::info("Graphics api set {}", static_cast<int>(api));
         return XR_SUCCESS;
     }
     else {

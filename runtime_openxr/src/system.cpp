@@ -1,3 +1,10 @@
+/*
+ * This file falls under the GNU General Public License v3.0 license: See the LICENSE.txt in the root of this project for more info.
+ * Summary:
+ * Permissions of this strong copyleft license are conditioned on making available complete source code of licensed works and modifications, which include larger works using a licensed work, under the same license.
+ * Copyright and license notices must be preserved. Contributors provide an express grant of patent rights. Modifications to the source code must be disclosed publicly.
+ */
+
 #include "system.h"
 
 #include <array>
@@ -159,7 +166,7 @@ XrResult xrEnumerateViewConfigurationViews(XrInstance instance, XrSystemId syste
 XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo, XrViewState* viewState, uint32_t viewCapacityInput, uint32_t* viewCountOutput, XrView* views) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    GB_Session& gb_session = g_sessions[session];
+    XRSession& gb_session = g_sessions[session];
     const auto view_count = gb_session.GetSystem()->GetViewCount();
 
     if (viewLocateInfo->viewConfigurationType != gb_session.view_configuration) {
@@ -210,7 +217,7 @@ XrResult xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo
 XrResult xrEnumerateReferenceSpaces(XrSession session, uint32_t spaceCapacityInput, uint32_t* spaceCountOutput, XrReferenceSpaceType* spaces) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    GB_Session& gb_session = g_sessions[session];
+    XRSession& gb_session = g_sessions[session];
 
     std::array reference_space_types{
         XR_REFERENCE_SPACE_TYPE_VIEW,

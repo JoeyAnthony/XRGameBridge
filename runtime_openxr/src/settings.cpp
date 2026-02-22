@@ -23,6 +23,8 @@ RuntimeSettings::RuntimeSettings(void* h_Inst) {
     h_Instance = h_Inst;
     FetchRuntimePath();
     FetchPathEnvSR();
+
+    runtime_epoch = std::chrono::high_resolution_clock::now();
 }
 
 void RuntimeSettings::FetchRuntimePath() {
@@ -61,6 +63,10 @@ std::string RuntimeSettings::GetSrInstallPath() {
 
 std::string RuntimeSettings::GetRuntimePath() {
     return runtime_path;
+}
+
+const std::chrono::high_resolution_clock::time_point& RuntimeSettings::GetRuntimeEpoch() {
+    return runtime_epoch;
 }
 
 void* RuntimeSettings::GethInstance() {

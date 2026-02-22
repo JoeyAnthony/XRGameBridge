@@ -116,7 +116,7 @@ inline std::unordered_map<XrPath, std::string> g_xrpath_storage;
 
 // TODO get rid of globals :)
 //inline std::unordered_map<XrInstance, GB_Instance> instances;
-inline std::unordered_map<XrSession, GB_Session> g_sessions;
+inline std::unordered_map<XrSession, XRSession> g_sessions;
 
 // OpenXR makes a distinction between active and inactive action sets, only active ones have to be updated.
 // Since we don't plan on handling VR actions I left this distinction out, but it might be good to have later.

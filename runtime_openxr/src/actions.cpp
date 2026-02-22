@@ -50,7 +50,7 @@ XrResult xrGetActionStateBoolean(XrSession session, const XrActionStateGetInfo* 
 XrResult xrGetActionStateFloat(XrSession session, const XrActionStateGetInfo* getInfo, XrActionStateFloat* state) {
     TraceLogFunctionCall(__func__, __LINE__);
 
-    GB_Session& gb_session = g_sessions[session];
+    XRSession& gb_session = g_sessions[session];
 
     state->isActive = false;
     state->currentState = 0.f;

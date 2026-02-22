@@ -22,8 +22,10 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
     {
-        g_runtime_settings = std::make_unique<RuntimeSettings>(hInst);
-        g_runtime_logger = std::make_unique<RuntimeLogger>();
+        if (g_runtime_settings == nullptr) {
+            g_runtime_settings = std::make_unique<RuntimeSettings>(hInst);
+            g_runtime_logger = std::make_unique<RuntimeLogger>();
+        }
 
         spdlog::info("DLL_PROCESS_ATTACH");
 

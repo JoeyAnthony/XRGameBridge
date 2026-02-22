@@ -17,7 +17,8 @@
 #include <sr/utility/exception.h>
 #include <sr/sense/core/inputstream.h>
 #include <sr/sense/system/systemsense.h>
-#include <sr/sense/eyetracker/eyetracker.h>
+#include <sr/sense/eyetracker/eyepairlistener.h>
+#include <sr/sense/eyetracker/predictingeyetracker.h>
 #include <sr/world/display/display.h>
 // GLM
 #include <glm/glm.hpp>
@@ -38,6 +39,7 @@ public:
     };
 };
 
+// TODO add prediction functions to FaceTrackerModule interface
 class SrEyePairListener final : public SR::EyePairListener {
     SR::InputStream<SR::EyePairStream> stream;
     glm::dvec3 left = {-30.0f, 0.0f, 600.0f};
@@ -52,7 +54,7 @@ public:
     SrEyePairListener() = delete;
     ~SrEyePairListener() = default;
 
-    explicit SrEyePairListener(SR::EyeTracker* tracker) {
+    explicit SrEyePairListener(SR::PredictingEyeTracker* tracker) {
         stream.set(tracker->openEyePairStream(this));
     }
 

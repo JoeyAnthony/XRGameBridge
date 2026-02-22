@@ -30,7 +30,7 @@ XrResult xrEnumerateSwapchainFormats(XrSession session, uint32_t formatCapacityI
     };
 
     try {
-        GB_Session& gb_session = g_sessions.at(session);
+        XRSession& gb_session = g_sessions.at(session);
         backend = gb_session.renderer->GetGraphicsBackend();
 
         if (backend == GraphicsBackend::D3D11) {
@@ -85,7 +85,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     TraceLogFunctionCall(__func__, __LINE__);
 
     //TODO Get compositor from the session and create descriptor on it for the new swapchain
-    GB_Session& gb_session = g_sessions[session];
+    XRSession& gb_session = g_sessions[session];
 
     /* TODO:
     * Get more consistent with error handling and logging.

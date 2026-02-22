@@ -20,7 +20,8 @@
 namespace fs = std::filesystem;
 
 class GB_Instance;
-constexpr unsigned short standard_swapchain_buffer_count = 2;
+// Use triple buffering
+constexpr unsigned short standard_swapchain_buffer_count = 3;
 
 // Path defined in Cmake
 #ifndef DEBUG_SHADER_PATH

@@ -15,7 +15,8 @@
 #include "instance.h"
 
 SrEyeTrackingSystemFeature::SrEyeTrackingSystemFeature(SR::SRContext& sr_context) :
-    eye_pair_listener(SrEyePairListener(SR::EyeTracker::create(sr_context))) {
+    eye_pair_listener(SrEyePairListener(SR::PredictingEyeTracker::create(sr_context))) {
+    sr_context.initialize();
 }
 
 std::tuple<XrVector3f, XrVector3f> SrEyeTrackingSystemFeature::GetEyePositions(double x_offset) const {
