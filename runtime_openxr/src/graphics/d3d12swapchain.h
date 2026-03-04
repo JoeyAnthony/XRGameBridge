@@ -37,6 +37,9 @@ class D3D12ProxySwapchain : public ProxySwapchain {
     uint32_t released_frame_index = 0;
     std::vector<ImageState> current_image_state;
     uint64_t previous_fence_value = 0;
+    std::mutex acquire_image_mutex;
+    std::mutex wait_image_mutex;
+    std::mutex release_image_mutex;
 
     // Fence values per image to check for
     std::vector<uint32_t> back_buffer_fence_values;

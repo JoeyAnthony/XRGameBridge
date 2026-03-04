@@ -39,8 +39,8 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
         }
 
         CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-        // Remark descriptors are static now, not sure I can copy them. The data can be changed when not executing command lists
-        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
+        // TODO Every image on a proxy swapchain has its own descriptor heap, for optimization it's better to create a single heap and set this flag to D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC for maximal optimizations.
+        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
         ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
 
         CD3DX12_ROOT_PARAMETER1 root_parameters[3];
@@ -314,7 +314,9 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
     // Set new fence values for the used swapchain image.
     proxy_swapchain->SetReleasedImageFenceValue(proxy_swapchain->GetAwaitedImageIndex(), new_fence_value);
 
-    //TransitionImage(cmd_list, proxy_resource.Get(), proxy_swapchain.resource_usage, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    // Transition proxy swapchain resource to pixel shader resource
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    cmd_list->ResourceBarrier(1, &barrier);
 
     for (; view_num < view_count; view_num++) {
         // Viewport settings
@@ -369,7 +371,9 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
 
         cmd_list->DrawInstanced(3, 1, 0, 0);
 
-        //TransitionImage(cmd_list, proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, proxy_swapchain.resource_usage);
+        // Transition proxy swapchain resource back to render target
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        cmd_list->ResourceBarrier(1, &barrier);
     }
 }
 

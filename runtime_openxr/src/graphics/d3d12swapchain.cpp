@@ -290,6 +290,7 @@ uint32_t D3D12ProxySwapchain::GetAwaitedImageIndex() {
 }
 
 XrResult D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
+    //std::lock_guard guard(acquire_image_mutex);
     uint32_t next_index = (current_frame_index + 1) % back_buffer_count;
 
     if (current_image_state[next_index] != IMAGE_STATE_RELEASED) {
@@ -304,6 +305,7 @@ XrResult D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
 }
 
 XrResult D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
+    //std::lock_guard guard(wait_image_mutex);
     if (current_image_state[current_frame_index] != IMAGE_STATE_ACQUIRED) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
@@ -319,6 +321,7 @@ XrResult D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
 }
 
 XrResult D3D12ProxySwapchain::ReleaseImage() {
+    //std::lock_guard guard(release_image_mutex);
     if (current_image_state[awaited_frame_index] != IMAGE_STATE_RENDER_TARGET) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
