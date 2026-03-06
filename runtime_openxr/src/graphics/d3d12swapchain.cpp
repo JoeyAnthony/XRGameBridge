@@ -49,9 +49,6 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     HRESULT res = 0;
 
     GetResourceStateFlags(createInfo->usageFlags, flags, states);
-    if (states == D3D12_RESOURCE_STATE_COMMON) {
-        states = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    }
 
     if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
         if (num_resources != 1) {

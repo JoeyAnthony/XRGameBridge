@@ -202,22 +202,38 @@ void D3D12Compositor::ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12Gra
 void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerProjection* layer, uint64_t new_fence_value) {
     auto& ref_space = g_reference_spaces[layer->space]; // pose in spaces of the view over time
 
+    // Get all unique images
+    std::set<ID3D12Resource*> unique_resources;
+    for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
+        auto& view = layer->views[view_num];
+        auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[view.subImage.swapchain]);
+        uint32_t image_index = proxy_swapchain->GetAwaitedImageIndex();
+        auto proxy_resource = proxy_swapchain->GetBuffers()[image_index];
+
+        // Set new fence values for the used swapchain image.
+        proxy_swapchain->SetReleasedImageFenceValue(image_index, new_fence_value);
+        // Get unique image
+        unique_resources.insert(proxy_resource.Get());
+    }
+
+    // Create before and after barriers
+    std::vector<CD3DX12_RESOURCE_BARRIER> barriers_before;
+    std::vector<CD3DX12_RESOURCE_BARRIER> barriers_after;
+    for (auto resource : unique_resources) {
+        // Transition proxy swapchain resource to pixel shader resource
+        D3D12_RESOURCE_STATES before_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        D3D12_RESOURCE_STATES after_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers_before.push_back(CD3DX12_RESOURCE_BARRIER::Transition(resource, before_state, after_state));
+        barriers_after.push_back(CD3DX12_RESOURCE_BARRIER::Transition(resource, after_state, before_state));
+    }
+    // Transitions all images at once
+    cmd_list->ResourceBarrier(barriers_before.size(), barriers_before.data());
+
     // Render every view to the resource
     for (int32_t view_num = 0; view_num < layer->viewCount; view_num++) {
         auto& view = layer->views[view_num];
-
-        // This sets a pose to the session views, which breaks the positions. Not sure why this was here before.
-        // Probably to update the positions before the update loop was there.
-        //SetXrViewPose(session, view_num, view.pose);
-        //SetXrViewFov(session, view_num, view.fov);
-
-        // TODO do something with rectangles
         auto& rect = view.subImage.imageRect;
-
         auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[view.subImage.swapchain]);
-        auto proxy_resource = proxy_swapchain->GetBuffers()[proxy_swapchain->GetAwaitedImageIndex()];
-        // Set new fence values for the used swapchain image.
-        proxy_swapchain->SetReleasedImageFenceValue(proxy_swapchain->GetAwaitedImageIndex(), new_fence_value);
 
         // Viewport settings
         const float width = static_cast<float>(system_width) / 2;
@@ -226,10 +242,6 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         D3D12_RECT scissor_rect{ 0, 0, system_width, system_height };
         cmd_list->RSSetViewports(1, &view_port);
         cmd_list->RSSetScissorRects(1, &scissor_rect);
-
-        // Transition proxy swapchain resource to pixel shader resource
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        cmd_list->ResourceBarrier(1, &barrier);
 
         struct {
             uint32_t is_opaque;
@@ -268,20 +280,21 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
 
         cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
 
-        // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+        // Only set image descriptors if the previous image was different
+        if (view_num == 0 || layer->views[view_num].subImage.swapchain != layer->views[view_num-1].subImage.swapchain) {
+            // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
+            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
+            cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+            cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+        }
 
         //float blend_factor[4]{ 0.f };
         //cmd_list->OMSetBlendFactor(blend_factor);
 
         cmd_list->DrawInstanced(3, 1, 0, 0);
-
-        // Transition proxy swapchain resource back to render target
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        cmd_list->ResourceBarrier(1, &barrier);
     }
+
+    cmd_list->ResourceBarrier(barriers_after.size(), barriers_after.data());
 }
 
 void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, const XrCompositionLayerQuad* layer, uint64_t new_fence_value) {
@@ -370,11 +383,11 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
         cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
         cmd_list->DrawInstanced(3, 1, 0, 0);
-
-        // Transition proxy swapchain resource back to render target
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        cmd_list->ResourceBarrier(1, &barrier);
     }
+
+    // Transition proxy swapchain resource back to render target
+    barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    cmd_list->ResourceBarrier(1, &barrier);
 }
 
 ComPtr<ID3D12PipelineState>& D3D12Compositor::GetDefaultPipelineState() {
