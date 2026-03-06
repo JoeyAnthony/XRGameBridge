@@ -27,7 +27,14 @@ L"LeapC.dll",
 L"opencv_world343.dll"
 };
 
+
 namespace fs = std::filesystem;
+
+#include<windows.h>
+struct WindowsEpoch{
+    LARGE_INTEGER qpc;
+    int64_t frequency;
+};
 
 class RuntimeLogger {
     static constexpr std::string_view log_name = "xrgb_log.txt";
@@ -45,11 +52,13 @@ class RuntimeSettings {
     std::string sr_install_path_win32;
     std::string runtime_path;
     std::chrono::high_resolution_clock::time_point runtime_epoch;
+    WindowsEpoch win_epoch;
 
     void* h_Instance;
 
     void FetchRuntimePath();
     void FetchPathEnvSR();
+    void InitializeClock();
 
 public:
     static constexpr bool support_d3d12 = true;
@@ -63,6 +72,7 @@ public:
     std::string GetSrInstallPath();
     std::string GetRuntimePath();
     const std::chrono::high_resolution_clock::time_point& GetRuntimeEpoch();
+    const WindowsEpoch GetWindowsRuntimeEpoch();
     void* GethInstance();
 };
 

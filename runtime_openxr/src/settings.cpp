@@ -23,8 +23,7 @@ RuntimeSettings::RuntimeSettings(void* h_Inst) {
     h_Instance = h_Inst;
     FetchRuntimePath();
     FetchPathEnvSR();
-
-    runtime_epoch = std::chrono::high_resolution_clock::now();
+    InitializeClock();
 }
 
 void RuntimeSettings::FetchRuntimePath() {
@@ -57,6 +56,14 @@ void RuntimeSettings::FetchPathEnvSR() {
     }
 }
 
+void RuntimeSettings::InitializeClock() {
+    QueryPerformanceCounter(&win_epoch.qpc);
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+    win_epoch.frequency = freq.QuadPart;
+    runtime_epoch = std::chrono::high_resolution_clock::now();
+}
+
 std::string RuntimeSettings::GetSrInstallPath() {
     return sr_install_path;
 }
@@ -67,6 +74,11 @@ std::string RuntimeSettings::GetRuntimePath() {
 
 const std::chrono::high_resolution_clock::time_point& RuntimeSettings::GetRuntimeEpoch() {
     return runtime_epoch;
+}
+
+const WindowsEpoch RuntimeSettings::GetWindowsRuntimeEpoch()
+{
+    return win_epoch;
 }
 
 void* RuntimeSettings::GethInstance() {

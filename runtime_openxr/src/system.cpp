@@ -374,15 +374,24 @@ XrResult xrDestroySpace(XrSpace space) {
 }
 
 XrResult xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER* performanceCounter, XrTime* time) {
-    TraceLogFunctionCall(__func__, __LINE__);
+    // Difference in ticks
+    auto win_epoch = g_runtime_settings->GetWindowsRuntimeEpoch();
+    int64_t diffTicks = performanceCounter->QuadPart - win_epoch.qpc.QuadPart;
 
-    *time = performanceCounter->QuadPart;
+    // Convert to nanoseconds (XrTime)
+    // We use 1e9 for nanoseconds.
+    *time = (XrTime)((diffTicks * 1000000000LL) / win_epoch.frequency);
+
     return XR_SUCCESS;
 }
 
 XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter) {
-    TraceLogFunctionCall(__func__, __LINE__);
+    // Convert XrTime (ns) back to ticks
+    auto win_epoch = g_runtime_settings->GetWindowsRuntimeEpoch();
+    int64_t ticks = (time * win_epoch.frequency) / 1000000000LL;
 
-    performanceCounter->QuadPart = time;
+    // Add back to the QPC epoch
+    performanceCounter->QuadPart = win_epoch.qpc.QuadPart + ticks;
+
     return XR_SUCCESS;
 }
