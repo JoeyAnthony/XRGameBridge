@@ -165,13 +165,12 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
 
         // Choose name for debugging
         if (resource_name.empty()) {
-            std::string name = std::format("Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(xr_handle), i);
-            name = com_name_prefix + name;
-            proxy_name = name;
+            std::string name = com_name_prefix + std::format("Proxy Swapchain {} Resource {}", reinterpret_cast<size_t>(xr_handle), i);
+            proxy_name = com_name_prefix + std::format("Proxy Swapchain {}", reinterpret_cast<size_t>(xr_handle));
         }
         else {
-            std::string name = std::format("{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
-            proxy_name = name;
+            std::string name = com_name_prefix + std::format("{} {} Resource {}", resource_name, reinterpret_cast<size_t>(xr_handle), i);
+            proxy_name = com_name_prefix + std::format("{} {}", resource_name, reinterpret_cast<size_t>(xr_handle));
         }
 
         // Give name to the buffer
@@ -243,6 +242,14 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         }
     }
 
+    std::stringstream ss;
+    ss << std::format("Successfully created proxy swapchain resources:") << "\n";
+    ss << std::format("swapchain {}", proxy_name) << "\n";
+    ss << std::format("width: {}", GetWidth()) << "\n";
+    ss << std::format("height: {}", GetHeight()) << "\n";
+    ss << std::format("buffer count: {}", GetBufferCount()) << "\n";
+    spdlog::info(ss.str());
+
     return true;
 }
 
@@ -256,6 +263,11 @@ void D3D12ProxySwapchain::DestroyResources() {
 
     rtv_heap.Reset();
     srv_heap.Reset();
+
+    std::stringstream ss;
+    ss << std::format("Destroyed proxy swapchain resources:") << "\n";
+    ss << std::format("swapchain {}", reinterpret_cast<size_t>(xr_handle)) << "\n";
+    spdlog::info(ss.str());
 }
 
 size_t D3D12ProxySwapchain::GetBufferCount() {
@@ -287,7 +299,6 @@ uint32_t D3D12ProxySwapchain::GetAwaitedImageIndex() {
 }
 
 XrResult D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
-    //std::lock_guard guard(acquire_image_mutex);
     uint32_t next_index = (current_frame_index + 1) % back_buffer_count;
 
     if (current_image_state[next_index] != IMAGE_STATE_RELEASED) {
@@ -299,13 +310,11 @@ XrResult D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
     current_image_state[current_frame_index] = IMAGE_STATE_ACQUIRED;
     index = current_frame_index;
 
-
-    spdlog::info("Acquired Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), index);
+    spdlog::debug("Acquired Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), index);
     return XR_SUCCESS;
 }
 
 XrResult D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
-    //std::lock_guard guard(wait_image_mutex);
     if (current_image_state[current_frame_index] != IMAGE_STATE_ACQUIRED) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
@@ -317,12 +326,11 @@ XrResult D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
     current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
     awaited_frame_index = current_frame_index;
 
-    spdlog::info("Awaited Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), current_frame_index);
+    spdlog::debug("Awaited Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), current_frame_index);
     return XR_SUCCESS;
 }
 
 XrResult D3D12ProxySwapchain::ReleaseImage() {
-    //std::lock_guard guard(release_image_mutex);
     if (current_image_state[awaited_frame_index] != IMAGE_STATE_RENDER_TARGET) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
@@ -338,7 +346,7 @@ XrResult D3D12ProxySwapchain::ReleaseImage() {
     //    << " released index " << released_frame_index
     //    ;
 
-    spdlog::info("Released Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), released_frame_index);
+    spdlog::debug("Released Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), released_frame_index);
     return XR_SUCCESS;
 }
 
@@ -445,6 +453,13 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
             back_buffers[i]->SetName(name.c_str());
         }
     }
+
+    std::stringstream ss;
+    ss << std::format("Successfully created window swapchain resources:") << "\n";
+    ss << std::format("width: {}", createInfo->width) << "\n";
+    ss << std::format("height: {}", createInfo->height) << "\n";
+    ss << std::format("buffer count: {}", back_buffers.size()) << "\n";
+    spdlog::info(ss.str());
 
     return true;
 }
