@@ -301,6 +301,9 @@ XrResult D3D12ProxySwapchain::AcquireNextImage(uint32_t& index) {
     current_frame_index = next_index;
     current_image_state[current_frame_index] = IMAGE_STATE_ACQUIRED;
     index = current_frame_index;
+
+
+    spdlog::info("Acquired Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), index);
     return XR_SUCCESS;
 }
 
@@ -317,6 +320,7 @@ XrResult D3D12ProxySwapchain::WaitForImage(const XrDuration& timeout) {
     current_image_state[current_frame_index] = IMAGE_STATE_RENDER_TARGET;
     awaited_frame_index = current_frame_index;
 
+    spdlog::info("Awaited Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), current_frame_index);
     return XR_SUCCESS;
 }
 
@@ -337,6 +341,7 @@ XrResult D3D12ProxySwapchain::ReleaseImage() {
     //    << " released index " << released_frame_index
     //    ;
 
+    spdlog::info("Released Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), released_frame_index);
     return XR_SUCCESS;
 }
 
@@ -472,14 +477,8 @@ uint32_t D3D12WindowSwapchain::AcquireNextImage() {
     return swap_chain->GetCurrentBackBufferIndex();
 }
 
-// Called from xrEndFrame, cause then we know the application is done with rendering this image.
 void D3D12WindowSwapchain::PresentFrame() {
-    // TODO Transitioning images state without waiting on the queue to finish, not sure this will break eventually. Maybe dx12 is synchronizing implicitly?
-    //TransitionBackBufferImage(COMMAND_RESOURCE_INDEX_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     swap_chain->Present(1, 0);
-
-
-    // barrier to render target
 }
 
 D3D12WindowSwapchain::D3D12WindowSwapchain() : d3d12_renderer(nullptr) {

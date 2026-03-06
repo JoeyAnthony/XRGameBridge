@@ -15,7 +15,6 @@ class D3D12Renderer;
 
 //TODO make this const inside the class and mutable through the constructor
 class D3D12ProxySwapchain : public ProxySwapchain {
-    XrSwapchain xr_handle;
     D3D12Renderer* d3d12_renderer;
 
     std::string proxy_name;

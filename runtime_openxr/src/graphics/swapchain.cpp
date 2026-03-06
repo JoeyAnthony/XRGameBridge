@@ -127,7 +127,7 @@ XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* creat
     *swapchain = proxy_swapchain->GetHandle();
     g_proxy_swapchains[proxy_swapchain->GetHandle()] = proxy_swapchain;
 
-    spdlog::info("Successfully created proxy swapchain");
+    spdlog::info("Successfully created proxy swapchain {}: ", reinterpret_cast<size_t>(*swapchain));
     return XR_SUCCESS;
 }
 

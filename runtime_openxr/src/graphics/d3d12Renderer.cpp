@@ -149,7 +149,7 @@ bool D3D12Renderer::DestroyFences() {
 
 XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     // Update the frame in flight.
-    frame_in_flight = frame_in_flight++ % standard_swapchain_buffer_count;
+    frame_in_flight = (frame_in_flight + 1) % standard_swapchain_buffer_count;
 
     // If the next frame in flight is still rendering wait until it is ready.
     if (fence->GetCompletedValue() < frame_fence_values[frame_in_flight]) {
