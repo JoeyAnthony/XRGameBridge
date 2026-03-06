@@ -535,7 +535,7 @@ void InitializeSystems(XrInstance instance) {
 
 GB_Instance::GB_Instance() {
     // Set dpi awareness for the application
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     // TODO move to input class
     // Initialize hotkey manager

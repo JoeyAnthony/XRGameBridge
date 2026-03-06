@@ -87,13 +87,10 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
         return false;
     }
 
+    // Ensure the application receives unscaled display metrics
     auto dpi_context = GetThreadDpiAwarenessContext();
-    if (dpi_context != DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE) {
-        // Ensure the application receives unscaled display metrics
-        //SetProcessDpiAwareness(PROCESS_DPI_AWARENESS::PROCESS_PER_MONITOR_DPI_AWARE);
-        const DPI_AWARENESS_CONTEXT context = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE;
-        SetThreadDpiAwarenessContext(context);
-    }
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
 
     // Always try to get the external display before creating one ourselves
     TryGetExternalDisplay();
@@ -161,6 +158,7 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
         ShowWindow(h_wnd, SW_MAXIMIZE);
     }
 
+    SetThreadDpiAwarenessContext(dpi_context);
     return true;
 }
 

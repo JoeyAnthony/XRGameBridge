@@ -238,8 +238,8 @@ uint32_t SRSystem::GetViewCount() const {
 XrSystemProperties SRSystem::GetSystemProperties() const {
     XrSystemGraphicsProperties g_props{};
     g_props.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-    g_props.maxSwapchainImageWidth = swapchain_image_width;
-    g_props.maxSwapchainImageHeight = swapchain_image_height;
+    g_props.maxSwapchainImageWidth = physical_resolution_width * 2;
+    g_props.maxSwapchainImageHeight = physical_resolution_height * 2;
 
     XrSystemTrackingProperties t_props{};
     t_props.positionTracking = false;
