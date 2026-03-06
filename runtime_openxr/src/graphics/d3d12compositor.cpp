@@ -266,10 +266,18 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
         layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
 
-        std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
-        cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+        // Only set image heap and descriptors if the previous image was different. Both pipeline states share the same root/descriptors so it's fine to not always set the image heaps.
+        if (view_num == 0 || layer->views[view_num].subImage.swapchain != layer->views[view_num-1].subImage.swapchain) {
+            // Set heaps
+            std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
+            cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+            cmd_list->SetGraphicsRootSignature(root_signature.Get());
 
-        cmd_list->SetGraphicsRootSignature(root_signature.Get());
+            // Set images for the shader
+            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
+            cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+            cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+        }
 
         if (layering_constants.is_opaque) {
             cmd_list->SetPipelineState(pipeline_state_opaque.Get());
@@ -279,17 +287,6 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         }
 
         cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
-
-        // Only set image descriptors if the previous image was different
-        if (view_num == 0 || layer->views[view_num].subImage.swapchain != layer->views[view_num-1].subImage.swapchain) {
-            // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-            cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-            cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
-        }
-
-        //float blend_factor[4]{ 0.f };
-        //cmd_list->OMSetBlendFactor(blend_factor);
 
         cmd_list->DrawInstanced(3, 1, 0, 0);
     }
@@ -331,6 +328,16 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     cmd_list->ResourceBarrier(1, &barrier);
 
+    // Set heaps
+    std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
+    cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
+    cmd_list->SetGraphicsRootSignature(root_signature.Get());
+
+    // Set images for the shader
+    auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
+    cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+    cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+
     for (; view_num < view_count; view_num++) {
         // Viewport settings
         const float width = static_cast<float>(system_width) / 2;
@@ -363,11 +370,6 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
         layering_constants.uvmax_x = static_cast<float>(rect.offset.x + rect.extent.width) / static_cast<float>(proxy_swapchain->GetWidth());
         layering_constants.uvmax_y = static_cast<float>(rect.offset.y + rect.extent.height) / static_cast<float>(proxy_swapchain->GetHeight());
 
-        std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
-        cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
-
-        cmd_list->SetGraphicsRootSignature(root_signature.Get());
-
         if (layering_constants.is_opaque) {
             cmd_list->SetPipelineState(pipeline_state_opaque.Get());
         }
@@ -376,11 +378,6 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
         }
 
         cmd_list->SetGraphicsRoot32BitConstants(2, 8, &layering_constants, 0);
-
-        // Setting descriptor tables is optional if there is only a single texture. For multiple sets of textures, you want to move this index.
-        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
         cmd_list->DrawInstanced(3, 1, 0, 0);
     }
