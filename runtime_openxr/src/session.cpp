@@ -227,11 +227,12 @@ XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, Xr
 
     gb_session.UpdateSession();
 
-    XrDuration average_frame_time = std::accumulate(gb_session.frame_times.begin(), gb_session.frame_times.end(), 0) / gb_session.frame_times.size();
+    // TODO calculate time based on the screen's v-sync
+    XrDuration average_frame_time = std::accumulate(gb_session.frame_times.begin(), gb_session.frame_times.end(), 0LL) / gb_session.frame_times.size();
     XrTime current_time = (std::chrono::high_resolution_clock::now() - g_runtime_settings->GetRuntimeEpoch()).count();
 
     frameState->predictedDisplayPeriod = average_frame_time;
-    frameState->predictedDisplayTime = current_time + average_frame_time;
+    frameState->predictedDisplayTime = current_time + average_frame_time * 1.5;
     frameState->shouldRender = gb_session.should_render;
 
     gb_session.waited_frame = frameState->predictedDisplayTime;
