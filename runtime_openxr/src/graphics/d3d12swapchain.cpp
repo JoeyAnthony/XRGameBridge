@@ -339,12 +339,13 @@ XrResult D3D12ProxySwapchain::ReleaseImage() {
 
     released_frame_index = awaited_frame_index;
 
-    //spdlog::info("px - "
-    //    << " swapchain: " << handle
+    //std::stringstream ss; ss << "px - "
+    //    << " swapchain: " << proxy_name
     //    << " aqcuired index " << current_frame_index
     //    << " awaited index " << awaited_frame_index
     //    << " released index " << released_frame_index
     //    ;
+    //spdlog::debug(ss.str());
 
     spdlog::debug("Released Proxy Swapchain {} Image {}", reinterpret_cast<size_t>(xr_handle), released_frame_index);
     return XR_SUCCESS;

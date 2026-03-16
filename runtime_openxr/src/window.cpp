@@ -136,6 +136,7 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     const long h = static_cast<long>(height);
     h_wnd = CreateWindowEx(0, window_class.c_str(), title.c_str(), window_style, window_x, window_y, w, h, h_wnd_external, NULL, hInstance, NULL);
     if (!h_wnd) {
+        spdlog::error("Failed to create window, call to CreateWindow failed!");
         MessageBox(NULL, "Call to CreateWindow failed!", "XR Game Bridge", NULL);
         return false;
     }

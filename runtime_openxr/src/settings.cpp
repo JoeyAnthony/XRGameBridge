@@ -8,11 +8,13 @@ RuntimeLogger::RuntimeLogger() {
     const auto log_path = std::filesystem::path(g_runtime_settings->GetRuntimePath()).parent_path() / log_name;
     stderr_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_path.string());
-
     multi_sink_logger = std::make_shared<spdlog::logger>("multi_sink", (stderr_sink, file_sink));
+
+    multi_sink_logger->set_level(spdlog::level::debug);
+
     spdlog::set_default_logger(multi_sink_logger);
 
-    //spdlog::info("Log path: {}", log_path);
+    //spdlog::error("Log path: {}", log_path.string());
 }
 
 std::shared_ptr<spdlog::logger> RuntimeLogger::GetLogger() {

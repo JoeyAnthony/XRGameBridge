@@ -31,11 +31,9 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD fdwReason, LPVOID) {
 
         spdlog::info("DLL_PROCESS_ATTACH");
 
-        spdlog::info("XR Game Bridge Loaded");
+        spdlog::info("XR Game Bridge Version: {}", Version::Full);
 
         spdlog::info("Runtime location: {}", g_runtime_settings->GetRuntimePath());
-
-        spdlog::info("Game Bridge: VERSION");
 
         spdlog::info("OpenXR API: {}.{}.{}", XR_VERSION_MAJOR(XR_CURRENT_API_VERSION), XR_VERSION_MINOR(XR_CURRENT_API_VERSION), XR_VERSION_PATCH(XR_CURRENT_API_VERSION));
 
