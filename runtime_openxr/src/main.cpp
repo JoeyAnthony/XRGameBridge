@@ -13,6 +13,8 @@
 #include <openxr/openxr.h>
 
 #include "settings.h"
+#include "../generated/version.h"
+
 #include "debug.h"
 
 namespace fs = std::filesystem;

@@ -3,7 +3,7 @@ include(cmake/storebinary.cmake)
 
 cmake_minimum_required(VERSION 3.23)
 set (CMAKE_CXX_STANDARD 20)
-project (RuntimeOpenXR VERSION 0.1)
+project (RuntimeOpenXR VERSION 0.1.1)
 set(CMAKE_DEBUG_POSTFIX d)
 
 # Options
@@ -37,6 +37,7 @@ set(GRAPHICS
     src/graphics/d3d11swapchain.cpp
 )
 set(SROUCES
+    generated/version.h
     src/main.cpp
     src/dll.h
     src/instance.h
@@ -111,17 +112,23 @@ if(EMBED_SHADERS)
         )
 
     # Append generated files to library
-    list(APPEND SHADERS
+    list(APPEND GENERATED
         generated/shaders_generated.h
         templates/shaders_embedded_template.h # Add only for easy editing
     )
 endif()
 
+# Generate version header
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/templates/version_template.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/generated/version.h
+)
+
 set(ALL_LIBRARY_SOURCES
     ${SROUCES}
     ${HOTKEYS}
     ${GRAPHICS}
-    ${SHADERS}
+    ${GENERATED}
 )
 
 # Add target
