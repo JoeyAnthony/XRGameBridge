@@ -74,7 +74,7 @@ bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
     rasterizerDesc.FillMode = D3D11_FILL_SOLID;
     rasterizerDesc.CullMode = D3D11_CULL_FRONT;
 
-    d3d11_device->CreateRasterizerState(&rasterizerDesc, rasterizer_state.GetAddressOf());
+    ThrowIfFailed(d3d11_device->CreateRasterizerState(&rasterizerDesc, rasterizer_state.GetAddressOf()));
 
     return true;
 }
