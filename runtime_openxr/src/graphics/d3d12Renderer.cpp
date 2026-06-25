@@ -443,9 +443,9 @@ D3D12Renderer* D3D12Renderer::Create(XrSystemId systemId, const void* graphics_b
     const XrGraphicsBindingD3D12KHR* d3d12_bindings = static_cast<const XrGraphicsBindingD3D12KHR*> (graphics_binding);
 
     { // Check validity of the device
-        const ID3D12Object* obj = dynamic_cast<ID3D12Object*> (d3d12_bindings->device);
-        if (!obj) {
-            throw XrException(XR_ERROR_GRAPHICS_DEVICE_INVALID, "Failed to create D3D12Renderer, graphics bining may be invalid");
+        ComPtr<ID3D12Object> obj;
+        if (!d3d12_bindings->device || FAILED(d3d12_bindings->device->QueryInterface(IID_PPV_ARGS(&obj)))) {
+            throw XrException(XR_ERROR_GRAPHICS_DEVICE_INVALID, "Failed to create D3D12Renderer, graphics binding may be invalid");
         }
     }
 
