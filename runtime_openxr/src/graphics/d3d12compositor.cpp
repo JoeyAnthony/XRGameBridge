@@ -329,9 +329,10 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
     }
 
     auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[layer->subImage.swapchain]);
-    auto proxy_resource = proxy_swapchain->GetBuffers()[proxy_swapchain->GetAwaitedImageIndex()];
+    int image_index = proxy_swapchain->GetAwaitedImageIndex();
+    auto proxy_resource = proxy_swapchain->GetBuffers()[image_index];
     // Set new fence values for the used swapchain image.
-    proxy_swapchain->SetReleasedImageFenceValue(proxy_swapchain->GetAwaitedImageIndex(), new_fence_value);
+    proxy_swapchain->SetReleasedImageFenceValue(image_index, new_fence_value);
 
     // Transition proxy swapchain resource to pixel shader resource
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(proxy_resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -343,7 +344,7 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
     cmd_list->SetGraphicsRootSignature(root_signature.Get());
 
     // Set images for the shader
-    auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
+    auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), image_index, proxy_swapchain->GetCbcSrvUavDescriptorSize());
     cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
     cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
