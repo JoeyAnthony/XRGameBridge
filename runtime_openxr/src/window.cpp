@@ -74,6 +74,8 @@ bool GameBridgeWindow::InitWindowClass(HINSTANCE hInstance) {
 
         return false;
     }
+
+    return true;
 }
 
 GameBridgeWindow::~GameBridgeWindow() {
@@ -81,6 +83,7 @@ GameBridgeWindow::~GameBridgeWindow() {
 }
 
 bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::shared_ptr<SRSystem>& system, uint32_t width, uint32_t height, int nCmdShow, bool fullscreen, bool showWindow) {
+    spdlog::info("Creating application window");
     // TODO better window creation checking code
     static bool window_created = false;
     if (h_wnd != nullptr) {
@@ -158,6 +161,9 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     if (showWindow) {
         ShowWindow(h_wnd, SW_MAXIMIZE);
     }
+
+    spdlog::info("Windows resolution: {}x{}", width, height);
+    spdlog::info("Windows position: {}x{}", window_x, window_y);
 
     SetThreadDpiAwarenessContext(dpi_context);
     return true;

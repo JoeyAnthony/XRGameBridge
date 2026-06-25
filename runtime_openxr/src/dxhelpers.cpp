@@ -14,6 +14,8 @@ void DxHelpers::CreateDXGIFactory(IDXGIFactory4** factory) {
     if (FAILED(err)) {
         spdlog::error("Could not create DXGIFactory with error: {}", err);
     }
+
+    spdlog::info("Created DGXI Factory");
 }
 
 void DxHelpers::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter) {
@@ -21,7 +23,9 @@ void DxHelpers::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAd
 
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
     Microsoft::WRL::ComPtr<IDXGIFactory6> factory6;
+
     if (SUCCEEDED(pFactory->QueryInterface(IID_PPV_ARGS(&factory6)))) {
+        spdlog::info("Searching for hardware adapter by device preference");
         for (UINT adapterIndex = 0; SUCCEEDED(factory6->EnumAdapterByGpuPreference(adapterIndex, requestHighPerformanceAdapter == true ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE : DXGI_GPU_PREFERENCE_UNSPECIFIED, IID_PPV_ARGS(&adapter))); ++adapterIndex) {
             DXGI_ADAPTER_DESC1 desc;
             adapter->GetDesc1(&desc);
@@ -33,6 +37,7 @@ void DxHelpers::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAd
 
             // Check to see whether the adapter supports Direct3D 12, but don't create the actual device yet.
             if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr))) {
+                spdlog::info("Hardware adapter found by preference");
                 break;
             }
         }
@@ -40,6 +45,7 @@ void DxHelpers::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAd
 
     if (adapter.Get() == nullptr) {
         for (UINT adapterIndex = 0; SUCCEEDED(pFactory->EnumAdapters1(adapterIndex, &adapter)); ++adapterIndex) {
+            spdlog::info("Searching for hardware adapters");
             DXGI_ADAPTER_DESC1 desc;
             adapter->GetDesc1(&desc);
 
@@ -50,6 +56,7 @@ void DxHelpers::GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAd
 
             // Check to see whether the adapter supports Direct3D 12, but don't create the actual device yet.
             if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr))) {
+                spdlog::info("Hardware adapter found");
                 break;
             }
         }

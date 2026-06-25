@@ -234,6 +234,8 @@ XrResult xrGetD3D11GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
+    spdlog::info("Initializing for DirectX 11");
+
     // Give graphics requirements to the connected application
     DXGI_ADAPTER_DESC1 desc;
     hardwareAdapter->GetDesc1(&desc);

@@ -16,6 +16,7 @@
 
 SrEyeTrackingSystemFeature::SrEyeTrackingSystemFeature(SR::SRContext& sr_context) :
     eye_pair_listener(SrEyePairListener(SR::PredictingEyeTracker::create(sr_context))) {
+    spdlog::info("Creating SR Predicting Eye Tracker");
     sr_context.initialize();
 }
 
@@ -56,9 +57,10 @@ PipelineStep* SrPipelineFactory::CreateD3D12DistortionPipeline() {
 }
 
 void SRSystem::InitializeSrContext() {
+    spdlog::info("Initializing SR Context");
     for (uint32_t retries = 0; retries < max_retries; retries++) {
         if (retries >= max_retries) {
-            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not connect to sr service");
+            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not connect to sr service, max retries reached");
         }
 
         if (context == nullptr) {
@@ -83,9 +85,11 @@ void SRSystem::InitializeSrContext() {
 }
 
 void SRSystem::InitializeSrDisplay() {
+    spdlog::info("Initializing SR Display");
+
     for (uint32_t retries = 0; retries < max_retries; retries++) {
         if (retries >= max_retries) {
-            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not find any connected SR display");
+            throw XrException(XR_ERROR_RUNTIME_FAILURE, "Could not find any connected SR display max retries reached");
         }
 
         display = SR::Display::create(*context);
@@ -100,6 +104,7 @@ void SRSystem::InitializeSrDisplay() {
 }
 
 SRSystem::SRSystem(XrSystemId sys_id, GraphicsBackend graphics) : XRSystem(sys_id, XRSystemType::SRSystem, "Simulated Reality Display") {
+    spdlog::info("Initializing SR System");
     instance = instance;
     form_factor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
     active_graphics_backend = graphics;
@@ -146,6 +151,9 @@ SRSystem::SRSystem(XrSystemId sys_id, GraphicsBackend graphics) : XRSystem(sys_i
 
     physical_screen_width_m = display->getPhysicalSizeWidth() / 100.f;
     physical_screen_height_m = display->getPhysicalSizeHeight() / 100.f;
+
+    spdlog::info("Physical resolution:    {}x{}", physical_resolution_width, physical_resolution_height);
+    spdlog::info("Recommended resolution: {}x{}", recommended_resolution_width, recommended_resolution_height);
 }
 
 XrFovf SRSystem::GetConvergingFov(const glm::vec3& eye_position) {

@@ -70,6 +70,7 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
     back_buffers.resize(back_buffer_count);
 
     for (uint32_t i = 0; i < back_buffer_count; i++) {
+        spdlog::info("Creating Depth resource");
         // Set resource_usage to save the state the application expects the buffer to be in
         resource_usage = states;
 
@@ -127,6 +128,7 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
         }
         // Create render target
         else {
+            spdlog::info("Creating Color resource");
             // Describe and create a Texture2D.
             D3D12_RESOURCE_DESC texture_desc = {};
             texture_desc.Format = format;
@@ -369,6 +371,7 @@ Renderer* D3D12ProxySwapchain::GetRenderer() {
 }
 
 bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd) {
+    spdlog::info("Creating DX12 window swapchain");
     ID3D12Device* device = d3d12_renderer->GetDevice().Get();
     ID3D12CommandQueue* queue = d3d12_renderer->GetCommandQueue().Get();
 

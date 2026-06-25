@@ -34,11 +34,12 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem
     }
     catch (std::exception& e) {
         LOG_RUNTIME_ERROR
-        return XR_ERROR_RUNTIME_FAILURE;
+            return XR_ERROR_RUNTIME_FAILURE;
     }
 }
 
 XrResult D3D12Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
+    spdlog::info("Creating DX12 weaver");
     auto sr_context = gb_system->GetSrContext();
     d3d12weaver = new SR::PredictingDX12Weaver(*sr_context, d3d12_device.Get(), command_allocators[0].Get(), d3d12_command_queue.Get(), intermediate_resource->GetBuffers()[0].Get(), window_swapchain.GetImages()[0].Get(), window.GetWindowHandle());
     sr_context->initialize();
@@ -75,6 +76,7 @@ XrResult D3D12Renderer::CreateWindowSwapchain(const std::shared_ptr<SRSystem>& g
 }
 
 bool D3D12Renderer::CreateCommandLists() {
+    spdlog::info("Creating command lists");
     command_allocators.resize(standard_swapchain_buffer_count);
     command_lists.resize(standard_swapchain_buffer_count);
 
@@ -104,11 +106,12 @@ bool D3D12Renderer::CreateCommandLists() {
 }
 
 bool D3D12Renderer::CreateFenceObjects() {
+    spdlog::info("Creating fences");
     frame_fence_values.resize(standard_swapchain_buffer_count, 0);
 
     // Create fence
     HRESULT res = d3d12_device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-    if(FAILED(res)) {
+    if (FAILED(res)) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create fence object");
     }
     // Create an event handle to use for frame synchronization.
@@ -121,6 +124,7 @@ bool D3D12Renderer::CreateFenceObjects() {
 }
 
 bool D3D12Renderer::DestroyFences() {
+    spdlog::info("Destroying fences");
     const uint64_t last_fence_value = fence_value;
     const uint64_t lastCompletedFence = fence->GetCompletedValue();
 
@@ -240,7 +244,7 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
 
     // Set viewport for weaving to window swapchain
     auto gb_system = g_systems[xr_system];
-    glm::ivec2 native_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight()};
+    glm::ivec2 native_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight() };
     D3D12_VIEWPORT view_port{ 0, 0, static_cast<float>(native_resolution.x) , static_cast<float>(native_resolution.y), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(native_resolution.x) , static_cast<long>(native_resolution.y) };
     cmd_list->RSSetViewports(1, &view_port);
@@ -311,6 +315,7 @@ XrResult D3D12Renderer::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
 }
 
 void D3D12Renderer::WaitForGpu() {
+    spdlog::info("Waiting for GPU to finish frame");
     // Schedule a Signal command in the queue.
     fence_value++;
     ThrowIfFailed(d3d12_command_queue->Signal(fence.Get(), fence_value));
@@ -321,6 +326,7 @@ void D3D12Renderer::WaitForGpu() {
 }
 
 void D3D12Renderer::ResetCommandLists() {
+    spdlog::info("Resetting all command lists");
     // Reset command lists
     WaitForGpu();
 
@@ -417,6 +423,7 @@ void D3D12Renderer::D3D12MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_
 }
 
 void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
+    spdlog::info("Initializing rendering pipeline for DX12");
     CreateFenceObjects();
     CreateCommandLists();
 

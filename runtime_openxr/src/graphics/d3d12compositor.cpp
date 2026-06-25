@@ -18,6 +18,8 @@
 #include "d3d12renderer.h"
 
 bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
+    spdlog::info("Initializing DX12 compositor");
+
     d3d12_device = renderer->GetDevice();
     command_queue = renderer->GetCommandQueue();
     HRESULT res = 0;
@@ -54,6 +56,8 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
         }
         else if (feature_data.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_0) {
             //root_signature_desc.Init_1_0(_countof(root_parameters), root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+            spdlog::error("Root signature verion 1.0 not implemented");
+            return false;
         }
 
         ComPtr<ID3DBlob> signature;
@@ -92,11 +96,13 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     blend_state_blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
     // TODO Loads the shaders twice this way
+    spdlog::info("Creating PSO with opaque state");
     if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_opaque, pipeline_state_opaque) == false) {
         // Error logged inside function
         return false;
     }
 
+    spdlog::info("Creating PSO with blending state");
     if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_blend, pipeline_state_blend) == false) {
         // Error logged inside function
         return false;
@@ -127,6 +133,9 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     sampler_desc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
     sampler_desc.BorderColor[0] = sampler_desc.BorderColor[1] = sampler_desc.BorderColor[2] = sampler_desc.BorderColor[3] = 0;
     d3d12_device->CreateSampler(&sampler_desc, sampler_heap->GetCPUDescriptorHandleForHeapStart());
+    if (sampler_heap == nullptr) {
+        spdlog::error("Sampler heap was nullptr");
+    }
 
     return true;
 }

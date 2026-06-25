@@ -98,6 +98,7 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
 }
 
 XrResult xrDestroySession(XrSession session) {
+    spdlog::info("Destroying Session");
     TraceLogFunctionCall(__func__, __LINE__);
 
     // TODO Should probably destroy all objects related to a session.
@@ -120,6 +121,7 @@ XrResult xrDestroySession(XrSession session) {
 }
 
 XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
+    spdlog::info("Beginning Session");
     TraceLogFunctionCall(__func__, __LINE__);
 
     // TODO check if view configuration type is supported
@@ -161,6 +163,7 @@ XrResult xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) 
 }
 
 XrResult xrEndSession(XrSession session) {
+    spdlog::info("Ending Session");
     TraceLogFunctionCall(__func__, __LINE__);
 
     XRSession& gb_session = g_sessions[session];
@@ -189,6 +192,7 @@ XrResult xrEndSession(XrSession session) {
 }
 
 XrResult xrRequestExitSession(XrSession session) {
+    spdlog::info("Exiting Session");
     TraceLogFunctionCall(__func__, __LINE__);
 
     XRSession& gb_session = g_sessions[session];

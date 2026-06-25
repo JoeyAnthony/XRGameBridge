@@ -15,6 +15,7 @@
 #include "swapchain.h"
 
 bool D3D11Compositor::Initialize(D3D11Renderer* renderer) {
+    spdlog::info("Initializing DX11 compositor");
     d3d11_device = renderer->GetDevice();
 
     // Load shaders

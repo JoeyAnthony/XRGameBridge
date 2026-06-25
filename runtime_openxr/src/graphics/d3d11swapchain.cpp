@@ -404,6 +404,7 @@ DXGI_FORMAT ResolveTextureFormatForUsage(DXGI_FORMAT application_format, XrSwapc
 
 D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd)
 {
+    spdlog::info("Creating DX11 window swapchain");
     d3d11_renderer = renderer;
     auto device = renderer->GetDevice();
     width = createInfo->width;

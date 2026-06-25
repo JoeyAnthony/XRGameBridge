@@ -48,6 +48,7 @@ XrResult D3D11Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem
 }
 
 XrResult D3D11Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
+    spdlog::info("Creating DX11 weaver");
     auto sr_context = gb_system->GetSrContext();
     native_weaver = new SR::PredictingDX11Weaver(*sr_context, d3d11_device.Get(), d3d11_device_context.Get(), gb_system->PhysicalResolutionWidth(), gb_system->PhysicalResolutionHeight(), window.GetWindowHandle());
     sr_context->initialize();
@@ -95,6 +96,7 @@ XrResult D3D11Renderer::CreateWindowSwapchain(const std::shared_ptr<SRSystem>& g
 }
 
 bool D3D11Renderer::CreateCommandLists() {
+    spdlog::info("Creating DX11 deferred contexts");
     d3d11_device->CreateDeferredContext(0, d3d11_device_context.GetAddressOf());
     d3d11_device->GetImmediateContext(d3d11_immediate_context.GetAddressOf());
     return true;
@@ -188,6 +190,7 @@ D3D11Renderer::D3D11Renderer(XrSystemId systemId, const XrGraphicsBindingD3D11KH
 }
 
 D3D11Renderer::~D3D11Renderer() {
+    spdlog::info("Destroying DX11 Renderer");
     delete native_weaver;
     delete compositor;
     delete window_swapchain;
@@ -196,6 +199,7 @@ D3D11Renderer::~D3D11Renderer() {
 }
 
 void D3D11Renderer::InitializePipeline(GB_Instance* instance) {
+    spdlog::info("Initializing DX11 rendering pipeline");
     std::shared_ptr<SRSystem> system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
 
     CreateCompositor();
