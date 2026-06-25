@@ -11,7 +11,7 @@
 // Edited from the Microsoft documentation
 class DxHelpers {
 public:
-    static void CreateDXGIFactory(IDXGIFactory4** factory);
+    static void CreateDXGIFactory(IDXGIFactory4** factory, UINT dxgi_factory_flags = 0);
     static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
 };
 

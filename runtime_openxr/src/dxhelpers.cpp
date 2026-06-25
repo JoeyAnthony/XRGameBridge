@@ -7,9 +7,8 @@
 
 #include "dxhelpers.h"
 
-void DxHelpers::CreateDXGIFactory(IDXGIFactory4** factory) {
+void DxHelpers::CreateDXGIFactory(IDXGIFactory4** factory, UINT dxgi_factory_flags) {
     // Create a DXGIFactory object.
-    UINT dxgi_factory_flags = 0;
     HRESULT err = CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(factory));
     if (FAILED(err)) {
         spdlog::error("Could not create DXGIFactory with error: {}", err);

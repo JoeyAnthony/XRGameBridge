@@ -250,6 +250,7 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
 
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
+    // Can try to use DXGI_CREATE_FACTORY_DEBUG as well perhaps.
     DxHelpers::CreateDXGIFactory(&factory);
     DxHelpers::GetGraphicsAdapter(factory.Get(), &hardwareAdapter, true);
 
