@@ -163,9 +163,6 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
         WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
     }
 
-    // Increase fence value so WaitForSwapchainImage will wait on it and the signal will be set for it.
-    fence_value++;
-
     int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
     auto& cmd_list = GetCommandList(frame_in_flight);
     auto& cmd_allocator = GetCommandAllocator(frame_in_flight);
@@ -195,6 +192,9 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     frame_fence_values[frame_in_flight] = fence_value;
     // Update the fence value when the GPU is done with execution.
     ThrowIfFailed(d3d12_command_queue->Signal(fence.Get(), fence_value));
+
+    // Increase fence value so WaitForSwapchainImage will wait on it and the signal will be set for it.
+    fence_value++;
 
     // Present to window
     window_swapchain.PresentFrame();
