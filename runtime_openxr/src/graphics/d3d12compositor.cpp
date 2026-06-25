@@ -281,12 +281,13 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
             std::array heaps = { proxy_swapchain->GetSrvHeap().Get(), sampler_heap.Get() };
             cmd_list->SetDescriptorHeaps(heaps.size(), heaps.data());
             cmd_list->SetGraphicsRootSignature(root_signature.Get());
-
-            // Set images for the shader
-            auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
-            cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
-            cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
         }
+
+        // Set images for the shader
+        // TODO Test if this may have to do with the white screen issue, otherwise, move back!
+        auto proxy_resource_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(proxy_swapchain->GetSrvHeap()->GetGPUDescriptorHandleForHeapStart(), proxy_swapchain->GetAwaitedImageIndex(), proxy_swapchain->GetCbcSrvUavDescriptorSize());
+        cmd_list->SetGraphicsRootDescriptorTable(0, proxy_resource_handle); // Set offset in the heap for the shader (descriptor tables)
+        cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
 
         if (layering_constants.is_opaque) {
             cmd_list->SetPipelineState(pipeline_state_opaque.Get());
