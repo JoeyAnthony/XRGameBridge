@@ -10,6 +10,7 @@ set(CMAKE_DEBUG_POSTFIX d)
 option(EMBED_SHADERS "Embed compiled shader binaries into a header file. 
 When turned off, shaders are compiled as post build and the binaries are read at run time.
 This is easier for development." ON)
+option(ENABLE_D3D12_DEBUG_LAYERS "Enable D3D12 debug layer and Info Queue message callback" OFF)
 
 # Sources
 set(HOTKEYS
@@ -157,6 +158,10 @@ target_include_directories(RuntimeOpenXR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_PLATFORM_WIN32)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D12)
 target_compile_definitions(RuntimeOpenXR PRIVATE XR_USE_GRAPHICS_API_D3D11)
+
+if(ENABLE_D3D12_DEBUG_LAYERS)
+    target_compile_definitions(RuntimeOpenXR PRIVATE ENABLE_D3D12_DEBUG_LAYERS)
+endif()
 
 # Debuging definitions
 # target_compile_definitions(RuntimeOpenXR PRIVATE DEBUG_FUNCTION_CALL)

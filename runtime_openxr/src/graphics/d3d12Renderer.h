@@ -34,6 +34,8 @@ class D3D12Renderer : public Renderer {
     // D3D12
     ComPtr<ID3D12Device> d3d12_device;
     ComPtr<ID3D12CommandQueue> d3d12_command_queue;
+    ComPtr<ID3D12InfoQueue> info_queue;
+    DWORD m_infoqueue_callback_cookie = 0;
     // TODO map holding an array of descriptors for each swapchain handle?
     std::vector<ComPtr<ID3D12CommandAllocator>> command_allocators;
     std::vector<ComPtr<ID3D12GraphicsCommandList>> command_lists;
@@ -59,6 +61,10 @@ class D3D12Renderer : public Renderer {
 
     void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
+    void SetupInfoQueue();
+    void DestroyInfoQueue();
+
+    static void D3D12MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id, LPCSTR description, void* pContext);
 
 public:
     static D3D12Renderer* Create(XrSystemId systemId, const void* graphics_binding);

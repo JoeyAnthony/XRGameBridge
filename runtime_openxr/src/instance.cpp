@@ -274,22 +274,25 @@ XrResult xrGetD3D12GraphicsRequirementsKHR(XrInstance instance, XrSystemId syste
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
+    spdlog::info("Initializing for DirectX 12");
+
     // Give graphics requirements to the connected application
     DXGI_ADAPTER_DESC1 desc;
     hardwareAdapter->GetDesc1(&desc);
     graphicsRequirements->adapterLuid = desc.AdapterLuid;
     graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_0;
 
-//#ifdef _DEBUG
-//    // Enable the D3D12 debug layer.
-//    spdlog::warn("DirectX 12 Debug device is being used");
-//    {
-//        ComPtr<ID3D12Debug> debugController;
-//        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
-//            debugController->EnableDebugLayer();
-//        }
-//    }
-//#endif
+#ifdef ENABLE_D3D12_DEBUG_LAYERS
+    // Enable the D3D12 debug layer.
+    spdlog::warn("DirectX 12 Debug device is being used");
+    {
+        ComPtr<ID3D12Debug> debugController;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf())))) {
+            debugController->EnableDebugLayer();
+        }
+    }
+#endif
+
     return XR_SUCCESS;
 }
 

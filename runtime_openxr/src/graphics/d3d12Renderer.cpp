@@ -352,6 +352,70 @@ ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t inde
     return command_allocators[index];
 }
 
+void D3D12Renderer::SetupInfoQueue() {
+#ifdef ENABLE_D3D12_DEBUG_LAYERS
+    if (d3d12_device->QueryInterface(IID_PPV_ARGS(&info_queue)) == S_OK) {
+        info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        ComPtr<ID3D12InfoQueue1> info_queue1;
+        if (SUCCEEDED(info_queue->QueryInterface(IID_PPV_ARGS(&info_queue1)))) {
+            info_queue1->RegisterMessageCallback(D3D12MessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &m_infoqueue_callback_cookie);
+            spdlog::info("D3D12 Info Queue message callback registered");
+        }
+    }
+#endif
+}
+
+void D3D12Renderer::DestroyInfoQueue()
+{
+    // Unregister callback first because the D3D12 debug layer may still fire messages during device teardown,
+    // and our callback holds a raw pointer to D3D12Renderer (this) which would be dangling if we reset the
+    // device before unregistering.
+#ifdef ENABLE_D3D12_DEBUG_LAYERS
+    if (m_infoqueue_callback_cookie != 0) {
+        ComPtr<ID3D12InfoQueue1> info_queue1;
+        if (SUCCEEDED(d3d12_device->QueryInterface(IID_PPV_ARGS(&info_queue1)))) {
+            info_queue1->UnregisterMessageCallback(m_infoqueue_callback_cookie);
+            spdlog::info("D3D12 Info Queue message callback unregistered");
+        }
+    }
+#endif
+}
+
+void D3D12Renderer::D3D12MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id, LPCSTR description, void* pContext) {
+#ifdef ENABLE_D3D12_DEBUG_LAYERS
+    D3D12Renderer* renderer = static_cast<D3D12Renderer*>(pContext);
+    (void)renderer;
+
+    auto level = spdlog::level::info;
+    switch (severity) {
+    case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+        level = spdlog::level::critical;
+        break;
+    case D3D12_MESSAGE_SEVERITY_ERROR:
+        level = spdlog::level::err;
+        break;
+    case D3D12_MESSAGE_SEVERITY_WARNING:
+        level = spdlog::level::warn;
+        break;
+    case D3D12_MESSAGE_SEVERITY_INFO:
+        level = spdlog::level::info;
+        break;
+    case D3D12_MESSAGE_SEVERITY_MESSAGE:
+        level = spdlog::level::info;
+        break;
+    }
+
+    std::string message = description;
+
+    if (!message.empty()) {
+        spdlog::log(level, "[Info Queue] [ID {}] {}", static_cast<int32_t>(id), message);
+    }
+    else {
+        spdlog::log(level, "[Info Queue] [ID {}] <no description>", static_cast<int32_t>(id));
+    }
+#endif
+}
+
 void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
     CreateFenceObjects();
     CreateCommandLists();
@@ -385,9 +449,12 @@ D3D12Renderer::D3D12Renderer(XrSystemId systemId, const XrGraphicsBindingD3D12KH
     xr_system = systemId;
     d3d12_device = graphics_binding->device;
     d3d12_command_queue = graphics_binding->queue;
+    SetupInfoQueue();
 }
 
 D3D12Renderer::~D3D12Renderer() {
+    DestroyInfoQueue();
+
     delete intermediate_resource;
     delete d3d12weaver;
     // Destroy window
