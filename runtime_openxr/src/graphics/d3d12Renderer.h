@@ -25,8 +25,9 @@ class D3D12Renderer : public Renderer {
 
     // Graphics
     D3D12Compositor compositor;
-    SR::PredictingDX12Weaver* d3d12weaver = nullptr;
-    D3D12ProxySwapchain* intermediate_resource = nullptr;
+    SR::IDX12Weaver1* d3d12weaver = nullptr;
+    std::unique_ptr<D3D12ProxySwapchain> intermediate_resource = nullptr;
+    std::unique_ptr<D3D12ProxySwapchain> weaved_resource = nullptr;
     // Windowing
     GameBridgeWindow window;
     D3D12WindowSwapchain window_swapchain;

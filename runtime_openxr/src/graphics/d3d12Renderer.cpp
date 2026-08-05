@@ -23,31 +23,39 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem
     info.mipCount = 1;
     info.sampleCount = 1;
     info.createFlags = 0;
-    info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
+	info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
 
     try {
-        intermediate_resource = D3D12ProxySwapchain::Create(&info, this, "Intermediate resource");
+		intermediate_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Intermediate resource", 1));
+		weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Weaved resource", 1));
         return XR_SUCCESS;
     }
     catch (XrException& e) {
         return e.GetResult();
     }
     catch (std::exception& e) {
-        LOG_RUNTIME_ERROR
-            return XR_ERROR_RUNTIME_FAILURE;
+		spdlog::error("RUNTIME FAILURE func: {} ln: {} err: {}", __func__, __LINE__, e.what());
+        return XR_ERROR_RUNTIME_FAILURE;
     }
 }
 
 XrResult D3D12Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
     spdlog::info("Creating DX12 weaver");
     auto sr_context = gb_system->GetSrContext();
-    d3d12weaver = new SR::PredictingDX12Weaver(*sr_context, d3d12_device.Get(), command_allocators[0].Get(), d3d12_command_queue.Get(), intermediate_resource->GetBuffers()[0].Get(), window_swapchain.GetImages()[0].Get(), window.GetWindowHandle());
+    SR::IDX12Weaver1* ptr;
+    SR::CreateDX12Weaver(sr_context, d3d12_device.Get(), window.GetWindowHandle(), &d3d12weaver);
+    d3d12weaver->setInputViewTexture(intermediate_resource->GetBuffers()[0].Get(), intermediate_resource->GetWidth(), intermediate_resource->GetHeight(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    d3d12weaver->setOutputFormat(DXGI_FORMAT_R8G8B8A8_UNORM);	
+    
+    // Set in-shader sRGB conversion if necessary.
+    //d3d12weaver->setShaderSRGBConversion(true, true);
+    
     sr_context->initialize();
     return XR_SUCCESS;
 }
 
 XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
-    if (window.TryGetExternalDisplay() != nullptr) {
+	if (window.TryGetExternalDisplay() != nullptr) {
         spdlog::info("Got window");
     }
 
@@ -251,7 +259,10 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
     // Do weaving
-    d3d12weaver->weave(cmd_list, native_resolution.x, native_resolution.y, 0, 0);
+    d3d12weaver->setCommandList(cmd_list);
+    d3d12weaver->setViewport(view_port);
+    d3d12weaver->setScissorRect(scissor_rect);
+    d3d12weaver->weave();
 
     // Transition to render target
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -461,9 +472,8 @@ D3D12Renderer::D3D12Renderer(XrSystemId systemId, const XrGraphicsBindingD3D12KH
 
 D3D12Renderer::~D3D12Renderer() {
     DestroyInfoQueue();
-
-    delete intermediate_resource;
-    delete d3d12weaver;
+    d3d12weaver->destroy();
+    d3d12weaver = nullptr;
     // Destroy window
     window.DestroyApplicationWindow();
     d3d12_command_queue.Reset();

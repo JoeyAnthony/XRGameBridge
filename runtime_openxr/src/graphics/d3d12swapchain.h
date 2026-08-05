@@ -47,7 +47,7 @@ public:
     ~D3D12ProxySwapchain() override;
 
     // TODO return handle instead.
-    static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name = "");
+	static D3D12ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name = "", int32_t num_resources = standard_swapchain_buffer_count);
 
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "") override;
 

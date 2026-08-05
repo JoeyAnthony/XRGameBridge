@@ -22,7 +22,7 @@ D3D12ProxySwapchain::~D3D12ProxySwapchain()
     DestroyResources();
 }
 
-D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name) {
+D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name, int32_t num_resources) {
     static size_t swapchain_creation_count = 1;
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
@@ -447,14 +447,12 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
                 spdlog::error("Failed to create rtv");
                 return false;
             }
-            std::wstringstream ss; ss << "Swapchain Buffer " << i;
-            back_buffers[i]->SetName(ss.str().c_str());
-            device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtvHandle);
-            rtvHandle.Offset(1, rtv_descriptor_size);
-
             //Give name to swapchain buffers
             std::wstring name = std::format(L"GB Swapchain Resource {}", i);
             back_buffers[i]->SetName(name.c_str());
+
+            device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtvHandle);
+            rtvHandle.Offset(1, rtv_descriptor_size);
         }
     }
 
