@@ -43,6 +43,69 @@ LRESULT CALLBACK GameBridgeWindow::WndProc(HWND hWnd, UINT message, WPARAM wPara
         break;
     case WM_QUIT:
         ShowWindow(hWnd, false);
+        break;
+    case WM_SIZE:
+        // Ignore minimize (0x0 client area) so the renderer never tries to size resources to zero.
+        if (wParam != SIZE_MINIMIZED) {
+            pending_width = LOWORD(lParam);
+            pending_height = HIWORD(lParam);
+            has_pending_resize = true;
+        }
+        break;
+    case WM_SIZING: {
+        if (aspect_ratio > 0.0f) {
+            RECT* drag_rect = reinterpret_cast<RECT*>(lParam);
+
+            // The rect WM_SIZING hands us is the whole window (title bar + borders included),
+            // but the ratio we care about is the client area that actually gets rendered into.
+            RECT border{};
+            AdjustWindowRectEx(&border, static_cast<DWORD>(GetWindowLongPtr(hWnd, GWL_STYLE)), FALSE,
+                                static_cast<DWORD>(GetWindowLongPtr(hWnd, GWL_EXSTYLE)));
+            const LONG border_width = border.right - border.left;
+            const LONG border_height = border.bottom - border.top;
+
+            LONG client_width = (drag_rect->right - drag_rect->left) - border_width;
+            LONG client_height = (drag_rect->bottom - drag_rect->top) - border_height;
+
+            switch (wParam) {
+            case WMSZ_LEFT:
+            case WMSZ_RIGHT:
+                client_height = static_cast<LONG>(client_width / aspect_ratio);
+                drag_rect->bottom = drag_rect->top + client_height + border_height;
+                break;
+            case WMSZ_TOP:
+            case WMSZ_BOTTOM:
+                client_width = static_cast<LONG>(client_height * aspect_ratio);
+                drag_rect->right = drag_rect->left + client_width + border_width;
+                break;
+            case WMSZ_TOPLEFT:
+                client_height = static_cast<LONG>(client_width / aspect_ratio);
+                drag_rect->top = drag_rect->bottom - client_height - border_height;
+                break;
+            case WMSZ_BOTTOMLEFT:
+                client_height = static_cast<LONG>(client_width / aspect_ratio);
+                drag_rect->bottom = drag_rect->top + client_height + border_height;
+                break;
+            case WMSZ_TOPRIGHT:
+                client_height = static_cast<LONG>(client_width / aspect_ratio);
+                drag_rect->top = drag_rect->bottom - client_height - border_height;
+                break;
+            case WMSZ_BOTTOMRIGHT:
+            default:
+                client_height = static_cast<LONG>(client_width / aspect_ratio);
+                drag_rect->bottom = drag_rect->top + client_height + border_height;
+                break;
+            }
+        }
+        return TRUE;
+    }
+    case WM_SYSKEYDOWN:
+        // bit 29 of lParam is set when Alt is held down for a WM_SYSKEYDOWN.
+        if (wParam == VK_RETURN && (lParam & (1 << 29))) {
+            ToggleFullscreen(hWnd);
+            return 0;
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
         break;
@@ -78,6 +141,46 @@ bool GameBridgeWindow::InitWindowClass(HINSTANCE hInstance) {
     return true;
 }
 
+void GameBridgeWindow::ToggleFullscreen(HWND hWnd) {
+    // SetWindowLongPtr replaces the whole style bitmask, so WS_VISIBLE has to be carried over
+    // explicitly or the window would vanish the moment the style changes.
+    const LONG_PTR current_style = GetWindowLongPtr(hWnd, GWL_STYLE);
+    const LONG_PTR visible_bit = current_style & WS_VISIBLE;
+
+    if (!is_fullscreen) {
+        // Remember the windowed placement so it can be restored later, then switch to a
+        // borderless popup sized to whichever monitor the window is currently on.
+        GetWindowRect(hWnd, &windowed_rect);
+
+        SetWindowLongPtr(hWnd, GWL_STYLE, WS_POPUP | visible_bit);
+
+        HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitor_info{};
+        monitor_info.cbSize = sizeof(MONITORINFO);
+        GetMonitorInfoA(monitor, &monitor_info);
+
+        SetWindowPos(hWnd, HWND_TOP,
+                     monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                     monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                     monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                     SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+        is_fullscreen = true;
+    } else {
+        // WS_OVERLAPPEDWINDOW brings back the title bar, system menu, and min/maximize/close
+        // buttons on its own - nothing extra is needed for those to reappear.
+        SetWindowLongPtr(hWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | visible_bit);
+
+        SetWindowPos(hWnd, HWND_NOTOPMOST,
+                     windowed_rect.left, windowed_rect.top,
+                     windowed_rect.right - windowed_rect.left,
+                     windowed_rect.bottom - windowed_rect.top,
+                     SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+        is_fullscreen = false;
+    }
+}
+
 GameBridgeWindow::~GameBridgeWindow() {
     DestroyApplicationWindow();
 }
@@ -93,10 +196,6 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     // Ensure the application receives unscaled display metrics
     auto dpi_context = GetThreadDpiAwarenessContext();
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
-
-    // Always try to get the external display before creating one ourselves
-    TryGetExternalDisplay();
 
     if (!window_class_is_registered) {
         InitWindowClass(hInstance);
@@ -114,6 +213,7 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     else {
         window_style = windowed;
     }
+    is_fullscreen = fullscreen;
 
     // Get position of the SR display
     int window_x = CW_USEDEFAULT, window_y = CW_USEDEFAULT;
@@ -125,6 +225,8 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
             .right = offset.x + extent.width,
             .bottom = offset.y + extent.height
         };
+        windowed_rect = rect;
+
         const HMONITOR h_monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
 
         MONITORINFO monitor_info;
@@ -145,6 +247,8 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     }
 
     //SetWindowLongPtr(h_wnd, GWL_STYLE, window_style); //3d argument=style
+
+    SetAspectRatio(width, height);
 
     SetWindowPos(
         h_wnd,
@@ -189,6 +293,24 @@ HWND GameBridgeWindow::GetWindowHandle() {
     return h_wnd;
 }
 
+void GameBridgeWindow::SetAspectRatio(uint32_t width, uint32_t height) {
+    if (height == 0) {
+        aspect_ratio = 0.0f;
+        return;
+    }
+    aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
+}
+
+bool GameBridgeWindow::ConsumePendingResize(uint32_t& out_width, uint32_t& out_height) {
+    if (!has_pending_resize) {
+        return false;
+    }
+    out_width = pending_width;
+    out_height = pending_height;
+    has_pending_resize = false;
+    return true;
+}
+
 void GameBridgeWindow::UpdateWindow() {
     // Main message loop:
     MSG msg;
@@ -196,28 +318,6 @@ void GameBridgeWindow::UpdateWindow() {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-}
-
-HWND GameBridgeWindow::TryGetExternalDisplay() {
-    // Make sure we get the root window, assuming all games uses its root window for showing the game and processing input.
-    HWND h_wnd_active = GetActiveWindow();
-    //HWND h_wnd_ancestor = GetAncestor(h_wnd_active, GA_ROOT);
-
-    //if(h_wnd_active == h_wnd_ancestor)
-    //{
-    //
-    //}
-
-    if (h_wnd_active == nullptr) {
-        return nullptr;
-    }
-
-    if (h_wnd_active == h_wnd) {
-        return nullptr;
-    }
-
-    h_wnd_external = h_wnd_active;
-    return h_wnd_active;
 }
 
 bool GameBridgeWindow::PeekMessageExternal(LPMSG& msg) {

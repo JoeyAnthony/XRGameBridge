@@ -21,6 +21,22 @@ class GameBridgeWindow {
 
     inline static bool window_class_is_registered = false;
 
+    // Locked width-over-height ratio enforced while the user drags the window border.
+    // 0 means no constraint has been set yet, and resizing is left unconstrained.
+    inline static float aspect_ratio = 0.0f;
+
+    // Set from WM_SIZE, consumed once per frame by the renderer.
+    inline static bool has_pending_resize = false;
+    inline static uint32_t pending_width = 0;
+    inline static uint32_t pending_height = 0;
+
+    // Tracks borderless-fullscreen (WS_POPUP) vs windowed (WS_OVERLAPPEDWINDOW), and the last
+    // known windowed placement so toggling back from fullscreen restores a sensible rect.
+    inline static bool is_fullscreen = false;
+    inline static RECT windowed_rect{};
+
+    static void ToggleFullscreen(HWND hWnd);
+
     bool InitWindowClass(HINSTANCE hInstance);
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -32,10 +48,13 @@ public:
     HWND GetWindowHandle();
     void UpdateWindow();
 
-    /*
-     * Returns the game window
-     */
-    static HWND TryGetExternalDisplay();
+    // Locks interactive resizing to the given width/height ratio. Pass width/height of the
+    // desired ratio, e.g. the SR panel's physical resolution, or a single eye's aspect for side-by-side.
+    void SetAspectRatio(uint32_t width, uint32_t height);
+
+    // Returns true once if the window's client area changed size since the last call, filling
+    // out_width/out_height with the new client size. Meant to be polled once per frame.
+    bool ConsumePendingResize(uint32_t& out_width, uint32_t& out_height);
 
     bool PeekMessageExternal(LPMSG& msg);
 };

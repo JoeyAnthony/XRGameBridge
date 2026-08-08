@@ -55,10 +55,6 @@ XrResult D3D12Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system)
 }
 
 XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
-	if (window.TryGetExternalDisplay() != nullptr) {
-        spdlog::info("Got window");
-    }
-
     // Create debug window
     window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, gb_system->PhysicalResolutionWidth(), gb_system->PhysicalResolutionHeight(), true, true);
     // Debugging with non full screen mode

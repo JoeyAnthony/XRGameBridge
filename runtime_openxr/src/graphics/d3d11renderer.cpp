@@ -58,10 +58,6 @@ XrResult D3D11Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system)
 }
 
 XrResult D3D11Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
-    if (window.TryGetExternalDisplay() != nullptr) {
-       spdlog::info("Got window");
-    }
-
     // Create debug window
     glm::ivec2 recommended_resolution = { gb_system->RecommendedWidth(), gb_system->RecommendedHeight() };
     window.CreateApplicationWindow(static_cast<HINSTANCE>(g_runtime_settings->GethInstance()), gb_system, recommended_resolution.x, recommended_resolution.y, true, true);
