@@ -36,7 +36,21 @@ LRESULT CALLBACK GameBridgeWindow::WndProc(HWND hWnd, UINT message, WPARAM wPara
         EndPaint(hWnd, &ps);
         break;
     case(WM_CLOSE):
-        spdlog::info("Window is closing");
+        // Hide rather than destroy - this window lives inside the game's process for the whole
+        // session, closing it via the X button is just meant to get it out of the way, not tear
+        // down the swapchain/GPU resources behind it. Ctrl+F2 (WM_HOTKEY below) brings it back.
+        spdlog::info("Debug window closed - Ctrl+F2 to bring it back");
+        ShowWindow(hWnd, SW_HIDE);
+        break;
+    case WM_HOTKEY:
+        if (wParam == show_window_hotkey_id) {
+            if (IsWindowVisible(hWnd)) {
+                ShowWindow(hWnd, SW_HIDE);
+            } else {
+                // NOACTIVATE so this doesn't steal focus away from the game.
+                ShowWindow(hWnd, SW_SHOWNOACTIVATE);
+            }
+        }
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -275,6 +289,10 @@ bool GameBridgeWindow::CreateApplicationWindow(HINSTANCE hInstance, const std::s
     spdlog::info("Windows resolution: {}x{}", width, height);
     spdlog::info("Windows position: {}x{}", window_x, window_y);
 
+    if (!RegisterHotKey(h_wnd, show_window_hotkey_id, MOD_CONTROL | MOD_NOREPEAT, VK_F2)) {
+        spdlog::warn("Failed to register show-window hotkey (Ctrl+F2): {}", GetLastError());
+    }
+
     SetThreadDpiAwarenessContext(dpi_context);
     return true;
 }
@@ -285,6 +303,8 @@ bool GameBridgeWindow::DestroyApplicationWindow() {
         spdlog::info("No window to destroy: {}", GetLastError());
         return true;
     }
+
+    UnregisterHotKey(h_wnd, show_window_hotkey_id);
 
     bool res = DestroyWindow(h_wnd);
     if (!res) {
@@ -319,6 +339,10 @@ bool GameBridgeWindow::ConsumePendingResize(int32_t& out_width, int32_t& out_hei
     out_height = pending_height;
     has_pending_resize = false;
     return true;
+}
+
+bool GameBridgeWindow::IsVisible() const {
+    return h_wnd != nullptr && IsWindowVisible(h_wnd);
 }
 
 void GameBridgeWindow::UpdateWindow() {

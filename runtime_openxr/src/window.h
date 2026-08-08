@@ -35,6 +35,11 @@ class GameBridgeWindow {
     inline static bool is_fullscreen = false;
     inline static RECT windowed_rect{};
 
+    // Global hotkey id used to toggle the window's visibility (also brings it back after it's
+    // been closed/hidden via the X button). Registered with RegisterHotKey so it fires even while
+    // the window is hidden and the game has focus.
+    static constexpr int show_window_hotkey_id = 1;
+
     static void ToggleFullscreen(HWND hWnd);
 
     bool InitWindowClass(HINSTANCE hInstance);
@@ -55,6 +60,10 @@ public:
     // Returns true once if the window's client area changed size since the last call, filling
     // out_width/out_height with the new client size. Meant to be polled once per frame.
     bool ConsumePendingResize(int32_t& out_width, int32_t& out_height);
+
+    // True as long as the window exists and hasn't been closed (hidden) via the X button.
+    // Meant to be polled once per frame by whoever decides whether to render into weaved_resource.
+    bool IsVisible() const;
 
     bool PeekMessageExternal(LPMSG& msg);
 };
