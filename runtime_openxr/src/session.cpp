@@ -436,35 +436,13 @@ void XRSession::UpdateSession() {
     // Not allowed to send messages after this function
     event_manager.PrepareForEventStreamProcessing();// TODO FOR DEBUG PURPOSES SHOULD BE REMOVED ASAP
 
-    //LPMSG msg = nullptr;
-    //if (session.window.PeekMessageExternal(msg)) {
-    //    switch (msg->message) {
-    //    case WM_KEYDOWN:
-    //        if (GetAsyncKeyState(VK_F1) & 0x80) {
-    //            spdlog::info("Pressed";
-    //        }
-    //        break;
-    //    case WM_KEYUP:
-    //        if (GetAsyncKeyState(VK_F1) & 0x00) {
-    //            spdlog::info("Released";
-    //        }
-    //        break;
-    //    }
-    //}
-
-    // Check if the F1 key is up
-    static bool f1_pressed = false;
-    if ((GetAsyncKeyState(VK_F1) & 0x80) == 0) {
-        f1_pressed = false;
-    }
-
     // Process input events
     GB_EVENT event_type;
     while (hotkey_events_reader->GetNextEvent(event_type)) {
         // Toggle buttons
-        if (event_type == GB_EVENT_HOTKEY_TOGGLE_WEAVING && f1_pressed == false) {
+        if (event_type == GB_EVENT_HOTKEY_TOGGLE_WEAVING) {
             should_weave = should_weave ? false : true;
-            f1_pressed = true;
+			renderer->EnableWeaving(should_weave);
         }
 
         // Separation buttons

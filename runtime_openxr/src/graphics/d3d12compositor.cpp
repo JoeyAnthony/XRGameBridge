@@ -402,3 +402,31 @@ ComPtr<ID3D12PipelineState>& D3D12Compositor::GetDefaultPipelineState() {
     return pipeline_state_opaque;
 }
 
+void D3D12Compositor::BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3D12DescriptorHeap* source_srv_heap, uint32_t dest_width, uint32_t dest_height) {
+    D3D12_VIEWPORT viewport{ 0, 0, static_cast<float>(dest_width), static_cast<float>(dest_height), 0.0f, 1.0f };
+    D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(dest_width), static_cast<long>(dest_height) };
+    cmd_list->RSSetViewports(1, &viewport);
+    cmd_list->RSSetScissorRects(1, &scissor_rect);
+
+    std::array heaps = { source_srv_heap, sampler_heap.Get() };
+    cmd_list->SetDescriptorHeaps(static_cast<uint32_t>(heaps.size()), heaps.data());
+    cmd_list->SetGraphicsRootSignature(root_signature.Get());
+    cmd_list->SetGraphicsRootDescriptorTable(0, source_srv_heap->GetGPUDescriptorHandleForHeapStart());
+    cmd_list->SetGraphicsRootDescriptorTable(1, sampler_heap->GetGPUDescriptorHandleForHeapStart());
+    cmd_list->SetPipelineState(pipeline_state_opaque.Get());
+
+    struct {
+        uint32_t is_opaque;
+        uint32_t multiply_alpha;
+        float convert_to_linear;
+        float uvmin_x;
+        float uvmin_y;
+        float uvmax_x;
+        float uvmax_y;
+        float pad;
+    } constants{ 1, 0, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f };
+    cmd_list->SetGraphicsRoot32BitConstants(2, 8, &constants, 0);
+
+    cmd_list->DrawInstanced(3, 1, 0, 0);
+}
+
