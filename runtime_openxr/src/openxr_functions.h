@@ -175,12 +175,18 @@ const std::unordered_map<std::string, PFN_xrVoidFunction> openxr_functions {
     { "xrConvertWin32PerformanceCounterToTimeKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertWin32PerformanceCounterToTimeKHR) },
     { "xrConvertTimeToWin32PerformanceCounterKHR",  reinterpret_cast<PFN_xrVoidFunction>(xrConvertTimeToWin32PerformanceCounterKHR) },
 
-        // Graphics extensions
+    // Graphics extensions
     { "xrGetD3D11GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D11GraphicsRequirementsKHR) },
-    { "xrGetD3D12GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D12GraphicsRequirementsKHR) }
+    { "xrGetD3D12GraphicsRequirementsKHR",          reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D12GraphicsRequirementsKHR) },
+
+    // XRGB extra function
+	{"xrgbGetReleasedBufferHandle", reinterpret_cast<PFN_xrVoidFunction>(xrgbGetReleasedBufferHandle)}
 };
 
-const std::vector<XrExtensionProperties> supported_extensions{
+#define XR_XRGB_ENABLE_EXTENSION_NAME "XR_XRGB_enable"
+#define XR_XRGB_enable_SPEC_VERSION 1
+
+const std::vector<XrExtensionProperties> supported_extensions {
     // Microsoft Windows extensions
     { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME, XR_EXT_win32_appcontainer_compatible_SPEC_VERSION },
     { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME, XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION },
@@ -190,4 +196,5 @@ const std::vector<XrExtensionProperties> supported_extensions{
     { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_KHR_D3D11_enable_SPEC_VERSION },
     { XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_D3D12_ENABLE_EXTENSION_NAME, XR_KHR_D3D12_enable_SPEC_VERSION },
         //{ XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME, XR_KHR_vulkan_enable2_SPEC_VERSION }
+	{XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_XRGB_ENABLE_EXTENSION_NAME, XR_XRGB_enable_SPEC_VERSION},
 };

@@ -267,6 +267,10 @@ ComPtr<ID3D11DeviceContext>& D3D11Renderer::GetDeviceContext() {
     return d3d11_device_context;
 }
 
+uint64_t D3D11Renderer::GetWeavedBufferHandle() {
+	return 0;
+}
+
 Compositor* const D3D11Renderer::GetCompositor() {
     return nullptr;
 }

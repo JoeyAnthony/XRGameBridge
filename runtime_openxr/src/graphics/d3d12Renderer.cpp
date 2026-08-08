@@ -181,14 +181,24 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
 
     // Render weaving
     if (should_weave) {
-        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, Renderer::clear_color, fence_value);
+        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value);
     }
     else {
-        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), window_swapchain, window_swapchain_index, Renderer::clear_color, fence_value);
+        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value);
     }
 
-    // Transition swapchain to present
-    TransitionImage(cmd_list.Get(), window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    bool weave_to_debug_window = true;
+	if (weave_to_debug_window) {
+		// Transition window swapchain to render target
+		auto resource = window_swapchain.GetImages()[window_swapchain_index].Get();
+		TransitionImage(cmd_list.Get(), resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+		// Do copy logic
+		cmd_list->CopyResource(resource, weaved_resource->GetBuffers()[0].Get());
+
+		// Transition swapchain to present
+		TransitionImage(cmd_list.Get(), resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	}
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
 
@@ -223,8 +233,7 @@ void D3D12Renderer::Update()
     window.UpdateWindow();
 }
 
-XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
-
+XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value) {
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource->GetRtvDescriptorSize());
 
@@ -240,15 +249,12 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     // Transition intermediate resource to unordered access for the weaver
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-    // Transition window swapchain to render target
-    TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    // The weaved_resource resource is already a render target and doesn't need to be anything else
 
-
-    // Set window swapchain as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
-    cmd_list->OMSetRenderTargets(1, &back_buffer_rtv_handle, true, nullptr);
-    cmd_list->ClearRenderTargetView(back_buffer_rtv_handle, clear_color, 0, nullptr);
-
+    // Set weaved_resource swapchain as render target
+	CD3DX12_CPU_DESCRIPTOR_HANDLE weaved_resource_rtv_handle(weaved_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, weaved_resource->GetRtvDescriptorSize());
+    cmd_list->OMSetRenderTargets(1, &weaved_resource_rtv_handle, true, nullptr);
+    cmd_list->ClearRenderTargetView(weaved_resource_rtv_handle, clear_color, 0, nullptr);
 
     // Set viewport for weaving to window swapchain
     auto gb_system = g_systems[xr_system];
@@ -270,18 +276,14 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, D3D12WindowSwapchain& window_swapchain, uint32_t window_swapchain_index, const float clear_color[4], uint64_t new_fence_value) {
-
-    // Transition to render target
-    TransitionImage(cmd_list, window_swapchain.GetImages()[window_swapchain_index].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value) {
 
     // Set window swapchain as render target
-    CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
-
+	CD3DX12_CPU_DESCRIPTOR_HANDLE weaved_resource_rtv_handle(weaved_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, weaved_resource->GetRtvDescriptorSize());
 
     // Compose
-    cmd_list->OMSetRenderTargets(1, &descriptor_handle_to_compose, true, nullptr);
-    cmd_list->ClearRenderTargetView(descriptor_handle_to_compose, clear_color, 0, nullptr);
+	cmd_list->OMSetRenderTargets(1, &weaved_resource_rtv_handle, true, nullptr);
+	cmd_list->ClearRenderTargetView(weaved_resource_rtv_handle, clear_color, 0, nullptr);
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Compose and draw to the intermediate resource
@@ -367,6 +369,13 @@ ComPtr<ID3D12GraphicsCommandList>& D3D12Renderer::GetCommandList(uint32_t index)
 
 ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t index) {
     return command_allocators[index];
+}
+
+uint64_t D3D12Renderer::GetWeavedBufferHandle() {
+	if (weaved_resource != nullptr) {
+		return reinterpret_cast<uint64_t>(weaved_resource.get()->GetBuffers()[0].Get());
+	}
+	return 0;
 }
 
 void D3D12Renderer::SetupInfoQueue() {

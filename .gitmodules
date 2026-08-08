@@ -7,3 +7,9 @@
 [submodule "third-party/spdlog"]
 	path = third-party/spdlog
 	url = git@github.com:gabime/spdlog.git
+[submodule "third-party/imgui"]
+	path = third-party/imgui
+	url = git@github.com:ocornut/imgui.git
+[submodule "third-party/UEVR"]
+	path = third-party/UEVR
+	url = git@github.com:praydog/UEVR.git

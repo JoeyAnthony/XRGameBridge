@@ -16,6 +16,7 @@
 
 #include "graphics/xrrendering.h"
 #include "events.h"
+#include <dll.h>
 
 XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session);
 XrResult xrDestroySession(XrSession session);
@@ -28,6 +29,9 @@ XrResult xrRequestExitSession(XrSession session);
 XrResult xrWaitFrame(XrSession session, const XrFrameWaitInfo* frameWaitInfo, XrFrameState* frameState);
 XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo);
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo);
+
+// XRGB function
+DllExport XrResult xrgbGetReleasedBufferHandle(XrSession session, uint64_t* resourceHandle);
 
 namespace ch = std::chrono;
 

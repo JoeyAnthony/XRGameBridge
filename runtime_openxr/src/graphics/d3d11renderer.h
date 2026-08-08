@@ -62,4 +62,7 @@ public:
 
     ComPtr<ID3D11Device> GetDevice();
     ComPtr<ID3D11DeviceContext>& GetDeviceContext();
+
+	// Inherited via Renderer
+	uint64_t GetWeavedBufferHandle() override;
 };

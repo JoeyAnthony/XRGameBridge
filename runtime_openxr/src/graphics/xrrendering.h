@@ -112,6 +112,7 @@ public:
     virtual void Update() = 0;
     virtual GraphicsBackend GetGraphicsBackend() = 0;
     virtual Compositor* const GetCompositor() = 0;
+	virtual uint64_t GetWeavedBufferHandle() = 0;
     virtual void InitializePipeline(GB_Instance* instance) = 0;
 };
 

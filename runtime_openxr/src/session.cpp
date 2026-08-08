@@ -329,6 +329,16 @@ XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     return XR_SUCCESS;
 }
 
+XrResult xrgbGetReleasedBufferHandle(XrSession session, uint64_t* resourceHandle) {
+	XRSession& gb_session = g_sessions[session];
+	*resourceHandle = gb_session.renderer->GetWeavedBufferHandle();
+	if (*resourceHandle == 0) {
+		return XR_ERROR_RUNTIME_FAILURE;
+    }
+
+	return XR_SUCCESS;
+}
+
 const std::shared_ptr<XRSystem>& XRSession::GetSystem() {
     return g_systems[system];
 }
