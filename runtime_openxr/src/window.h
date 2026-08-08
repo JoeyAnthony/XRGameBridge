@@ -50,11 +50,11 @@ public:
 
     // Locks interactive resizing to the given width/height ratio. Pass width/height of the
     // desired ratio, e.g. the SR panel's physical resolution, or a single eye's aspect for side-by-side.
-    void SetAspectRatio(uint32_t width, uint32_t height);
+    void SetAspectRatio(int32_t width, int32_t height);
 
     // Returns true once if the window's client area changed size since the last call, filling
     // out_width/out_height with the new client size. Meant to be polled once per frame.
-    bool ConsumePendingResize(uint32_t& out_width, uint32_t& out_height);
+    bool ConsumePendingResize(int32_t& out_width, int32_t& out_height);
 
     bool PeekMessageExternal(LPMSG& msg);
 };

@@ -136,8 +136,6 @@ XrResult xrDestroySwapchain(XrSwapchain swapchain) {
 
     auto& gb_proxy = g_proxy_swapchains[swapchain];
 
-    gb_proxy->DestroyResources();
-
     g_proxy_swapchains.erase(swapchain);
 
     return XR_SUCCESS;

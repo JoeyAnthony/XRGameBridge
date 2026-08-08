@@ -19,6 +19,7 @@ class D3D12ProxySwapchain : public ProxySwapchain {
 
     std::string proxy_name;
     bool is_depth_resource = false;
+	XrSwapchainCreateInfo current_create_info;
 
     std::vector<ComPtr<ID3D12Resource>> back_buffers;
     ComPtr<ID3D12DescriptorHeap> rtv_heap;
@@ -55,6 +56,7 @@ public:
 
     // Interface functions
     void DestroyResources() override;
+	bool Resize(int32_t width, int32_t height) override;
     // Returns the oldest image index
     XrResult AcquireNextImage(uint32_t& index) override;
     // Waits for an image that has been weaved
@@ -91,6 +93,10 @@ public:
 
     // Creates device
     bool CreateSwapChain(const XrSwapchainCreateInfo* createInfo, HWND hwnd);
+
+    // Resizes an already-created swapchain in place, keeping its existing format/buffer count.
+    // Must only be called once the GPU is known to be done with the current back buffers.
+    bool Resize(uint32_t width, uint32_t height);
 
     const std::vector<ComPtr<ID3D12Resource>> GetImages();
     ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();

@@ -125,6 +125,7 @@ public:
 
     virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "") = 0;
     virtual void DestroyResources() = 0;
+	virtual bool Resize(int32_t width, int32_t height) = 0;
 
     // Returns the oldest image index
     virtual XrResult AcquireNextImage(uint32_t& index) = 0;

@@ -22,6 +22,7 @@ class D3D12ProxySwapchain;
 class D3D12Renderer : public Renderer {
     XrSystemId xr_system;
     bool should_weave = true;
+    bool weave_to_debug_window = true;
 
     // Graphics
     D3D12Compositor compositor;
@@ -57,7 +58,7 @@ class D3D12Renderer : public Renderer {
     bool DestroyFences();
 
     // Pipeline functions
-    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value);
+    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
     XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value);
 
     void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
@@ -96,6 +97,6 @@ public:
     ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
     ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
 
-	// Inherited via Renderer
-	uint64_t GetWeavedBufferHandle() override;
+    // Inherited via Renderer
+    uint64_t GetWeavedBufferHandle() override;
 };

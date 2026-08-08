@@ -41,6 +41,7 @@ public:
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name);
 
     void DestroyResources() override;
+	bool Resize(int32_t width, int32_t height) override;
     XrResult AcquireNextImage(uint32_t& index) override;
     XrResult WaitForImage(const XrDuration& timeout) override;
     XrResult ReleaseImage() override;

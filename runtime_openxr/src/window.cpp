@@ -293,7 +293,11 @@ HWND GameBridgeWindow::GetWindowHandle() {
     return h_wnd;
 }
 
-void GameBridgeWindow::SetAspectRatio(uint32_t width, uint32_t height) {
+void GameBridgeWindow::SetAspectRatio(int32_t width, int32_t height) {
+	if (width < 1 || height < 1) {
+		return;
+    }
+
     if (height == 0) {
         aspect_ratio = 0.0f;
         return;
@@ -301,7 +305,7 @@ void GameBridgeWindow::SetAspectRatio(uint32_t width, uint32_t height) {
     aspect_ratio = static_cast<float>(width) / static_cast<float>(height);
 }
 
-bool GameBridgeWindow::ConsumePendingResize(uint32_t& out_width, uint32_t& out_height) {
+bool GameBridgeWindow::ConsumePendingResize(int32_t& out_width, int32_t& out_height) {
     if (!has_pending_resize) {
         return false;
     }

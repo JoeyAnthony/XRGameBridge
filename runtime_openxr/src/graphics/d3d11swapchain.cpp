@@ -231,6 +231,10 @@ void D3D11ProxySwapchain::DestroyResources() {
     current_image_state.clear();
 }
 
+bool D3D11ProxySwapchain::Resize(int32_t width, int32_t height) {
+	return false;
+}
+
 XrResult D3D11ProxySwapchain::AcquireNextImage(uint32_t& index) {
     uint32_t next_index = (current_frame_index + 1) % back_buffer_count;
 
