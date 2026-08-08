@@ -142,6 +142,10 @@ bool GameBridgeWindow::InitWindowClass(HINSTANCE hInstance) {
 }
 
 void GameBridgeWindow::ToggleFullscreen(HWND hWnd) {
+	// Ensure the application receives unscaled display metrics
+	auto dpi_context = GetThreadDpiAwarenessContext();
+	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     // SetWindowLongPtr replaces the whole style bitmask, so WS_VISIBLE has to be carried over
     // explicitly or the window would vanish the moment the style changes.
     const LONG_PTR current_style = GetWindowLongPtr(hWnd, GWL_STYLE);
@@ -179,6 +183,8 @@ void GameBridgeWindow::ToggleFullscreen(HWND hWnd) {
 
         is_fullscreen = false;
     }
+
+	SetThreadDpiAwarenessContext(dpi_context);
 }
 
 GameBridgeWindow::~GameBridgeWindow() {

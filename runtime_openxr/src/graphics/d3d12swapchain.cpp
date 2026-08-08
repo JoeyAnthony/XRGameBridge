@@ -425,6 +425,15 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
         return false;
     }
 
+    // DXGI installs its own Alt+Enter handling on this window by default, which fights with
+    // GameBridgeWindow's own borderless-fullscreen toggle - DXGI would additionally try to put
+    // the swapchain into exclusive fullscreen and pick a "closest matching" output mode based on
+    // whatever size the window currently is, which is exactly what caused the wrong
+    // resolution/orientation after a resize. Disable it so only our own toggle is in control.
+    if (FAILED(factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER))) {
+        spdlog::warn("Failed to disable DXGI's built-in Alt+Enter handling");
+    }
+
     // Create descriptor heaps.
     {
         // Describe and create a render target view (RTV) descriptor heap.
