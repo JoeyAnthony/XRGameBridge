@@ -7,19 +7,19 @@
 
 #pragma once
 
+#include "d3d12compositor.h"
+#include "d3d12swapchain.h"
 #include "openxr_includes.h"
-
-#include <sr/weaver/dx12weaver.h>
 #include "types.h"
 #include "window.h"
 #include "xrrendering.h"
-#include "d3d12swapchain.h"
-#include "d3d12compositor.h"
+
+#include <sr/weaver/dx12weaver.h>
 
 class GB_Instance;
 class D3D12ProxySwapchain;
 
-class D3D12Renderer : public Renderer {
+class D3D12Renderer: public Renderer {
     XrSystemId xr_system;
     bool should_weave = true;
     bool weave_to_debug_window = true;
@@ -49,17 +49,17 @@ class D3D12Renderer : public Renderer {
     uint8_t frame_in_flight = 0;
 
     // Initialization
-	XrResult CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain);
-	XrResult CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
-	XrResult CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system);
-	XrResult CreateWindowSwapchain(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain);
+    XrResult CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system);
+    XrResult CreateSystemWindow(const std::shared_ptr<SRSystem> &gb_system);
+    XrResult CreateWindowSwapchain(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system);
     bool CreateCommandLists();
     bool CreateFenceObjects();
     bool DestroyFences();
 
     // Pipeline functions
     XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
-	XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
+    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
 
     void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
@@ -76,7 +76,7 @@ public:
     ~D3D12Renderer() override;
 
     // Inherited via Renderer
-	void InitializePipeline(XrSwapchain swapchain) override;
+    void InitializePipeline(XrSwapchain swapchain) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable = true) override;
@@ -85,17 +85,17 @@ public:
     Compositor* const GetCompositor() override;
 
     /*
-    * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.
-    */
+     * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.
+     */
     XrResult WaitFenceSwapchain(uint32_t value, XrDuration timeout);
     void WaitForGpu();
     void ResetCommandLists();
     uint32_t GetFrameFenceValue(uint32_t frameNumber);
 
-    ComPtr<ID3D12Device>& GetDevice();
-    ComPtr<ID3D12CommandQueue>& GetCommandQueue();
-    ComPtr<ID3D12GraphicsCommandList>& GetCommandList(uint32_t index);
-    ComPtr<ID3D12CommandAllocator>& GetCommandAllocator(uint32_t index);
+    ComPtr<ID3D12Device> &GetDevice();
+    ComPtr<ID3D12CommandQueue> &GetCommandQueue();
+    ComPtr<ID3D12GraphicsCommandList> &GetCommandList(uint32_t index);
+    ComPtr<ID3D12CommandAllocator> &GetCommandAllocator(uint32_t index);
 
     // Inherited via Renderer
     uint64_t GetWeavedBufferHandle() override;
