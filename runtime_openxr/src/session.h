@@ -98,6 +98,7 @@ public:
     Frame ended_frame = 0;
     bool end_frame_called = true;
     bool should_render = false;
+	bool is_renderer_initialized = false;
 
     // Renderer
     Renderer* renderer = nullptr;

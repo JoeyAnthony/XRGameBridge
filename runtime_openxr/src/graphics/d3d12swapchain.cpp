@@ -286,7 +286,7 @@ bool D3D12ProxySwapchain::Resize(int32_t width, int32_t height) {
 	return CreateResources(&current_create_info, back_buffer_count);
 }
 
-size_t D3D12ProxySwapchain::GetBufferCount() {
+size_t D3D12ProxySwapchain::GetBufferCount() const {
     return back_buffers.size();
 }
 
@@ -367,12 +367,16 @@ XrResult D3D12ProxySwapchain::ReleaseImage() {
     return XR_SUCCESS;
 }
 
-uint32_t D3D12ProxySwapchain::GetWidth() {
+uint32_t D3D12ProxySwapchain::GetWidth() const {
     return resolution_x;
 }
 
-uint32_t D3D12ProxySwapchain::GetHeight() {
+uint32_t D3D12ProxySwapchain::GetHeight() const {
     return resolution_y;
+}
+
+uint32_t D3D12ProxySwapchain::GetFormat() const {
+	return current_create_info.format;
 }
 
 void D3D12ProxySwapchain::SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value) {
@@ -397,10 +401,17 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     DxHelpers::CreateDXGIFactory(&factory);
 
+    DXGI_FORMAT used_format = static_cast<DXGI_FORMAT>(createInfo->format);
+	if (used_format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+		used_format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	} else if (used_format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) {
+		used_format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = createInfo->width;
     swapChainDesc.Height = createInfo->height;
-    swapChainDesc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+	swapChainDesc.Format = used_format;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
     swapChainDesc.BufferCount = back_buffer_count;
     swapChainDesc.SampleDesc.Count = 1;
@@ -473,8 +484,15 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
             //Give name to swapchain buffers
             std::wstring name = std::format(L"GB Swapchain Resource {}", i);
             back_buffers[i]->SetName(name.c_str());
-
-            device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtvHandle);
+            
+            D3D12_RENDER_TARGET_VIEW_DESC rtv_desc;
+			rtv_desc.Buffer.FirstElement = 0;
+			rtv_desc.Buffer.NumElements = 1;
+			rtv_desc.Texture2D.MipSlice = 0;
+			rtv_desc.Texture2D.PlaneSlice = 0;
+			rtv_desc.ViewDimension = D3D12_RTV_DIMENSION::D3D12_RTV_DIMENSION_TEXTURE2D;
+			rtv_desc.Format = static_cast<DXGI_FORMAT>(createInfo->format);
+            device->CreateRenderTargetView(back_buffers[i].Get(), &rtv_desc, rtvHandle);
             rtvHandle.Offset(1, rtv_descriptor_size);
         }
     }

@@ -6,13 +6,13 @@
  */
 
 #include "d3d11swapchain.h"
-#include <format>
 
-#include <glm/glm.hpp>
-
-#include "openxr_includes.h"
-#include "dxhelpers.h"
 #include "d3d11renderer.h"
+#include "dxhelpers.h"
+#include "openxr_includes.h"
+
+#include <format>
+#include <glm/glm.hpp>
 
 D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name) {
     // Create with swapchain index handle
@@ -26,14 +26,14 @@ D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* cr
 
     // Initialize resources
     if (d3d11_proxy->CreateResources(createInfo, standard_swapchain_buffer_count, resource_name) == false) {
-         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create proxy swapchain");
+        throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create proxy swapchain");
     }
 
     swapchain_creation_count++;
     return d3d11_proxy;
 }
 
-D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle)   {
+D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer) : ProxySwapchain(handle) {
     d3d11_renderer = renderer;
 }
 
@@ -137,15 +137,15 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
             descDSV.Texture2D.MipSlice = 0;
 
-            //hr = device->CreateDepthStencilView(back_buffers[i].Get(), &descDSV, depth_stencil_views[i].GetAddressOf());
-            //if (FAILED(hr)) {
-            //    throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
-            //}
+            // hr = device->CreateDepthStencilView(back_buffers[i].Get(), &descDSV, depth_stencil_views[i].GetAddressOf());
+            // if (FAILED(hr)) {
+            //     throw XrException(XR_ERROR_RUNTIME_FAILURE, "D3D11 Failed creating depth stencil view");
+            // }
 
             com_name_prefix = "Depth ";
 
             // TODO Example releases the resource here?
-            //back_buffers[i]->Release();
+            // back_buffers[i]->Release();
         }
         else {
             auto hr = device->CreateTexture2D(&texture_desc, nullptr, back_buffers[i].GetAddressOf());
@@ -175,7 +175,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             }
 
             // TODO Example releases the resource here?
-            //back_buffers[i]->Release();
+            // back_buffers[i]->Release();
         }
 
         // Choose name for debugging
@@ -202,7 +202,7 @@ bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInf
             rtvname = std::format("{} {} Render Target View {}", resource_name, handle, i);
             rtvname = com_name_prefix + texname;
 
-            srvname = std::format("{} {} Shader Resource View {}",resource_name, handle, i);
+            srvname = std::format("{} {} Shader Resource View {}", resource_name, handle, i);
             srvname = com_name_prefix + texname;
 
             proxy_name = texname;
@@ -232,10 +232,10 @@ void D3D11ProxySwapchain::DestroyResources() {
 }
 
 bool D3D11ProxySwapchain::Resize(int32_t width, int32_t height) {
-	return false;
+    return false;
 }
 
-XrResult D3D11ProxySwapchain::AcquireNextImage(uint32_t& index) {
+XrResult D3D11ProxySwapchain::AcquireNextImage(uint32_t &index) {
     uint32_t next_index = (current_frame_index + 1) % back_buffer_count;
 
     if (current_image_state[next_index] != IMAGE_STATE_RELEASED) {
@@ -249,7 +249,7 @@ XrResult D3D11ProxySwapchain::AcquireNextImage(uint32_t& index) {
     return XR_SUCCESS;
 }
 
-XrResult D3D11ProxySwapchain::WaitForImage(const XrDuration& timeout) {
+XrResult D3D11ProxySwapchain::WaitForImage(const XrDuration &timeout) {
     if (current_image_state[current_frame_index] != IMAGE_STATE_ACQUIRED) {
         return XR_ERROR_CALL_ORDER_INVALID;
     }
@@ -272,26 +272,30 @@ XrResult D3D11ProxySwapchain::ReleaseImage() {
 
     released_frame_index = awaited_frame_index;
 
-    //LOG(INFO) << "px - "
-    //    << " swapchain: " << handle
-    //    << " aqcuired index " << current_frame_index
-    //    << " awaited index " << awaited_frame_index
-    //    << " released index " << released_frame_index
-    //    ;
+    // LOG(INFO) << "px - "
+    //     << " swapchain: " << handle
+    //     << " aqcuired index " << current_frame_index
+    //     << " awaited index " << awaited_frame_index
+    //     << " released index " << released_frame_index
+    //     ;
 
     return XR_SUCCESS;
 }
 
-uint32_t D3D11ProxySwapchain::GetWidth() {
+uint32_t D3D11ProxySwapchain::GetWidth() const {
     return resolution_x;
 }
 
-uint32_t D3D11ProxySwapchain::GetHeight() {
+uint32_t D3D11ProxySwapchain::GetHeight() const {
     return resolution_y;
 }
 
-uint64_t D3D11ProxySwapchain::GetBufferCount() {
-    if(is_depth_resource) {
+uint32_t D3D11ProxySwapchain::GetFormat() const {
+    return 0;
+}
+
+uint64_t D3D11ProxySwapchain::GetBufferCount() const {
+    if (is_depth_resource) {
         return depth_stencil_views.size();
     }
 
@@ -302,33 +306,28 @@ Renderer* D3D11ProxySwapchain::GetRenderer() {
     return d3d11_renderer;
 }
 
-std::vector<ComPtr<ID3D11Texture2D>> D3D11ProxySwapchain::GetBuffers()
-{
-	return back_buffers;
+std::vector<ComPtr<ID3D11Texture2D>> D3D11ProxySwapchain::GetBuffers() {
+    return back_buffers;
 }
 
-std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11ProxySwapchain::GetShaderResourceViews()
-{
-	return shader_resource_views;
+std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11ProxySwapchain::GetShaderResourceViews() {
+    return shader_resource_views;
 }
 
-std::vector<ComPtr<ID3D11RenderTargetView>> D3D11ProxySwapchain::GetRenderTargetViews()
-{
-	return render_target_views;
+std::vector<ComPtr<ID3D11RenderTargetView>> D3D11ProxySwapchain::GetRenderTargetViews() {
+    return render_target_views;
 }
 
-bool D3D11ProxySwapchain::IsDepthResource()
-{
-	return is_depth_resource;
+bool D3D11ProxySwapchain::IsDepthResource() {
+    return is_depth_resource;
 }
 
-uint32_t D3D11ProxySwapchain::GetAwaitedImageIndex()
-{
+uint32_t D3D11ProxySwapchain::GetAwaitedImageIndex() {
     return awaited_frame_index;
 }
 
-void ApplyBindFlag(D3D11_BIND_FLAG flag ,uint32_t& bind_flags) {
-    if(bind_flags == 0) {
+void ApplyBindFlag(D3D11_BIND_FLAG flag, uint32_t &bind_flags) {
+    if (bind_flags == 0) {
         bind_flags = flag;
     }
     else {
@@ -336,7 +335,7 @@ void ApplyBindFlag(D3D11_BIND_FLAG flag ,uint32_t& bind_flags) {
     }
 }
 
-void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags) {
+void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE &usage, uint32_t &bind_flags) {
     bind_flags = 0;
     if (XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT & usage_flags) {
         ApplyBindFlag(D3D11_BIND_RENDER_TARGET, bind_flags);
@@ -406,8 +405,7 @@ DXGI_FORMAT ResolveTextureFormatForUsage(DXGI_FORMAT application_format, XrSwapc
     return application_format;
 }
 
-D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd)
-{
+D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd) {
     spdlog::info("Creating DX11 window swapchain");
     d3d11_renderer = renderer;
     auto device = renderer->GetDevice();
@@ -459,50 +457,41 @@ D3D11WindowSwapchain::D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwap
     device->CreateRenderTargetView(back_buffer, &rtv_desc, &render_target_views[0]);
 }
 
-uint32_t D3D11WindowSwapchain::GetCurrentImageIndex()
-{
+uint32_t D3D11WindowSwapchain::GetCurrentImageIndex() {
     return swap_chain->GetCurrentBackBufferIndex();
 }
 
-void D3D11WindowSwapchain::PresentFrame()
-{
+void D3D11WindowSwapchain::PresentFrame() {
     HRESULT res = swap_chain->Present(1, 0);
-    if(FAILED(res)) {
+    if (FAILED(res)) {
         spdlog::error("Failed to present frame, error: %l", res);
     }
 }
 
-uint32_t D3D11WindowSwapchain::GetWidth()
-{
+uint32_t D3D11WindowSwapchain::GetWidth() {
     return width;
 }
 
-uint32_t D3D11WindowSwapchain::GetHeight()
-{
+uint32_t D3D11WindowSwapchain::GetHeight() {
     return height;
 }
 
-uint32_t D3D11WindowSwapchain::GetBufferCount()
-{
+uint32_t D3D11WindowSwapchain::GetBufferCount() {
     return back_buffer_count;
 }
 
-Renderer* D3D11WindowSwapchain::GetRenderer()
-{
+Renderer* D3D11WindowSwapchain::GetRenderer() {
     return d3d11_renderer;
 }
 
-std::vector<ComPtr<ID3D11Texture2D>> D3D11WindowSwapchain::GetBuffers()
-{
+std::vector<ComPtr<ID3D11Texture2D>> D3D11WindowSwapchain::GetBuffers() {
     return std::vector<ComPtr<ID3D11Texture2D>>();
 }
 
-std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11WindowSwapchain::GetShaderResourceViews()
-{
+std::vector<ComPtr<ID3D11ShaderResourceView>> D3D11WindowSwapchain::GetShaderResourceViews() {
     return std::vector<ComPtr<ID3D11ShaderResourceView>>();
 }
 
-std::vector<ComPtr<ID3D11RenderTargetView>> D3D11WindowSwapchain::GetRenderTargetViews()
-{
+std::vector<ComPtr<ID3D11RenderTargetView>> D3D11WindowSwapchain::GetRenderTargetViews() {
     return render_target_views;
 }

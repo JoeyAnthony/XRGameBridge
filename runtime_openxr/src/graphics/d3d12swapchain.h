@@ -63,9 +63,10 @@ public:
     XrResult WaitForImage(const XrDuration& timeout) override;
     // Make the image available for weaving
     XrResult ReleaseImage() override;
-    uint32_t GetWidth() override;
-    uint32_t GetHeight() override;
-    size_t GetBufferCount() override;
+	uint32_t GetWidth() const override;
+	uint32_t GetHeight() const override;
+	uint32_t GetFormat() const override;
+	size_t GetBufferCount() const override;
     void SetReleasedImageFenceValue(uint32_t back_buffer_frame_num, uint64_t fence_value);
 
     ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();

@@ -87,9 +87,6 @@ XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createI
     *session = handle;
     session_creation_count++;
 
-    // Initialize rendering pipeline
-    new_session.renderer->InitializePipeline(gb_instance);
-
     new_session.ChangeSessionState(XR_SESSION_STATE_READY);
     new_session.UpdateSession();
 
@@ -286,12 +283,24 @@ XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) {
     TraceLogFunctionCall(__func__, __LINE__);
 
+    if (frameEndInfo->layerCount == 0) {
+        return XR_ERROR_LAYER_INVALID;
+    }
+
     // TODO If no layers are provided then the display must be cleared.
     // Present the frame for session
     XRSession& gb_session = g_sessions[session];
 
-    if (frameEndInfo->layerCount == 0) {
-        return XR_ERROR_LAYER_INVALID;
+    // Initialize resources according to swapchain settings from the application so we don't have to guess the texture format
+    if (!gb_session.is_renderer_initialized) {
+		if (frameEndInfo->layers[0]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+			auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[0]);
+			if (layer->viewCount > 0) {
+		    // Initialize rendering pipeline
+			gb_session.renderer->InitializePipeline(layer->views[0].subImage.swapchain);
+		    gb_session.is_renderer_initialized = true;
+			}
+		}
     }
 
     // TODO Frame too late, signal fences and return success. Skipping frame?

@@ -49,10 +49,10 @@ class D3D12Renderer : public Renderer {
     uint8_t frame_in_flight = 0;
 
     // Initialization
-    XrResult CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system);
-    XrResult CreateWeaver(const std::shared_ptr<SRSystem>& gb_system);
-    XrResult CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system);
-    XrResult CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system);
+	XrResult CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain);
+	XrResult CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
+	XrResult CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system);
+	XrResult CreateWindowSwapchain(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
     bool CreateCommandLists();
     bool CreateFenceObjects();
     bool DestroyFences();
@@ -76,7 +76,7 @@ public:
     ~D3D12Renderer() override;
 
     // Inherited via Renderer
-    void InitializePipeline(GB_Instance* instance) override;
+	void InitializePipeline(XrSwapchain swapchain) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable = true) override;

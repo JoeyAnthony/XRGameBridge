@@ -9,15 +9,18 @@
 
 #include "instance.h"
 #include "settings.h"
+#include "swapchain.h"
 #include "types.h"
 
-XrResult D3D12Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system) {
+#include <runtime_comm.hpp>
+
+XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain) {
     // Create intermediate resources for weaving render target
     XrSwapchainCreateInfo info;
     info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-    info.width = gb_system->RecommendedWidth();
-    info.height = gb_system->RecommendedHeight();
-    info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    info.width = back_buffer_swapchain->GetWidth();
+    info.height = back_buffer_swapchain->GetHeight();
+    info.format = back_buffer_swapchain->GetFormat();
     info.arraySize = 1;
     info.faceCount = 1;
     info.mipCount = 1;
@@ -29,30 +32,34 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const std::shared_ptr<SRSystem
         intermediate_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Intermediate resource", 1));
         weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Weaved resource", 1));
         return XR_SUCCESS;
-    } catch (XrException& e) {
+    }
+    catch (XrException &e) {
         return e.GetResult();
-    } catch (std::exception& e) {
+    }
+    catch (std::exception &e) {
         spdlog::error("RUNTIME FAILURE func: {} ln: {} err: {}", __func__, __LINE__, e.what());
         return XR_ERROR_RUNTIME_FAILURE;
     }
 }
 
-XrResult D3D12Renderer::CreateWeaver(const std::shared_ptr<SRSystem>& gb_system) {
+XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system) {
     spdlog::info("Creating DX12 weaver");
     auto sr_context = gb_system->GetSrContext();
     SR::IDX12Weaver1* ptr;
     SR::CreateDX12Weaver(sr_context, d3d12_device.Get(), window.GetWindowHandle(), &d3d12weaver);
-    d3d12weaver->setInputViewTexture(intermediate_resource->GetBuffers()[0].Get(), intermediate_resource->GetWidth(), intermediate_resource->GetHeight(), DXGI_FORMAT_R8G8B8A8_UNORM);
-    d3d12weaver->setOutputFormat(DXGI_FORMAT_R8G8B8A8_UNORM);
+    d3d12weaver->setInputViewTexture(intermediate_resource->GetBuffers()[0].Get(), back_buffer_swapchain->GetWidth(), back_buffer_swapchain->GetHeight(), static_cast<DXGI_FORMAT>(back_buffer_swapchain->GetFormat()));
+    d3d12weaver->setOutputFormat(static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()));
 
     // Set in-shader sRGB conversion if necessary.
-    // d3d12weaver->setShaderSRGBConversion(true, true);
+    if (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+        d3d12weaver->setShaderSRGBConversion(false, false); // Explicitly set to false to be sure
+    }
 
     sr_context->initialize();
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system) {
+XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem> &gb_system) {
     // Create debug window
     window.CreateApplicationWindow(static_cast<HMODULE>(g_runtime_settings->GethInstance()), gb_system, gb_system->PhysicalResolutionWidth(), gb_system->PhysicalResolutionHeight(), true, true);
     // Debugging with non full screen mode
@@ -61,14 +68,14 @@ XrResult D3D12Renderer::CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_s
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system) {
+XrResult D3D12Renderer::CreateWindowSwapchain(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system) {
     // Create swapchain info for the window swapchain
     window_swapchain.Initialize(this);
 
     XrSwapchainCreateInfo window_swapchain_info;
     window_swapchain_info.width = gb_system->RecommendedWidth();
     window_swapchain_info.height = gb_system->RecommendedHeight();
-    window_swapchain_info.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    window_swapchain_info.format = back_buffer_swapchain->GetFormat();
     window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create swapchain for debug window
@@ -165,8 +172,8 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
         WaitForSingleObjectEx(fence_event, INFINITE, FALSE);
     }
 
-    auto& cmd_list = GetCommandList(frame_in_flight);
-    auto& cmd_allocator = GetCommandAllocator(frame_in_flight);
+    auto &cmd_list = GetCommandList(frame_in_flight);
+    auto &cmd_allocator = GetCommandAllocator(frame_in_flight);
 
     // Prepare command list
     cmd_allocator->Reset();
@@ -189,22 +196,28 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     // Render weaving
     if (should_weave) {
         RenderFrameWeaving(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value, window_width, window_height);
-    } else {
+    }
+    else {
         RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value, window_width, window_height);
     }
 
     if (weave_to_debug_window) {
         int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
 
-        // Transition window swapchain to render target
+        // Transition
         auto resource = window_swapchain.GetImages()[window_swapchain_index].Get();
-        TransitionImage(cmd_list.Get(), resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        std::array<CD3DX12_RESOURCE_BARRIER, 2> barriers;
+        barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(weaved_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+        cmd_list->ResourceBarrier(2, barriers.data());
 
         // Do copy logic
         cmd_list->CopyResource(resource, weaved_resource->GetBuffers()[0].Get());
 
-        // Transition swapchain to present
-        TransitionImage(cmd_list.Get(), resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+        // Transtision back
+        barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(weaved_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+        cmd_list->ResourceBarrier(2, barriers.data());
     }
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
@@ -263,8 +276,8 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     // Set viewport for weaving to window swapchain
     auto gb_system = g_systems[xr_system];
     glm::ivec2 native_resolution = {width, height};
-    D3D12_VIEWPORT view_port{0, 0, static_cast<float>(native_resolution.x), static_cast<float>(native_resolution.y), 0.0f, 1.0f};
-    D3D12_RECT scissor_rect{0, 0, static_cast<long>(native_resolution.x), static_cast<long>(native_resolution.y)};
+    D3D12_VIEWPORT view_port {0, 0, static_cast<float>(native_resolution.x), static_cast<float>(native_resolution.y), 0.0f, 1.0f};
+    D3D12_RECT scissor_rect {0, 0, static_cast<long>(native_resolution.x), static_cast<long>(native_resolution.y)};
     cmd_list->RSSetViewports(1, &view_port);
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
@@ -311,7 +324,7 @@ XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
 }
 
 void D3D12Renderer::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
-    ID3D12CommandList* lists[]{cmd_list};
+    ID3D12CommandList* lists[] {cmd_list};
     d3d12_command_queue->ExecuteCommandLists(1, lists);
 }
 
@@ -373,19 +386,19 @@ uint32_t D3D12Renderer::GetFrameFenceValue(uint32_t frameNumber) {
     return frame_fence_values[frameNumber];
 }
 
-ComPtr<ID3D12Device>& D3D12Renderer::GetDevice() {
+ComPtr<ID3D12Device> &D3D12Renderer::GetDevice() {
     return d3d12_device;
 }
 
-ComPtr<ID3D12CommandQueue>& D3D12Renderer::GetCommandQueue() {
+ComPtr<ID3D12CommandQueue> &D3D12Renderer::GetCommandQueue() {
     return d3d12_command_queue;
 }
 
-ComPtr<ID3D12GraphicsCommandList>& D3D12Renderer::GetCommandList(uint32_t index) {
+ComPtr<ID3D12GraphicsCommandList> &D3D12Renderer::GetCommandList(uint32_t index) {
     return command_lists[index];
 }
 
-ComPtr<ID3D12CommandAllocator>& D3D12Renderer::GetCommandAllocator(uint32_t index) {
+ComPtr<ID3D12CommandAllocator> &D3D12Renderer::GetCommandAllocator(uint32_t index) {
     return command_allocators[index];
 }
 
@@ -431,47 +444,47 @@ void D3D12Renderer::D3D12MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_
 
     auto level = spdlog::level::info;
     switch (severity) {
-    case D3D12_MESSAGE_SEVERITY_CORRUPTION:
-        level = spdlog::level::critical;
-        break;
-    case D3D12_MESSAGE_SEVERITY_ERROR:
-        level = spdlog::level::err;
-        break;
-    case D3D12_MESSAGE_SEVERITY_WARNING:
-        level = spdlog::level::warn;
-        break;
-    case D3D12_MESSAGE_SEVERITY_INFO:
-        level = spdlog::level::info;
-        break;
-    case D3D12_MESSAGE_SEVERITY_MESSAGE:
-        level = spdlog::level::info;
-        break;
+        case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+            level = spdlog::level::critical;
+            break;
+        case D3D12_MESSAGE_SEVERITY_ERROR:
+            level = spdlog::level::err;
+            break;
+        case D3D12_MESSAGE_SEVERITY_WARNING:
+            level = spdlog::level::warn;
+            break;
+        case D3D12_MESSAGE_SEVERITY_INFO:
+            level = spdlog::level::info;
+            break;
+        case D3D12_MESSAGE_SEVERITY_MESSAGE:
+            level = spdlog::level::info;
+            break;
     }
 
     std::string message = description;
 
     if (!message.empty()) {
         spdlog::log(level, "[Info Queue] [ID {}] {}", static_cast<int32_t>(id), message);
-    } else {
+    }
+    else {
         spdlog::log(level, "[Info Queue] [ID {}] <no description>", static_cast<int32_t>(id));
     }
 #endif
 }
 
-void D3D12Renderer::InitializePipeline(GB_Instance* instance) {
+void D3D12Renderer::InitializePipeline(XrSwapchain swapchain) {
     spdlog::info("Initializing rendering pipeline for DX12");
-    CreateFenceObjects();
-    CreateCommandLists();
+    auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[swapchain]);
+    std::shared_ptr<SRSystem> gb_system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
 
-    if (compositor.Initialize(this) == false) {
+    CreateIntermediateTexture(proxy_swapchain);
+    CreateSystemWindow(gb_system);
+    CreateWeaver(proxy_swapchain, gb_system);          // Needs SR context
+    CreateWindowSwapchain(proxy_swapchain, gb_system); // Needs a window
+
+    if (compositor.Initialize(this, intermediate_resource->GetFormat()) == false) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create compositor");
     }
-
-    std::shared_ptr<SRSystem> gb_system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
-    CreateIntermediateTexture(gb_system);
-    CreateSystemWindow(gb_system);
-    CreateWindowSwapchain(gb_system); // Needs a window
-    CreateWeaver(gb_system);          // Needs command allocators created in CreateCommandLists
 }
 
 D3D12Renderer* D3D12Renderer::Create(XrSystemId systemId, const void* graphics_binding) {
@@ -492,6 +505,9 @@ D3D12Renderer::D3D12Renderer(XrSystemId systemId, const XrGraphicsBindingD3D12KH
     d3d12_device = graphics_binding->device;
     d3d12_command_queue = graphics_binding->queue;
     SetupInfoQueue();
+
+    CreateFenceObjects();
+    CreateCommandLists();
 }
 
 D3D12Renderer::~D3D12Renderer() {

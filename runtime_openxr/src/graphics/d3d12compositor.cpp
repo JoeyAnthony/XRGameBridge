@@ -17,7 +17,7 @@
 #include "swapchain.h"
 #include "d3d12renderer.h"
 
-bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
+bool D3D12Compositor::Initialize(D3D12Renderer* renderer, int64_t resource_format) {
     spdlog::info("Initializing DX12 compositor");
 
     d3d12_device = renderer->GetDevice();
@@ -97,13 +97,13 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
 
     // TODO Loads the shaders twice this way
     spdlog::info("Creating PSO with opaque state");
-    if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_opaque, pipeline_state_opaque) == false) {
+	if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_opaque, pipeline_state_opaque, resource_format) == false) {
         // Error logged inside function
         return false;
     }
 
     spdlog::info("Creating PSO with blending state");
-    if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_blend, pipeline_state_blend) == false) {
+	if (CreatePipelineStateObject(d3d12_device, root_signature, blend_state_blend, pipeline_state_blend, resource_format) == false) {
         // Error logged inside function
         return false;
     }
@@ -140,7 +140,7 @@ bool D3D12Compositor::Initialize(D3D12Renderer* renderer) {
     return true;
 }
 
-bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state) {
+bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state, int64_t resource_format) {
     // Create the pipeline state, which includes loading shaders.
     {
         std::vector<uint8_t>vertex_shader = LoadShader(dx12_vs);
@@ -172,7 +172,7 @@ bool D3D12Compositor::CreatePipelineStateObject(ComPtr<ID3D12Device>& device, Co
         psoDesc.SampleMask = UINT_MAX;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         psoDesc.NumRenderTargets = 1;
-        psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; //TODO choose format from the client
+		psoDesc.RTVFormats[0] = static_cast<DXGI_FORMAT>(resource_format);
         //psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         psoDesc.SampleDesc.Count = 1;
 
@@ -267,7 +267,7 @@ void D3D12Compositor::ComposeProjectionLayer(ID3D12GraphicsCommandList* cmd_list
         layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
         // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
         layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-        layering_constants.convert_to_linear = 1;
+		layering_constants.convert_to_linear = 0; //(static_cast<DXGI_FORMAT>(proxy_swapchain->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) ? 0.0f : 1.0f;
 
         // Normalize uv values
         layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());
@@ -373,7 +373,7 @@ void D3D12Compositor::ComposeQuadLayer(ID3D12GraphicsCommandList* cmd_list, uint
         layering_constants.is_opaque = (layer->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT) != XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
         // Multiply alpha if XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT is set
         layering_constants.multiply_alpha = (layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) == XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
-        layering_constants.convert_to_linear = 1;
+		layering_constants.convert_to_linear = 0; //(static_cast<DXGI_FORMAT>(proxy_swapchain->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) ? 0.0f : 1.0f;
 
         // Normalize uv values
         layering_constants.uvmin_x = static_cast<float>(rect.offset.x) / static_cast<float>(proxy_swapchain->GetWidth());

@@ -113,7 +113,7 @@ public:
     virtual GraphicsBackend GetGraphicsBackend() = 0;
     virtual Compositor* const GetCompositor() = 0;
 	virtual uint64_t GetWeavedBufferHandle() = 0;
-    virtual void InitializePipeline(GB_Instance* instance) = 0;
+    virtual void InitializePipeline(XrSwapchain swapchain) = 0;
 };
 
 class ProxySwapchain {
@@ -136,9 +136,10 @@ public:
     // Make the image available for weaving
     virtual XrResult ReleaseImage() = 0;
 
-    virtual uint32_t GetWidth() = 0;
-    virtual uint32_t GetHeight() = 0;
-    virtual size_t GetBufferCount() = 0;
+    virtual uint32_t GetWidth() const = 0;
+	virtual uint32_t GetHeight() const = 0;
+	virtual uint32_t GetFormat() const = 0;
+	virtual size_t GetBufferCount() const = 0;
 
     virtual Renderer* GetRenderer() = 0;
 

@@ -24,9 +24,9 @@ class D3D12Compositor : public Compositor {
     ComPtr<ID3D12CommandQueue> command_queue;
 
 public:
-    bool Initialize(D3D12Renderer* renderer);
+    bool Initialize(D3D12Renderer* renderer, int64_t resource_format);
 
-    bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state);
+    bool CreatePipelineStateObject(ComPtr<ID3D12Device>& device, ComPtr<ID3D12RootSignature>& root, D3D12_BLEND_DESC blend_state, ComPtr<ID3D12PipelineState>& pipeline_state, int64_t resource_format);
 
     //void InitShaders(const ComPtr<ID3D12Device>& device);
     void ComposeImage(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, uint32_t system_width, uint32_t system_height, uint64_t new_fence_value);

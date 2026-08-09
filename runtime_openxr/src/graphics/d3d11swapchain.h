@@ -6,8 +6,8 @@
  */
 
 #pragma once
-#include "xrrendering.h"
 #include "openxr_includes.h"
+#include "xrrendering.h"
 
 class D3D11Renderer;
 
@@ -41,13 +41,14 @@ public:
     bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name);
 
     void DestroyResources() override;
-	bool Resize(int32_t width, int32_t height) override;
-    XrResult AcquireNextImage(uint32_t& index) override;
-    XrResult WaitForImage(const XrDuration& timeout) override;
+    bool Resize(int32_t width, int32_t height) override;
+    XrResult AcquireNextImage(uint32_t &index) override;
+    XrResult WaitForImage(const XrDuration &timeout) override;
     XrResult ReleaseImage() override;
-    uint32_t GetWidth() override;
-    uint32_t GetHeight() override;
-    uint64_t GetBufferCount() override;
+    uint32_t GetWidth() const override;
+    uint32_t GetHeight() const override;
+    uint32_t GetFormat() const override;
+    uint64_t GetBufferCount() const override;
     Renderer* GetRenderer() override;
 
     std::vector<ComPtr<ID3D11Texture2D>> GetBuffers();
@@ -60,8 +61,8 @@ public:
 
 class D3D11WindowSwapchain {
 public:
-    //static void CreateDXGIFactory(IDXGIFactory4** factory);
-    //static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
+    // static void CreateDXGIFactory(IDXGIFactory4** factory);
+    // static void GetGraphicsAdapter(IDXGIFactory1* pFactory, IDXGIAdapter1** ppAdapter, bool requestHighPerformanceAdapter);
 
     D3D11Renderer* d3d11_renderer;
     ComPtr<IDXGISwapChain3> swap_chain;
@@ -71,8 +72,8 @@ public:
 
     D3D11WindowSwapchain() = delete;
     D3D11WindowSwapchain(D3D11Renderer* renderer, const XrSwapchainCreateInfo* createInfo, uint32_t back_buffer_count, HWND hwnd);
-public:
 
+public:
     uint32_t GetCurrentImageIndex();
     void PresentFrame();
     uint32_t GetWidth();
@@ -85,6 +86,6 @@ public:
     std::vector<ComPtr<ID3D11RenderTargetView>> GetRenderTargetViews();
 };
 
-void ApplyBindFlag(D3D11_BIND_FLAG flag, uint32_t& bind_flags);
-void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE& usage, uint32_t& bind_flags);
+void ApplyBindFlag(D3D11_BIND_FLAG flag, uint32_t &bind_flags);
+void GetResourceStateFlags(XrSwapchainUsageFlags usage_flags, D3D11_USAGE &usage, uint32_t &bind_flags);
 DXGI_FORMAT ResolveTextureFormatForUsage(DXGI_FORMAT application_format, XrSwapchainUsageFlags usage_flags);

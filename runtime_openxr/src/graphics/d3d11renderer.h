@@ -6,10 +6,10 @@
  */
 
 #pragma once
-#include <sr/weaver/dx11weaver.h>
-
-#include "xrrendering.h"
 #include "window.h"
+#include "xrrendering.h"
+
+#include <sr/weaver/dx11weaver.h>
 
 class SRSystem;
 class D3D11Compositor;
@@ -33,10 +33,10 @@ class D3D11Renderer : public Renderer {
     uint8_t frame_in_flight = 0;
 
     // Initialization
-    XrResult CreateIntermediateTexture(const std::shared_ptr<SRSystem>& gb_system);
-    XrResult CreateWeaver(const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateIntermediateTexture(const D3D11ProxySwapchain* back_buffer_swapchain);
+    XrResult CreateWeaver(const D3D11ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
     XrResult CreateSystemWindow(const std::shared_ptr<SRSystem>& gb_system);
-    XrResult CreateWindowSwapchain(const std::shared_ptr<SRSystem>& gb_system);
+    XrResult CreateWindowSwapchain(const D3D11ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem>& gb_system);
     bool CreateCommandLists();
     XrResult CreateCompositor();
 
@@ -52,7 +52,7 @@ public:
     ~D3D11Renderer() override;
 
     // Inherited via Renderer
-    void InitializePipeline(GB_Instance* instance) override;
+    void InitializePipeline(XrSwapchain swapchain) override;
     XrResult RenderFrame(const XrFrameEndInfo* frameEndInfo) override;
     void EnableSrWindow(bool enable) override;
     void EnableWeaving(bool enable) override;
@@ -63,6 +63,6 @@ public:
     ComPtr<ID3D11Device> GetDevice();
     ComPtr<ID3D11DeviceContext>& GetDeviceContext();
 
-	// Inherited via Renderer
-	uint64_t GetWeavedBufferHandle() override;
+    // Inherited via Renderer
+    uint64_t GetWeavedBufferHandle() override;
 };
