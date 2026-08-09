@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.23)
+
+set (CMAKE_CXX_STANDARD 20)
+
+project (RuntimeComm VERSION 0.1)
+message("Game Bridge UEVR Version: ${3DGameBridge_VERSION}")
+
+set(CMAKE_DEBUG_POSTFIX d)
+
+# Source files
+add_library(RuntimeComm STATIC
+		./include/runtime_comm.hpp
+        ./src/runtime_comm.cpp
+)
+
+# PUBLIC: runtime_comm.hpp itself pulls in <openxr/openxr.h>, so anything linking against
+# RuntimeComm needs both of these to even parse the header, not just to build this library.
+target_include_directories(RuntimeComm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(RuntimeComm PUBLIC ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
+
+set_target_properties(RuntimeComm PROPERTIES LINKER_LANGUAGE CXX)
+

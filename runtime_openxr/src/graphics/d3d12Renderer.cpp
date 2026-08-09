@@ -15,6 +15,20 @@
 #include <runtime_comm.hpp>
 
 XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain) {
+    // Initialize plugin communication
+    auto res = pcomm::InitializeCommInterface();
+    switch (res) {
+        case CommResult::RUNTIME_NOT_FOUND:
+            spdlog::error("Couldn't find XRGB Runtime. Falling back to regular texture settings.");
+            break;
+        case CommResult::FUNCTION_NOT_FOUND:
+            spdlog::error("Couldn't find plugin functions. Falling back to regular texture settings.");
+            break;
+        case CommResult::SUCCESS:
+            spdlog::info("Plugin for external window rendering found.");
+            break;
+    }
+
     // Create intermediate resources for weaving render target
     XrSwapchainCreateInfo info;
     info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;

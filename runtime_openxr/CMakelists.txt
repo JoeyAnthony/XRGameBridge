@@ -217,6 +217,7 @@ find_package(srDirectX REQUIRED)
 target_include_directories(RuntimeOpenXR PRIVATE ${LEIASR_SDKROOT}/include)
 message(${LEIASR_SDKROOT}/include)
 target_link_libraries(${PROJECT_NAME} PRIVATE
+        RuntimeComm
         ${TARGET_DXHEADERS}
         spdlog::spdlog
         glm::glm
