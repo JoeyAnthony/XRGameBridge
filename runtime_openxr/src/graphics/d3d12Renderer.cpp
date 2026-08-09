@@ -30,21 +30,40 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* bac
     }
 
     // Create intermediate resources for weaving render target
-    XrSwapchainCreateInfo info;
-    info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
-    info.width = back_buffer_swapchain->GetWidth();
-    info.height = back_buffer_swapchain->GetHeight();
-    info.format = back_buffer_swapchain->GetFormat();
-    info.arraySize = 1;
-    info.faceCount = 1;
-    info.mipCount = 1;
-    info.sampleCount = 1;
-    info.createFlags = 0;
-    info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
+    XrSwapchainCreateInfo intermediate_info;
+    intermediate_info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
+    intermediate_info.width = back_buffer_swapchain->GetWidth();
+    intermediate_info.height = back_buffer_swapchain->GetHeight();
+    intermediate_info.format = back_buffer_swapchain->GetFormat();
+    intermediate_info.arraySize = 1;
+    intermediate_info.faceCount = 1;
+    intermediate_info.mipCount = 1;
+    intermediate_info.sampleCount = 1;
+    intermediate_info.createFlags = 0;
+    intermediate_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
+
+    XrSwapchainCreateInfo weaved_info;
+    weaved_info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
+    weaved_info.width = back_buffer_swapchain->GetWidth();
+    weaved_info.height = back_buffer_swapchain->GetHeight();
+    weaved_info.format = back_buffer_swapchain->GetFormat();
+    weaved_info.arraySize = 1;
+    weaved_info.faceCount = 1;
+    weaved_info.mipCount = 1;
+    weaved_info.sampleCount = 1;
+    weaved_info.createFlags = 0;
+    weaved_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT;
+
+    auto desc = pcomm::xrgbGetBackbufferDescription();
+    if (desc.width != 0 || desc.height != 0) {
+        weaved_info.width = desc.width;
+        weaved_info.height = desc.height;
+        weaved_info.format = desc.format;
+    }
 
     try {
-        intermediate_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Intermediate resource", 1));
-        weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&info, this, "Weaved resource", 1));
+        intermediate_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&intermediate_info, this, "Intermediate resource", 1));
+        weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&weaved_info, this, "Weaved resource", 1));
         return XR_SUCCESS;
     }
     catch (XrException &e) {
@@ -59,15 +78,28 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* bac
 XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system) {
     spdlog::info("Creating DX12 weaver");
     auto sr_context = gb_system->GetSrContext();
-    SR::IDX12Weaver1* ptr;
     SR::CreateDX12Weaver(sr_context, d3d12_device.Get(), window.GetWindowHandle(), &d3d12weaver);
     d3d12weaver->setInputViewTexture(intermediate_resource->GetBuffers()[0].Get(), back_buffer_swapchain->GetWidth(), back_buffer_swapchain->GetHeight(), static_cast<DXGI_FORMAT>(back_buffer_swapchain->GetFormat()));
-    d3d12weaver->setOutputFormat(static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()));
-
+    d3d12weaver->setOutputFormat(static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()));
+    
     // Set in-shader sRGB conversion if necessary.
-    if (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
-        d3d12weaver->setShaderSRGBConversion(false, false); // Explicitly set to false to be sure
+    bool input_conversion = false;
+    bool output_conversion = false;
+    if (static_cast<DXGI_FORMAT>(((intermediate_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat())) == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) &&
+        static_cast<DXGI_FORMAT>(((weaved_resource->GetFormat()) != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()) != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))) {
+        // Input is srgb, output is linear
+        input_conversion = true; // srgb to linear on read
+        output_conversion = false; // linear to srgb on write
     }
+    if ((static_cast<DXGI_FORMAT>(((intermediate_resource->GetFormat()) != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()) != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))) &&
+        (static_cast<DXGI_FORMAT>(((weaved_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()) == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)))) {
+        // Input is linear, output is srgb
+        input_conversion = true;   // srgb to linear on read
+        output_conversion = false; // linear to srgb on write
+    }
+    d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion); // Default off
+
+    current_weaver_output_format = back_buffer_swapchain->GetFormat();
 
     sr_context->initialize();
     return XR_SUCCESS;
@@ -89,7 +121,7 @@ XrResult D3D12Renderer::CreateWindowSwapchain(const D3D12ProxySwapchain* back_bu
     XrSwapchainCreateInfo window_swapchain_info;
     window_swapchain_info.width = gb_system->RecommendedWidth();
     window_swapchain_info.height = gb_system->RecommendedHeight();
-    window_swapchain_info.format = back_buffer_swapchain->GetFormat();
+    window_swapchain_info.format = weaved_resource->GetFormat();
     window_swapchain_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT | XR_SWAPCHAIN_USAGE_SAMPLED_BIT;
 
     // Create swapchain for debug window
@@ -193,45 +225,43 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     cmd_allocator->Reset();
     cmd_list->Reset(cmd_allocator.Get(), compositor.GetDefaultPipelineState().Get());
 
-    int32_t window_width = weaved_resource->GetWidth(), window_height = weaved_resource->GetHeight();
+    // Get size of the debug window
+    int32_t window_width = window_swapchain.GetWidth(), window_height = window_swapchain.GetHeight();
     window.ConsumePendingResize(window_width, window_height);
-    if (!weaved_resource->Resize(window_width, window_height)) {
+
+    // Initialize to size of the debug window since we may not be able to get the size of the game window.
+    int32_t back_buffer_width = window_width, back_buffer_height = window_height;
+    // For the weaved resource we want to prefer the size of the game window. If we can't get that size we use the debug window instead.
+    auto desc = pcomm::xrgbGetBackbufferDescription();
+    if (desc.width != 0 || desc.height != 0) {
+        back_buffer_width = desc.width;
+        back_buffer_height = desc.height;
+    }
+
+    // Resize weaved resource on change
+    if (!weaved_resource->Resize(back_buffer_width, back_buffer_height)) {
         spdlog::error("D3D12 Error, Failed to resize weaved resource to window size");
         cmd_list->Close();
         return XR_ERROR_RUNTIME_FAILURE;
     }
 
+    // Resize swapchain on change
     if (!window_swapchain.Resize(window_width, window_height)) {
         spdlog::error("D3D12 Error, Failed to resize window swapchain to window size");
         cmd_list->Close();
         return XR_SUCCESS;
     }
 
-    // Render weaving
+    // Compose and weave or compose and blit to resources
     if (should_weave) {
-        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value, window_width, window_height);
+        RenderFrameWeaving(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value);
     }
     else {
-        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value, window_width, window_height);
+        RenderFrameSideBySide(frameEndInfo, cmd_list.Get(), Renderer::clear_color, fence_value);
     }
 
     if (weave_to_debug_window) {
-        int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
-
-        // Transition
-        auto resource = window_swapchain.GetImages()[window_swapchain_index].Get();
-        std::array<CD3DX12_RESOURCE_BARRIER, 2> barriers;
-        barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(weaved_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-        barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-        cmd_list->ResourceBarrier(2, barriers.data());
-
-        // Do copy logic
-        cmd_list->CopyResource(resource, weaved_resource->GetBuffers()[0].Get());
-
-        // Transtision back
-        barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(weaved_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-        cmd_list->ResourceBarrier(2, barriers.data());
+        RenderToDebugWindow(cmd_list.Get());
     }
 
     // Todo: maybe use split barriers at the end here instead of regular ones. Then also initialize the resources in the correct state.
@@ -265,7 +295,7 @@ void D3D12Renderer::Update() {
     window.UpdateWindow();
 }
 
-XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height) {
+XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value) {
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource->GetRtvDescriptorSize());
 
@@ -288,14 +318,13 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     cmd_list->ClearRenderTargetView(weaved_resource_rtv_handle, clear_color, 0, nullptr);
 
     // Set viewport for weaving to window swapchain
-    auto gb_system = g_systems[xr_system];
-    glm::ivec2 native_resolution = {width, height};
+
+    glm::ivec2 native_resolution = {weaved_resource->GetWidth(), weaved_resource->GetHeight()};
     D3D12_VIEWPORT view_port {0, 0, static_cast<float>(native_resolution.x), static_cast<float>(native_resolution.y), 0.0f, 1.0f};
     D3D12_RECT scissor_rect {0, 0, static_cast<long>(native_resolution.x), static_cast<long>(native_resolution.y)};
     cmd_list->RSSetViewports(1, &view_port);
     cmd_list->RSSetScissorRects(1, &scissor_rect);
 
-    // Do weaving
     d3d12weaver->setCommandList(cmd_list);
     d3d12weaver->setViewport(view_port);
     d3d12weaver->setScissorRect(scissor_rect);
@@ -307,7 +336,7 @@ XrResult D3D12Renderer::RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, I
     return XR_SUCCESS;
 }
 
-XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height) {
+XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value) {
     // Set intermediate resource as render target
     CD3DX12_CPU_DESCRIPTOR_HANDLE descriptor_handle_to_compose = CD3DX12_CPU_DESCRIPTOR_HANDLE(intermediate_resource->GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), 0, intermediate_resource->GetRtvDescriptorSize());
 
@@ -329,12 +358,45 @@ XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     cmd_list->OMSetRenderTargets(1, &weaved_resource_rtv_handle, true, nullptr);
     cmd_list->ClearRenderTargetView(weaved_resource_rtv_handle, clear_color, 0, nullptr);
 
-    compositor.BlitToBoundTarget(cmd_list, intermediate_resource->GetSrvHeap().Get(), width, height);
+    compositor.BlitToBoundTarget(cmd_list, intermediate_resource->GetSrvHeap().Get(), weaved_resource->GetWidth(), weaved_resource->GetHeight());
 
     // Transition to render target
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     return XR_SUCCESS;
+}
+
+void D3D12Renderer::RenderToDebugWindow(ID3D12GraphicsCommandList* cmd_list) {
+    int32_t window_swapchain_index = window_swapchain.AcquireNextImage();
+
+    // Transition
+    auto resource = window_swapchain.GetImages()[window_swapchain_index].Get();
+    std::array<CD3DX12_RESOURCE_BARRIER, 2> barriers;
+    barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    cmd_list->ResourceBarrier(2, barriers.data());
+
+    // Set weaved_resource swapchain as render target
+    CD3DX12_CPU_DESCRIPTOR_HANDLE window_swapchain_resource_rtv_handle(window_swapchain.GetRtvHeap()->GetCPUDescriptorHandleForHeapStart(), window_swapchain_index, window_swapchain.GetRtvDescriptorSize());
+    cmd_list->OMSetRenderTargets(1, &window_swapchain_resource_rtv_handle, true, nullptr);
+    cmd_list->ClearRenderTargetView(window_swapchain_resource_rtv_handle, clear_color, 0, nullptr);
+
+    // Set viewport for weaving to window swapchain
+    glm::ivec2 native_resolution = {window_swapchain.GetWidth(), window_swapchain.GetHeight()};
+    D3D12_VIEWPORT view_port {0, 0, static_cast<float>(native_resolution.x), static_cast<float>(native_resolution.y), 0.0f, 1.0f};
+    D3D12_RECT scissor_rect {0, 0, static_cast<long>(native_resolution.x), static_cast<long>(native_resolution.y)};
+    cmd_list->RSSetViewports(1, &view_port);
+    cmd_list->RSSetScissorRects(1, &scissor_rect);
+
+    d3d12weaver->setCommandList(cmd_list);
+    d3d12weaver->setViewport(view_port);
+    d3d12weaver->setScissorRect(scissor_rect);
+    d3d12weaver->weave();
+
+    // Transtision back
+    barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    barriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    cmd_list->ResourceBarrier(2, barriers.data());
 }
 
 void D3D12Renderer::ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list) {
@@ -491,10 +553,10 @@ void D3D12Renderer::InitializePipeline(XrSwapchain swapchain) {
     auto proxy_swapchain = reinterpret_cast<D3D12ProxySwapchain*>(g_proxy_swapchains[swapchain]);
     std::shared_ptr<SRSystem> gb_system = std::dynamic_pointer_cast<SRSystem>(g_systems[xr_system]);
 
-    CreateIntermediateTexture(proxy_swapchain);
+    CreateIntermediateTexture(proxy_swapchain); // Should be created first
     CreateSystemWindow(gb_system);
-    CreateWeaver(proxy_swapchain, gb_system);          // Needs SR context
-    CreateWindowSwapchain(proxy_swapchain, gb_system); // Needs a window
+    CreateWeaver(proxy_swapchain, gb_system);          // Needs SR context and weaved resource format
+    CreateWindowSwapchain(proxy_swapchain, gb_system); // Needs a window and weaved resource format
 
     if (compositor.Initialize(this, intermediate_resource->GetFormat()) == false) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create compositor");

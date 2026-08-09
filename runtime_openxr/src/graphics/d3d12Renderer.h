@@ -23,10 +23,12 @@ class D3D12Renderer: public Renderer {
     XrSystemId xr_system;
     bool should_weave = true;
     bool weave_to_debug_window = true;
+    int64_t current_weaver_output_format = 0;
 
     // Graphics
     D3D12Compositor compositor;
     SR::IDX12Weaver1* d3d12weaver = nullptr;
+
     std::unique_ptr<D3D12ProxySwapchain> intermediate_resource = nullptr;
     std::unique_ptr<D3D12ProxySwapchain> weaved_resource = nullptr;
     // Windowing
@@ -58,8 +60,9 @@ class D3D12Renderer: public Renderer {
     bool DestroyFences();
 
     // Pipeline functions
-    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
-    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value, int32_t width, int32_t height);
+    XrResult RenderFrameWeaving(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value);
+    XrResult RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo, ID3D12GraphicsCommandList* cmd_list, const float clear_color[4], uint64_t new_fence_value);
+    void RenderToDebugWindow(ID3D12GraphicsCommandList* cmd_list);
 
     void ExecuteCommandList(ID3D12GraphicsCommandList* cmd_list);
     void TransitionImage(ID3D12GraphicsCommandList* cmd_list, ID3D12Resource* resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);

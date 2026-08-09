@@ -85,6 +85,8 @@ public:
     ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
     ComPtr<ID3D12DescriptorHeap> m_srvHeap;
     std::vector<ComPtr<ID3D12Resource>> back_buffers;
+    uint32_t resolution_x = 0;
+    uint32_t resolution_y = 0;
 
     D3D12_RESOURCE_STATES resource_usage = D3D12_RESOURCE_STATE_COMMON;
     uint32_t rtv_descriptor_size = 0;
@@ -98,6 +100,9 @@ public:
     // Resizes an already-created swapchain in place, keeping its existing format/buffer count.
     // Must only be called once the GPU is known to be done with the current back buffers.
     bool Resize(uint32_t width, uint32_t height);
+
+    uint32_t GetWidth() const;
+    uint32_t GetHeight() const;
 
     const std::vector<ComPtr<ID3D12Resource>> GetImages();
     ComPtr<ID3D12DescriptorHeap>& GetRtvHeap();

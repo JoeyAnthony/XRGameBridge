@@ -408,6 +408,9 @@ bool D3D12WindowSwapchain::CreateSwapChain(const XrSwapchainCreateInfo* createIn
 		used_format = DXGI_FORMAT_B8G8R8A8_UNORM;
     }
 
+    resolution_x = createInfo->width;
+    resolution_y = createInfo->height;
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = createInfo->width;
     swapChainDesc.Height = createInfo->height;
@@ -518,6 +521,9 @@ bool D3D12WindowSwapchain::Resize(uint32_t width, uint32_t height) {
         return true;
     }
 
+    resolution_x = width;
+    resolution_y = height;
+
     // Caller (the renderer) is responsible for having waited for the GPU to be done with the
     // current back buffers before this is called - releasing them while still in flight is UB.
     for (auto& buffer : back_buffers) {
@@ -547,6 +553,14 @@ bool D3D12WindowSwapchain::Resize(uint32_t width, uint32_t height) {
 
     spdlog::info("Resized window swapchain to {}x{}", width, height);
     return true;
+}
+
+uint32_t D3D12WindowSwapchain::GetWidth() const {
+    return resolution_x;
+}
+
+uint32_t D3D12WindowSwapchain::GetHeight() const {
+    return resolution_y;
 }
 
 const std::vector<ComPtr<ID3D12Resource>> D3D12WindowSwapchain::GetImages() {

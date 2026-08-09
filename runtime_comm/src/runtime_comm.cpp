@@ -11,9 +11,15 @@ std::mutex pcomm_mutex;
 typedef XrResult(XRAPI_PTR* PFN_xrgbGetReleasedBufferHandle)(XrSession session, uint64_t* resourceHandle);
 PFN_xrgbGetReleasedBufferHandle xrgbGetReleasedBufferHandle_func = nullptr;
 
+bool is_initialized = false;
+
 namespace rcomm {
 CommResult InitializeCommInterface() {
 	std::lock_guard<std::mutex> guard(rcomm_mutex);
+	if (is_initialized) {
+        return CommResult::SUCCESS;
+	}
+
 	std::array modules = {"RuntimeOpenXR.dll", "runtimeopenxr.dll", "RuntimeOpenXRd.dll", "runtimeopenxrd.dll"};
 	HMODULE xrgb_module = NULL;
 	for (auto& module : modules) {
@@ -32,12 +38,15 @@ CommResult InitializeCommInterface() {
 	}
 
 	xrgbGetReleasedBufferHandle_func = reinterpret_cast<PFN_xrgbGetReleasedBufferHandle>(func);
-
+    
+	is_initialized = true;
 	return CommResult::SUCCESS;
 }
 
 void DeinitializeCommInterface() {
 	std::lock_guard<std::mutex> guard(rcomm_mutex);
+
+	is_initialized = false;
 	xrgbGetReleasedBufferHandle_func = nullptr;
 }
 
