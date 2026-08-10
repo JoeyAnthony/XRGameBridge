@@ -1,0 +1,59 @@
+Language: Cpp
+Standard: c++20
+BasedOnStyle: LLVM
+
+# --- Indentation / structure ---
+AccessModifierOffset: -4
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 8
+NamespaceIndentation: All
+IndentCaseLabels: true
+
+# --- Column limit ---
+ColumnLimit: 0
+
+# --- Braces ---
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: Never
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: true
+InsertBraces: true
+
+# --- Short-statement collapsing ---
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: Always
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLambdasOnASingleLine: All
+
+# --- Breaking rules ---
+BreakBeforeBinaryOperators: NonAssignment
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+PackConstructorInitializers: CurrentLine
+
+# --- Alignment ---
+AlignAfterOpenBracket: true
+# AlignArrayOfStructures: Left
+
+# --- Pointers / references ---
+PointerAlignment: Left
+ReferenceAlignment: Right
+
+# --- Spacing (only non-Microsoft-default ones kept) ---
+SpaceBeforeCpp11BracedList: true
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: false
+SpaceBeforeRangeBasedForLoopColon: true
+
+# --- Includes / misc ---
+IncludeBlocks: Regroup
+InsertNewlineAtEOF: true
+MaxEmptyLinesToKeep: 2
