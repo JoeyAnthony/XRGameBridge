@@ -81,23 +81,19 @@ XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swap
     SR::CreateDX12Weaver(sr_context, d3d12_device.Get(), window.GetWindowHandle(), &d3d12weaver);
     d3d12weaver->setInputViewTexture(intermediate_resource->GetBuffers()[0].Get(), back_buffer_swapchain->GetWidth(), back_buffer_swapchain->GetHeight(), static_cast<DXGI_FORMAT>(back_buffer_swapchain->GetFormat()));
     d3d12weaver->setOutputFormat(static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()));
-    
-    // Set in-shader sRGB conversion if necessary.
-    bool input_conversion = false;
-    bool output_conversion = false;
-    if (static_cast<DXGI_FORMAT>(((intermediate_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat())) == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) &&
-        static_cast<DXGI_FORMAT>(((weaved_resource->GetFormat()) != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()) != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))) {
-        // Input is srgb, output is linear
-        input_conversion = true; // srgb to linear on read
-        output_conversion = false; // linear to srgb on write
-    }
-    if ((static_cast<DXGI_FORMAT>(((intermediate_resource->GetFormat()) != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(intermediate_resource->GetFormat()) != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))) &&
-        (static_cast<DXGI_FORMAT>(((weaved_resource->GetFormat()) == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) || (static_cast<DXGI_FORMAT>(weaved_resource->GetFormat()) == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)))) {
-        // Input is linear, output is srgb
-        input_conversion = true;   // srgb to linear on read
-        output_conversion = false; // linear to srgb on write
-    }
-    d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion); // Default off
+
+    // Set in-shader sRGB conversion if necessary. Each flag simply mirrors whether that specific
+    // resource's own format is SRGB-tagged - the weaver's SRV/RTV bindings match the real format
+    // of whatever they're reading/writing, so this should never disagree with what hardware is
+    // already doing at that boundary (see the compose-shader conversion discussion: correction
+    // only belongs where the format tag and the data don't already agree).
+    auto is_srgb_format = [](int64_t format) {
+        const auto dxgi_format = static_cast<DXGI_FORMAT>(format);
+        return dxgi_format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || dxgi_format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    };
+    const bool input_conversion = is_srgb_format(intermediate_resource->GetFormat());
+    const bool output_conversion = is_srgb_format(weaved_resource->GetFormat());
+    d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion);
 
     current_weaver_output_format = back_buffer_swapchain->GetFormat();
 
