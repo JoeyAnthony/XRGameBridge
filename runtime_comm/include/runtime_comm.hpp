@@ -12,6 +12,7 @@ struct CommBackBufferDescription {
 	uint32_t width;
 	uint32_t height;
 	int64_t format;
+    void* windowHandle;
 };
 
 // Runtime functions

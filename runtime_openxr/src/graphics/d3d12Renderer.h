@@ -22,7 +22,7 @@ class D3D12ProxySwapchain;
 class D3D12Renderer: public Renderer {
     XrSystemId xr_system;
     bool should_weave = true;
-    bool weave_to_debug_window = true;
+    bool use_debug_window = false;
     int64_t current_weaver_output_format = 0;
 
     // Graphics

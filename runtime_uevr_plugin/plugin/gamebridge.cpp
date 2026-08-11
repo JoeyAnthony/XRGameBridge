@@ -200,10 +200,14 @@ std::unique_ptr<RuntimeUevrPlugin> g_plugin{new RuntimeUevrPlugin()};
 CommBackBufferDescription xrgbGetBackbufferDescription() {
 	const auto uevr_renderer_data = uevr::API::get()->param()->renderer;
 	auto swapchain = static_cast<IDXGISwapChain3*>(uevr_renderer_data->swapchain);
+    HWND window;
 	DXGI_SWAP_CHAIN_DESC1 desc;
 	swapchain->GetDesc1(&desc);
+    swapchain->GetHwnd(&window);
 	return CommBackBufferDescription{
 		.width = desc.Width,
 		.height = desc.Height,
-		.format = desc.Format};
+		.format = desc.Format,
+        .windowHandle = window
+	};
 }
