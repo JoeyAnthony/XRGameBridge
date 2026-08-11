@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.23)
+
+set (CMAKE_CXX_STANDARD 20)
+
+project (RuntimeUEVRPlugin VERSION 0.1)
+message("Game Bridge UEVR Version: ${3DGameBridge_VERSION}")
+
+set(CMAKE_DEBUG_POSTFIX d)
+
+# Source files
+add_library(RuntimeUEVRPlugin SHARED		
+		# Source
+		# plugin/Plugin.hpp
+		plugin/gamebridge.hpp
+		plugin/gamebridge.cpp
+)
+set_target_properties(RuntimeUEVRPlugin PROPERTIES LINKER_LANGUAGE CXX)
+
+# Add plugin dependencies
+# target_include_directories(RuntimeUEVRPlugin PRIVATE renderlib)
+
+# Include directories
+target_include_directories(RuntimeUEVRPlugin PRIVATE ${CMAKE_SOURCE_DIR}/third-party/UEVR/include)
+target_include_directories(RuntimeUEVRPlugin PRIVATE ${CMAKE_SOURCE_DIR}/third-party/DirectX-Headers/include)
+target_include_directories(RuntimeUEVRPlugin PRIVATE ${CMAKE_SOURCE_DIR}/third-party/spdlog/include)
+target_include_directories(RuntimeUEVRPlugin PRIVATE ${CMAKE_SOURCE_DIR}/third-party/imgui)
+# target_include_directories(RuntimeUEVRPlugin PRIVATE ${CMAKE_SOURCE_DIR}/third-party/OpenXR-SDK/include)
+
+target_link_libraries(RuntimeUEVRPlugin PRIVATE openxr_loader)
+target_link_libraries(RuntimeUEVRPlugin PRIVATE RuntimeComm)
