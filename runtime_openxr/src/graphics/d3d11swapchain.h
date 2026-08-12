@@ -33,12 +33,12 @@ class D3D11ProxySwapchain: public ProxySwapchain {
     explicit D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* renderer);
 
 public:
-    static D3D11ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name = "");
+    static D3D11ProxySwapchain* Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name = "", int64_t rtv_format = -1);
 
     D3D11ProxySwapchain() = delete;
 
     // Resource initializer
-    bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name);
+    bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "", int64_t rtv_format = -1) override;
 
     void DestroyResources() override;
     bool Resize(int32_t width, int32_t height) override;

@@ -123,7 +123,7 @@ public:
     ProxySwapchain(XrSwapchain handle) : xr_handle(handle) {};
     virtual ~ProxySwapchain() = default;
 
-    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "") = 0;
+    virtual bool CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name = "", int64_t rtv_format = -1) = 0;
     virtual void DestroyResources() = 0;
 	virtual bool Resize(int32_t width, int32_t height) = 0;
 

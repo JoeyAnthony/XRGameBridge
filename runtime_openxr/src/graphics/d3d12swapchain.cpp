@@ -22,14 +22,14 @@ D3D12ProxySwapchain::~D3D12ProxySwapchain()
     DestroyResources();
 }
 
-D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name, int32_t num_resources) {
+D3D12ProxySwapchain* D3D12ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D12Renderer* renderer, std::string resource_name, int32_t num_resources, int64_t rtv_format) {
     static size_t swapchain_creation_count = 1;
     // Create handle
     XrSwapchain handle = reinterpret_cast<XrSwapchain>(swapchain_creation_count);
     auto d3d12_proxy = new D3D12ProxySwapchain(handle, renderer);
 
     // Initialize resources. Double buffering is standard.
-    if (d3d12_proxy->CreateResources(createInfo, standard_swapchain_buffer_count) == false) {
+    if (d3d12_proxy->CreateResources(createInfo, num_resources, resource_name, rtv_format) == false) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create D3D12 proxy swapchain");
     }
 
@@ -41,7 +41,7 @@ D3D12ProxySwapchain::D3D12ProxySwapchain(XrSwapchain handle, D3D12Renderer* rend
     d3d12_renderer = renderer;
 }
 
-bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* create_info, uint32_t num_resources, std::string resource_name) {
+bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* create_info, uint32_t num_resources, std::string resource_name, int64_t rtv_format) {
 	current_create_info = *create_info;
     DXGI_FORMAT format = static_cast<DXGI_FORMAT>(create_info->format);
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
@@ -225,8 +225,21 @@ bool D3D12ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* create_in
                 //std::wstringstream ss; ss << "Swap Container Resource: " << i;
                 //back_buffers[i]->SetName(ss.str().c_str());
 
-                // Create a RTV for each resource.
-                device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
+                if (rtv_format < 0) {
+                    device->CreateRenderTargetView(back_buffers[i].Get(), nullptr, rtv_handle);
+                }
+                else {
+                    // Create a RTV for each resource.
+                    D3D12_RENDER_TARGET_VIEW_DESC rtv_desc;
+                    rtv_desc.Buffer.FirstElement = 0;
+                    rtv_desc.Buffer.NumElements = 1;
+                    rtv_desc.Texture2D.MipSlice = 0;
+                    rtv_desc.Texture2D.PlaneSlice = 0;
+                    rtv_desc.ViewDimension = D3D12_RTV_DIMENSION::D3D12_RTV_DIMENSION_TEXTURE2D;
+                    rtv_desc.Format = static_cast<DXGI_FORMAT>(rtv_format);
+                    device->CreateRenderTargetView(back_buffers[i].Get(), &rtv_desc, rtv_handle);
+                }
+
                 rtv_handle.Offset(1, rtv_descriptor_size);
 
                 D3D12_TEX2D_SRV tex2d{};

@@ -68,7 +68,12 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* bac
         else {
             use_debug_window = true;
         }
-        weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&weaved_info, this, "Weaved resource", 1));
+
+        int64_t rtv_format = -1;
+        if (weaved_info.format != back_buffer_swapchain->GetFormat() && IsSrgbFormat(back_buffer_swapchain->GetFormat())) {
+            rtv_format = back_buffer_swapchain->GetFormat();
+        }
+        weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&weaved_info, this, "Weaved resource", 1, rtv_format));
 
         return XR_SUCCESS;
     }
@@ -89,7 +94,7 @@ XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swap
         used_window = window.GetWindowHandle();
     }
     else {
-        used_window = static_cast <HWND>( pcomm::xrgbGetBackbufferDescription().windowHandle);
+        used_window = static_cast<HWND>(pcomm::xrgbGetBackbufferDescription().windowHandle);
     }
 
     auto sr_context = gb_system->GetSrContext();
@@ -110,12 +115,9 @@ XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swap
         // of whatever they're reading/writing, so this should never disagree with what hardware is
         // already doing at that boundary (see the compose-shader conversion discussion: correction
         // only belongs where the format tag and the data don't already agree).
-        auto is_srgb_format = [](int64_t format) {
-            const auto dxgi_format = static_cast<DXGI_FORMAT>(format);
-            return dxgi_format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || dxgi_format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-        };
-        const bool input_conversion = is_srgb_format(back_buffer_swapchain->GetFormat());
-        const bool output_conversion = is_srgb_format(current_weaver_output_format);
+
+        const bool input_conversion = IsSrgbFormat(back_buffer_swapchain->GetFormat());
+        const bool output_conversion = IsSrgbFormat(current_weaver_output_format);
         d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion);
     }
 
@@ -460,6 +462,11 @@ Compositor* const D3D12Renderer::GetCompositor() {
     return &compositor;
 }
 
+bool D3D12Renderer::IsSrgbFormat(int64_t format) {
+    const auto dxgi_format = static_cast<DXGI_FORMAT>(format);
+    return dxgi_format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || dxgi_format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+}
+
 XrResult D3D12Renderer::WaitFenceSwapchain(uint32_t value, XrDuration timeout) {
     // If the next frame in flight is still rendering wait until it is ready.
     uint64_t completed_value = fence->GetCompletedValue();
@@ -599,7 +606,7 @@ void D3D12Renderer::InitializePipeline(XrSwapchain swapchain) {
         CreateWindowSwapchain(proxy_swapchain, gb_system); // Needs a window
     }
 
-    CreateWeaver(proxy_swapchain, gb_system);   // Needs SR context and weaved resource format
+    CreateWeaver(proxy_swapchain, gb_system); // Needs SR context and weaved resource format
 
     if (compositor.Initialize(this, intermediate_resource->GetFormat()) == false) {
         throw XrException(XR_ERROR_RUNTIME_FAILURE, "Failed to create compositor");

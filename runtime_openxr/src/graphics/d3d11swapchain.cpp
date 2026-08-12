@@ -14,7 +14,7 @@
 #include <format>
 #include <glm/glm.hpp>
 
-D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name) {
+D3D11ProxySwapchain* D3D11ProxySwapchain::Create(const XrSwapchainCreateInfo* createInfo, D3D11Renderer* renderer, std::string resource_name, int64_t rtv_format) {
     // Create with swapchain index handle
     // Add to swapchain lists
     // Throw/rethrow errors that occur
@@ -37,7 +37,7 @@ D3D11ProxySwapchain::D3D11ProxySwapchain(XrSwapchain handle, D3D11Renderer* rend
     d3d11_renderer = renderer;
 }
 
-bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name) {
+bool D3D11ProxySwapchain::CreateResources(const XrSwapchainCreateInfo* createInfo, uint32_t num_resources, std::string resource_name, int64_t rtv_format) {
     DXGI_FORMAT format = static_cast<DXGI_FORMAT>(createInfo->format);
     D3D11_USAGE d3d11_usage;
     uint32_t bind_flags;

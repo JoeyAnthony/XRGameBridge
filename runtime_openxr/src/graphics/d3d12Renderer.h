@@ -86,6 +86,7 @@ public:
     void Update() override;
     GraphicsBackend GetGraphicsBackend() override;
     Compositor* const GetCompositor() override;
+    bool IsSrgbFormat(int64_t format);
 
     /*
      * Check if a specific fence value for a frame has been reached, and wait for it when that's not the case.
