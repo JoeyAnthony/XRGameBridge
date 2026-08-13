@@ -110,12 +110,6 @@ XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swap
         current_weaver_output_format = weaved_resource->GetFormat();
         d3d12weaver->setOutputFormat(static_cast<DXGI_FORMAT>(current_weaver_output_format));
 
-        // Set in-shader sRGB conversion if necessary. Each flag simply mirrors whether that specific
-        // resource's own format is SRGB-tagged - the weaver's SRV/RTV bindings match the real format
-        // of whatever they're reading/writing, so this should never disagree with what hardware is
-        // already doing at that boundary (see the compose-shader conversion discussion: correction
-        // only belongs where the format tag and the data don't already agree).
-
         const bool input_conversion = IsSrgbFormat(back_buffer_swapchain->GetFormat()) == false;
         const bool output_conversion = IsSrgbFormat(current_weaver_output_format) == false;
         d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion);
@@ -384,7 +378,12 @@ XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     cmd_list->OMSetRenderTargets(1, &weaved_resource_rtv_handle, true, nullptr);
     cmd_list->ClearRenderTargetView(weaved_resource_rtv_handle, clear_color, 0, nullptr);
 
-    compositor.BlitToBoundTarget(cmd_list, intermediate_resource->GetSrvHeap().Get(), weaved_resource->GetWidth(), weaved_resource->GetHeight());
+    // Same reasoning as CreateWeaver's setShaderSRGBConversion: intermediate_resource's SRV is SRGB,
+    // so hardware already decodes to linear on sample - no read-side correction needed. But if
+    // weaved_resource's format can't itself be SRGB-tagged (e.g. R10G10B10A2_UNORM), hardware can't
+    // encode back on write, so the shader has to do that manually or the stored bytes end up linear.
+    const bool encode_to_srgb_on_write = IsSrgbFormat(intermediate_resource->GetFormat()) && !IsSrgbFormat(weaved_resource->GetFormat());
+    compositor.BlitToBoundTarget(cmd_list, intermediate_resource->GetSrvHeap().Get(), weaved_resource->GetWidth(), weaved_resource->GetHeight(), encode_to_srgb_on_write);
 
     // Transition to render target
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);

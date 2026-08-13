@@ -40,7 +40,15 @@ public:
     // use it whenever the source and destination resolutions don't match and can't just be CopyResource'd.
     // Caller owns the render target binding and all resource-state transitions: source must already be in
     // D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, destination must already be bound as a render target.
-    void BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3D12DescriptorHeap* source_srv_heap, uint32_t dest_width, uint32_t dest_height);
+    //
+    // encode_to_srgb_on_write: pass true only when the source SRV is SRGB-tagged (so hardware already
+    // decodes to linear on sample) AND the destination RTV cannot itself be SRGB-tagged (e.g. 10-bit
+    // formats like R10G10B10A2_UNORM have no SRGB variant at all) - in that case hardware can decode
+    // but never encode, so the shader has to manually re-encode linear->sRGB before the write, or the
+    // stored bytes end up linear instead of the gamma-encoded values the display actually needs. Leave
+    // false whenever source and destination formats already agree (both SRGB or both plain UNORM) -
+    // hardware handles that case consistently on its own and manual correction would just double up.
+    void BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3D12DescriptorHeap* source_srv_heap, uint32_t dest_width, uint32_t dest_height, bool encode_to_srgb_on_write = false);
 
     ComPtr<ID3D12PipelineState>& GetDefaultPipelineState();
 };

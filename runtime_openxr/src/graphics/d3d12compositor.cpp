@@ -402,7 +402,7 @@ ComPtr<ID3D12PipelineState>& D3D12Compositor::GetDefaultPipelineState() {
     return pipeline_state_opaque;
 }
 
-void D3D12Compositor::BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3D12DescriptorHeap* source_srv_heap, uint32_t dest_width, uint32_t dest_height) {
+void D3D12Compositor::BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3D12DescriptorHeap* source_srv_heap, uint32_t dest_width, uint32_t dest_height, bool encode_to_srgb_on_write) {
     D3D12_VIEWPORT viewport{ 0, 0, static_cast<float>(dest_width), static_cast<float>(dest_height), 0.0f, 1.0f };
     D3D12_RECT scissor_rect{ 0, 0, static_cast<long>(dest_width), static_cast<long>(dest_height) };
     cmd_list->RSSetViewports(1, &viewport);
@@ -424,7 +424,7 @@ void D3D12Compositor::BlitToBoundTarget(ID3D12GraphicsCommandList* cmd_list, ID3
         float uvmax_x;
         float uvmax_y;
         float pad;
-    } constants{ 1, 0, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f };
+    } constants{ 1, 0, encode_to_srgb_on_write ? 1.0f : 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f };
     cmd_list->SetGraphicsRoot32BitConstants(2, 8, &constants, 0);
 
     cmd_list->DrawInstanced(3, 1, 0, 0);

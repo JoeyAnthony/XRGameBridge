@@ -21,9 +21,11 @@ class RuntimeUevrPlugin : public uevr::Plugin {
 	uint32_t frame_index = 0;
 
 	bool initialized = false;
+	bool needs_reacquire = false;
 
 	bool get_gb_functions();
 	bool init_rendering_pipeline();
+	bool acquire_back_buffers();
 
 	void on_dllmain() override;
 	void on_initialize() override;
