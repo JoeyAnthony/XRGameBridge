@@ -70,9 +70,9 @@ XrResult D3D12Renderer::CreateIntermediateTexture(const D3D12ProxySwapchain* bac
         }
 
         int64_t rtv_format = -1;
-        if (weaved_info.format != back_buffer_swapchain->GetFormat() && IsSrgbFormat(back_buffer_swapchain->GetFormat())) {
-            rtv_format = back_buffer_swapchain->GetFormat();
-        }
+        //if (weaved_info.format != back_buffer_swapchain->GetFormat() && IsSrgbFormat(back_buffer_swapchain->GetFormat())) {
+        //    rtv_format = back_buffer_swapchain->GetFormat();
+        //}
         weaved_resource = std::unique_ptr<D3D12ProxySwapchain>(D3D12ProxySwapchain::Create(&weaved_info, this, "Weaved resource", 1, rtv_format));
 
         return XR_SUCCESS;
@@ -116,8 +116,8 @@ XrResult D3D12Renderer::CreateWeaver(const D3D12ProxySwapchain* back_buffer_swap
         // already doing at that boundary (see the compose-shader conversion discussion: correction
         // only belongs where the format tag and the data don't already agree).
 
-        const bool input_conversion = IsSrgbFormat(back_buffer_swapchain->GetFormat());
-        const bool output_conversion = IsSrgbFormat(current_weaver_output_format);
+        const bool input_conversion = IsSrgbFormat(back_buffer_swapchain->GetFormat()) == false;
+        const bool output_conversion = IsSrgbFormat(current_weaver_output_format) == false;
         d3d12weaver->setShaderSRGBConversion(input_conversion, output_conversion);
     }
 
@@ -303,7 +303,9 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
     fence_value++;
 
     // Present to window
-    window_swapchain.PresentFrame();
+    if (use_debug_window) {
+        window_swapchain.PresentFrame();
+    }
 
     return XR_SUCCESS;
 }
@@ -372,7 +374,7 @@ XrResult D3D12Renderer::RenderFrameSideBySide(const XrFrameEndInfo* frameEndInfo
     // Compose and draw to the intermediate resource
     compositor.ComposeImage(frameEndInfo, cmd_list, intermediate_resource->GetWidth(), intermediate_resource->GetHeight(), new_fence_value);
 
-    // Transition intermediate resource to unordered access for the weaver
+    
     TransitionImage(cmd_list, intermediate_resource->GetBuffers()[0].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     // The weaved_resource resource is already a render target and doesn't need to be anything else
