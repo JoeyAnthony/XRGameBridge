@@ -56,7 +56,7 @@ public:
 
     // Interface functions
     void DestroyResources() override;
-	bool Resize(int32_t width, int32_t height) override;
+    bool Resize(int32_t width, int32_t height, int64_t format = -1) override;
     // Returns the oldest image index
     XrResult AcquireNextImage(uint32_t& index) override;
     // Waits for an image that has been weaved

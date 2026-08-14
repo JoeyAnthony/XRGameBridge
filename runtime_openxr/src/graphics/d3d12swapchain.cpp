@@ -286,13 +286,17 @@ void D3D12ProxySwapchain::DestroyResources() {
     spdlog::info(ss.str());
 }
 
-bool D3D12ProxySwapchain::Resize(int32_t width, int32_t height) {
+bool D3D12ProxySwapchain::Resize(int32_t width, int32_t height, int64_t format) {
 	if (resolution_x == width && resolution_y == height) {
 		return true;
     }
 
 	current_create_info.width = width;
 	current_create_info.height = height;
+    if (format != -1) {
+        current_create_info.format = format;
+    }
+
 
 
     DestroyResources();

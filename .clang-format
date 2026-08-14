@@ -45,7 +45,7 @@ AlignAfterOpenBracket: true
 
 # --- Pointers / references ---
 PointerAlignment: Left
-ReferenceAlignment: Right
+ReferenceAlignment: Left
 
 # --- Spacing (only non-Microsoft-default ones kept) ---
 SpaceBeforeCpp11BracedList: true

@@ -257,7 +257,7 @@ XrResult D3D12Renderer::RenderFrame(const XrFrameEndInfo* frameEndInfo) {
 
 
     // Resize weaved resource on change
-    if (!weaved_resource->Resize(window_width, window_height)) {
+    if (!weaved_resource->Resize(window_width, window_height, desc.format)) {
         spdlog::error("D3D12 Error, Failed to resize weaved resource to window size");
         cmd_list->Close();
         return XR_ERROR_RUNTIME_FAILURE;
