@@ -53,6 +53,7 @@ class D3D12Renderer: public Renderer {
     // Initialization
     XrResult CreateIntermediateTexture(const D3D12ProxySwapchain* back_buffer_swapchain);
     XrResult CreateWeaver(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system);
+    void ConfigureWeaver(const D3D12ProxySwapchain* back_buffer_swapchain);
     XrResult CreateSystemWindow(const std::shared_ptr<SRSystem> &gb_system);
     XrResult CreateWindowSwapchain(const D3D12ProxySwapchain* back_buffer_swapchain, const std::shared_ptr<SRSystem> &gb_system);
     bool CreateCommandLists();
